@@ -1,0 +1,7 @@
+server_url: https://agent.robinhood.com/mcp/trading
+callback_url: http://127.0.0.1:9876/callback
+keychain_service: com.openai.robinhood-shadow.oauth
+requested_scope: internal
+socket_path: /Users/Shared/RobinhoodShadow/run/robinhood-read.sock
+proxy_user: robinhoodproxy
+socket_group: robinhoodreaders

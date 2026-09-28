@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.openai.robinhood-shadow</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PROJECT_DIR__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>agents.operator</string>
+    <string>--config</string>
+    <string>__PROJECT_DIR__/config/settings.local.yaml</string>
+    <string>--database</string>
+    <string>__PROJECT_DIR__/data/agent.db</string>
+    <string>--interval-seconds</string>
+    <string>300</string>
+  </array>
+  <key>WorkingDirectory</key><string>__PROJECT_DIR__</string>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>StandardOutPath</key><string>__PROJECT_DIR__/data/operator.log</string>
+  <key>StandardErrorPath</key><string>__PROJECT_DIR__/data/operator-error.log</string>
+</dict>
+</plist>

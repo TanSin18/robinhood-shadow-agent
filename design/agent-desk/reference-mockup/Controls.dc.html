@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Controls</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+input[type=range]{accent-color:#3dc6ff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1900px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Controls</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">Everything you can steer. Big safety buttons act immediately; experiments run on the side and never touch the official results.</p>
+</div>
+
+<section style="{{stopPanel}}">
+<div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+<span style="font-size: 20px; font-weight: 700">{{stopTitle}}</span>
+<span style="font-size: 15px; color: #cfd3da; line-height: 1.5">{{stopText}}</span>
+</div>
+<button type="button" onClick="{{togglePause}}" style="min-height: 52px; padding: 0 22px; border-radius: 12px; border: 1px solid #3a3d44; background: #1d1f23; color: #f2f3f5; font-size: 15px; font-weight: 700; cursor: pointer">{{pauseLabel}}</button>
+<sc-if value="{{askConfirm}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{confirmStop}}" style="min-height: 52px; padding: 0 22px; border-radius: 12px; border: none; background: #ff5c3a; color: #1b0a05; font-size: 15px; font-weight: 800; cursor: pointer">Yes, stop all new buys</button>
+<button type="button" onClick="{{cancelStop}}" style="min-height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid #3a3d44; background: transparent; color: #cfd3da; font-size: 15px; font-weight: 600; cursor: pointer">Cancel</button>
+</sc-if>
+<sc-if value="{{showStop}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{askStop}}" style="{{stopBtn}}">{{stopLabel}}</button>
+</sc-if>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Research a stock</h2>
+<span style="font-size: 14px; color: #a1a6b0">Ask the team to look at any company. Runs as a learning run: separate budget, never counted in the official results.</span>
+<div style="display: flex; gap: 10px">
+<label for="ticker" style="position: absolute; width: 1px; height: 1px; overflow: hidden">Stock ticker</label>
+<input id="ticker" type="text" placeholder="Ticker, e.g. AAPL" style="flex-grow: 1; height: 46px; box-sizing: border-box; background: #0f1012; border: 1px solid #33363c; border-radius: 10px; padding: 0 14px; color: #f2f3f5; font-size: 16px; font-family: 'Geist Mono', monospace">
+<button type="button" onClick="{{research}}" style="height: 46px; padding: 0 18px; border-radius: 10px; border: none; background: #3dc6ff; color: #06202b; font-size: 14px; font-weight: 700; cursor: pointer">Ask the team</button>
+</div>
+<span style="font-size: 13px; color: #8a8f99">Estimated cost about $0.06 from the learning budget ($2.64 left today).</span>
+<sc-if value="{{researched}}" hint-placeholder-val="{{ false }}">
+<div style="background: #1d2a31; border: 1px solid #2f5566; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600; color: #3dc6ff">Learning run started · about 40 seconds</span>
+<span style="font-size: 14px; color: #cfd3da; line-height: 1.5">Pip and Biscuit are reading, then Maple, Pickle and Nugget weigh in. Follow along in the Decision room under "Learning runs".</span>
+</div>
+</sc-if>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Risk style (side test)</h2>
+<span style="font-size: 14px; color: #a1a6b0">See what a more careful or bolder team would do, on paper, next to the official one.</span>
+<div style="display: flex; gap: 4px; background: #0f1012; border: 1px solid #2a2c31; border-radius: 12px; padding: 4px">
+<sc-for list="{{styles}}" as="s" hint-placeholder-count="3">
+<button type="button" onClick="{{s.pick}}" style="{{s.style}}">{{s.label}}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{styleFacts}}" as="x" hint-placeholder-count="3">
+<div style="background: #1d1f23; border-radius: 10px; padding: 12px"><div style="font-size: 12px; color: #a1a6b0">{{x.label}}</div><div style="font-size: 17px; font-weight: 700; font-family: 'Geist Mono', monospace">{{x.value}}</div></div>
+</sc-for>
+</div>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<span style="font-size: 13px; color: #8a8f99">{{styleNote}}</span>
+<button type="button" onClick="{{runStyle}}" style="{{styleBtnStyle}}">{{styleBtn}}</button>
+</div>
+</section>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Idea sources (side test)</h2>
+<span style="font-size: 14px; color: #a1a6b0">Turn TradeLog-Pro scanners on or off in a side test to learn which ones pay. The official team keeps all of them.</span>
+<sc-for list="{{scanners}}" as="s" hint-placeholder-count="8">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 120px 64px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #23252a">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">{{s.name}}</span><span style="font-size: 12px; color: #8a8f99">{{s.note}}</span></div>
+<span style="{{s.recStyle}}">{{s.rec}}</span>
+<button type="button" role="switch" aria-checked="{{s.on}}" aria-label="{{s.name}}" onClick="{{s.toggle}}" style="{{s.track}}"><span style="{{s.knob}}"></span></button>
+</div>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Budget and runs (build week)</h2>
+<sc-for list="{{sliders}}" as="b" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr) 90px; gap: 14px; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">{{b.label}}</span><span style="font-size: 12px; color: #8a8f99">{{b.help}}</span></div>
+<input type="range" min="{{b.min}}" max="{{b.max}}" step="{{b.step}}" value="{{b.value}}" onChange="{{b.change}}" aria-label="{{b.label}}">
+<span style="font-family: 'Geist Mono', monospace; font-size: 15px; text-align: right">{{b.shown}}</span>
+</div>
+</sc-for>
+<div style="background: #1d1f23; border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #a1a6b0">Most this week could cost</span><span style="font-size: 12px; color: #8a8f99">Hard stop at $20 no matter what</span></div>
+<span style="{{weekStyle}}">{{weekMax}}</span>
+</div>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Side tests running</h2>
+<sc-for list="{{tests}}" as="t" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #23252a">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 15px; font-weight: 600">{{t.name}}</span>
+<div style="height: 8px; background: #1d1f23; border-radius: 999px"><div style="{{t.bar}}"></div></div>
+</div>
+<span style="{{t.vsStyle}}">{{t.vs}}</span>
+<button type="button" onClick="{{t.act}}" style="{{t.btnStyle}}">{{t.btn}}</button>
+</div>
+</sc-for>
+<span style="font-size: 12px; color: #8a8f99">Promoting a winner makes it official in a new rulebook version (v1.6) that you approve. Results before and after are shown separately.</span>
+</section>
+</div>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Your phone</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{alerts}}" as="a" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #1d1f23; border-radius: 12px; padding: 14px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">{{a.name}}</span><span style="font-size: 12px; color: #8a8f99">{{a.note}}</span></div>
+<button type="button" role="switch" aria-checked="{{a.on}}" aria-label="{{a.name}}" onClick="{{a.toggle}}" style="{{a.track}}"><span style="{{a.knob}}"></span></button>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'running', confirm: false, researched: false, riskStyle: 'Normal', styleQueued: false,
+      scanOff: {}, budget: { official: 0.5, runs: 2, learning: 3 }, promoted: {}, alertsOff: { weekly: false, scans: true } };
+  }
+  renderVals() {
+    const st = this.state;
+    const sw = (on) => ({ track: 'width: 52px; height: 30px; border-radius: 999px; border: none; padding: 3px; cursor: pointer; display: flex; justify-content: ' + (on ? 'flex-end' : 'flex-start') + '; background: ' + (on ? '#3dc6ff' : '#3a3d44'),
+      knob: 'width: 24px; height: 24px; border-radius: 50%; background: #ffffff; display: block' });
+    const stopped = st.mode === 'stopped', paused = st.mode === 'paused';
+    const panelColor = stopped ? ['#2a1f1b', '#ff8a6b'] : paused ? ['#2a2114', '#f5b54a'] : ['#1a2a22', '#2c6a4c'];
+    const styles = ['Careful', 'Normal', 'Bold'].map((label) => ({ label, pick: () => this.setState({ riskStyle: label, styleQueued: false }),
+      style: 'flex-grow: 1; min-height: 44px; border-radius: 9px; border: none; cursor: pointer; font-size: 15px; font-weight: 700; background: ' + (label === st.riskStyle ? '#262930' : 'transparent') + '; color: ' + (label === st.riskStyle ? '#f2f3f5' : '#8a8f99') }));
+    const facts = { Careful: [['Normal buy', '6%'], ['Min conviction', '70'], ['Daily brake', '2%']], Normal: [['Normal buy', '10%'], ['Min conviction', '60'], ['Daily brake', '3%']], Bold: [['Normal buy', '15%'], ['Min conviction', '50'], ['Daily brake', '4%']] }[st.riskStyle];
+    const isNormal = st.riskStyle === 'Normal';
+    const scannerList = [['Earnings drift', 'Buys after strong earnings beats', '+3.1% · 9 trades', '#3fd08f'], ['Sector rotation', 'Funds moving into the lead', '+1.4% · 6 trades', '#3fd08f'], ['Trend (funds)', 'Steady uptrends', '+0.6% · 5 trades', '#a1a6b0'], ['Mean reversion', 'Big one-day drops that bounce', '+0.2% · 8 trades', '#a1a6b0'], ['Setup finder', 'Chart breakouts', '−0.4% · 7 trades', '#a1a6b0'], ['Day tendencies', 'Weekday and seasonal patterns', '−0.9% · 12 trades', '#f5b54a'], ['Squeeze release', 'Quiet stocks starting to move', '−1.8% · 10 trades', '#f5b54a'], ['Market-bias filter', 'Overall market mood', '−2.6% · 4 trades', '#ff8a6b']];
+    const scanners = scannerList.map(([name, note, rec, col]) => { const on = !st.scanOff[name]; return { name, note, rec, on: on ? 'true' : 'false', recStyle: 'font-size: 13px; font-family: Geist Mono, monospace; color: ' + col, ...sw(on), toggle: () => this.setState({ scanOff: { ...st.scanOff, [name]: on } }) }; });
+    const b = st.budget;
+    const setB = (k) => (e) => this.setState({ budget: { ...b, [k]: Number(e.target.value) } });
+    const sliders = [
+      { label: 'AI per official run', help: 'Ceiling for each scheduled run', min: 0.1, max: 1, step: 0.05, value: b.official, shown: '$' + b.official.toFixed(2), change: setB('official') },
+      { label: 'Official runs per day', help: 'Fixed times, always counted', min: 1, max: 4, step: 1, value: b.runs, shown: String(b.runs), change: setB('runs') },
+      { label: 'Learning budget per day', help: 'Your own research and tests', min: 0, max: 6, step: 0.5, value: b.learning, shown: '$' + b.learning.toFixed(2), change: setB('learning') }
+    ];
+    const weekMaxN = Math.min(20, 5 * (b.official * b.runs + b.learning));
+    const promoted = st.promoted;
+    const tests = [
+      ['Pip reads 6 stocks a day', 70, '+0.8% vs official', '#3fd08f', 'ready'],
+      ['Similarity limit 0.85', 35, 'too early', '#a1a6b0', 'wait'],
+      ['Skip squeezes after +15%', 10, 'just started', '#a1a6b0', 'wait']
+    ].map(([name, pct, vs, col, k]) => {
+      const done = !!promoted[name];
+      const ready = k === 'ready';
+      return { name, vs, bar: 'height: 8px; border-radius: 999px; width: ' + pct + '%; background: ' + (ready ? '#3fd08f' : '#3dc6ff'),
+        vsStyle: 'font-size: 13px; font-family: Geist Mono, monospace; color: ' + col,
+        btn: done ? 'Sent for approval' : ready ? 'Promote' : pct + '% done',
+        act: () => { if (ready) this.setState({ promoted: { ...promoted, [name]: true } }); },
+        btnStyle: 'min-height: 40px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: ' + (ready ? 'pointer' : 'default') + '; ' + (done ? 'background: #1a2a22; border: 1px solid #2c6a4c; color: #3fd08f' : ready ? 'background: #3fd08f; border: none; color: #06251a' : 'background: transparent; border: 1px solid #3a3d44; color: #8a8f99') };
+    });
+    const alertDefs = [['approvals', 'Trade approvals', 'Yes / no right from the notification'], ['problems', 'Problems and safety', 'Always on for safety alerts'], ['weekly', 'Weekly summary', 'Friday 4:30 PM'], ['lessons', 'Daily lesson', 'One thing to learn, after the close'], ['scans', 'Scanner finds', 'Every time a scan finds something'], ['budget', 'Budget warnings', 'At 80% of any cap']];
+    const alerts = alertDefs.map(([k, name, note]) => { const locked = k === 'problems'; const on = locked || !st.alertsOff[k]; return { name, note, on: on ? 'true' : 'false', ...sw(on), toggle: () => { if (!locked) this.setState({ alertsOff: { ...st.alertsOff, [k]: on } }); } }; });
+    return {
+      stopPanel: 'border-radius: 16px; padding: 22px 26px; display: flex; align-items: center; gap: 16px; background: ' + panelColor[0] + '; border: 2px solid ' + panelColor[1],
+      stopTitle: stopped ? 'Stopped: no new buys' : paused ? 'Paused' : 'Running normally',
+      stopText: stopped ? 'All new buys are blocked until you restart. Selling and safety exits still work. Restarting needs a short review of what happened.' : paused ? 'No new runs until you resume. Nothing is sold.' : 'Next official run 10:00 AM. Free scans every 30 minutes. Selling is always allowed, even when stopped.',
+      pauseLabel: paused ? 'Resume' : 'Pause runs',
+      togglePause: () => this.setState({ mode: paused ? 'running' : 'paused' }),
+      showStop: !st.confirm,
+      askConfirm: st.confirm,
+      stopLabel: stopped ? 'Restart (needs review)' : 'STOP everything',
+      stopBtn: 'min-height: 52px; padding: 0 26px; border-radius: 12px; border: none; cursor: pointer; font-size: 16px; font-weight: 800; ' + (stopped ? 'background: #3dc6ff; color: #06202b' : 'background: #ff5c3a; color: #1b0a05'),
+      askStop: () => stopped ? this.setState({ mode: 'running' }) : this.setState({ confirm: true }),
+      confirmStop: () => this.setState({ mode: 'stopped', confirm: false }),
+      cancelStop: () => this.setState({ confirm: false }),
+      research: () => this.setState({ researched: true }),
+      researched: st.researched,
+      styles,
+      styleFacts: facts.map(([label, value]) => ({ label, value })),
+      styleNote: isNormal ? 'Normal is the official setting. Pick Careful or Bold to test it.' : (st.styleQueued ? st.riskStyle + ' is running beside the official team for 8 weeks.' : 'Runs on paper beside the official team for 8 weeks.'),
+      styleBtn: isNormal ? 'Official' : (st.styleQueued ? 'Test queued' : 'Start side test'),
+      runStyle: () => { if (!isNormal) this.setState({ styleQueued: true }); },
+      styleBtnStyle: 'min-height: 44px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; ' + (isNormal ? 'background: transparent; border: 1px solid #3a3d44; color: #8a8f99' : st.styleQueued ? 'background: #1a2a22; border: 1px solid #2c6a4c; color: #3fd08f' : 'background: #3dc6ff; border: none; color: #06202b'),
+      scanners, sliders,
+      weekMax: '$' + weekMaxN.toFixed(2),
+      weekStyle: 'font-size: 24px; font-weight: 700; font-family: Geist Mono, monospace; color: ' + (weekMaxN >= 20 ? '#f5b54a' : '#f2f3f5'),
+      tests, alerts
+    };
+  }
+}
+</script>
+</body>
+</html>

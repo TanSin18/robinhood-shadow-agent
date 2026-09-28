@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Tweaks and health</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1800px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd3da; border: 1px solid #2a2c31; background: #17181b; padding: 7px 12px; border-radius: 999px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #3fd08f"></span>Paper only · real orders blocked</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">What we could tweak, and is everything healthy?</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">Suggestions come from the scoreboard. Nothing changes the official experiment until you approve it; each idea is first tested on the side.</p>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Suggested tweaks, with the evidence</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{tweaks}}" as="t" hint-placeholder-count="4">
+<article style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span style="font-size: 18px; font-weight: 600">{{t.title}}</span>
+<span style="{{t.tagStyle}}">{{t.tag}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; background: #1d1f23; border-radius: 10px; padding: 12px 14px">
+<span style="font-size: 12px; font-weight: 600; color: #a1a6b0">What we saw</span>
+<span style="font-size: 15px; line-height: 1.55; color: #e4e6ea">{{t.saw}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; font-weight: 600; color: #a1a6b0">What we'd try</span>
+<span style="font-size: 15px; line-height: 1.55; color: #e4e6ea">{{t.try}}</span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #2a2c31; padding-top: 12px">
+<span style="font-size: 13px; color: #8a8f99">{{t.how}}</span>
+<button type="button" onClick="{{t.act}}" style="{{t.btnStyle}}">{{t.btn}}</button>
+</div>
+</article>
+</sc-for>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">The dials, explained</h2>
+<p style="margin: 0; font-size: 14px; color: #a1a6b0">Locked in the experiment's rulebook. Changing one starts a new, labeled chapter of the results.</p>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{levers}}" as="l" hint-placeholder-count="8">
+<div style="display: grid; grid-template-columns: 210px 120px minmax(0, 1fr); gap: 16px; align-items: center; padding: 13px 0; border-bottom: 1px solid #23252a">
+<span style="font-size: 15px; font-weight: 600">{{l.name}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 15px; color: #3dc6ff">{{l.value}}</span>
+<span style="font-size: 14px; line-height: 1.45; color: #cfd3da">{{l.plain}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">System health</h2>
+<span style="font-size: 13px; color: #3fd08f; font-weight: 600">7 of 8 fine</span>
+</div>
+<sc-for list="{{health}}" as="h" hint-placeholder-count="7">
+<div style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: flex-start">
+<span style="{{h.dot}}"></span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 500">{{h.name}}</span>
+<span style="font-size: 13px; color: #a1a6b0; line-height: 1.4">{{h.detail}}</span>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Rulebook history</h2>
+<sc-for list="{{history}}" as="v" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; align-items: baseline">
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #3dc6ff">{{v.ver}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14px; color: #e4e6ea; line-height: 1.45">{{v.what}}</span>
+<span style="font-size: 12px; color: #8a8f99">{{v.when}}</span>
+</div>
+</div>
+</sc-for>
+</section>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { queued: {} };
+  }
+  renderVals() {
+    const q = this.state.queued;
+    const tag = (bg, fg) => 'font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; white-space: nowrap; background: ' + bg + '; color: ' + fg;
+    const raw = [
+      { id: 'budget', title: 'Give the Earnings Analyst more of the budget', tag: 'Strong signal', tagStyle: tag('#1a2a22', '#3fd08f'),
+        saw: 'The Earnings Analyst was right 11 of 18 times; the Filings & News Analyst 6 of 13. Earnings-drift is also the best scanner so far (+3.1% vs VTI).',
+        try: 'Let the Earnings Analyst read up to 6 stocks a day instead of 4, and the Filings Analyst 2 instead of 4. Same total cost.' },
+      { id: 'squeeze', title: 'Put the market-bias filter on notice', tag: 'Weak scanner', tagStyle: tag('#2a1f1b', '#ff8a6b'),
+        saw: 'The market-bias filter is 2.6% behind VTI after 4 trades, and squeeze release is 1.8% behind after 10.',
+        try: 'No change yet: 4 trades is far too few to judge. The rulebook reviews it automatically at 60 trades.' },
+      { id: 'timing', title: 'Test a looser entry timing rule', tag: 'Worth testing', tagStyle: tag('#2a2114', '#f5b54a'),
+        saw: 'Buying right away would have made $0.40 more than waiting for the code’s entry signal, across 9 picks.',
+        try: 'Run a side-by-side version that allows 1% price movement instead of 0.5% before buying.' },
+      { id: 'critic', title: 'Keep the Critic as it is', tag: 'Working', tagStyle: tag('#1d2a31', '#3dc6ff'),
+        saw: '4 of the 6 ideas the Critic blocked would have lost money. Blocking costs us little.',
+        try: 'Nothing. If later data shows its blocks turning away winners, we’d test a softer Critic on the side.' }
+    ];
+    const tweaks = raw.map((t) => {
+      const done = !!q[t.id];
+      const none = t.id === 'critic' || t.id === 'squeeze';
+      return { ...t,
+        how: none ? 'No action needed now' : (done ? 'Queued: runs on paper beside the official setup for 8 weeks' : 'Tested on the side first, never on the official account'),
+        btn: none ? 'Noted' : (done ? 'Test queued' : 'Test it on the side'),
+        act: () => { if (!none) this.setState({ queued: { ...q, [t.id]: true } }); },
+        btnStyle: 'min-height: 44px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; ' + (none ? 'background: transparent; border: 1px solid #3a3d44; color: #a1a6b0' : done ? 'background: #1a2a22; border: 1px solid #2c6a4c; color: #3fd08f' : 'background: #3dc6ff; border: none; color: #06202b') };
+    });
+    const levers = [
+      ['Starting money', '$500 / lane', 'Paper money per lane: one for stocks and funds, one for options.'],
+      ['Normal position size', '10%', 'A normal buy is about $50. Jumpy stocks get less, calm ones more, up to 25%.'],
+      ['Evidence score to proceed', '75 / 100', 'How well-sourced research must be before the Portfolio agent sees it.'],
+      ['Minimum expected profit', '$0.50', 'After trading costs, taxes and AI cost. Below this, we skip the trade.'],
+      ['Daily loss brake', '3%', 'Lose this much in a day and no new buys until tomorrow. Selling is always allowed.'],
+      ['Big loss brake', '10% / 15%', 'At 10% down, buying stops until you review. At 15%, everything locks.'],
+      ['Max similarity between holdings', '0.80', 'Stops us from owning two things that move the same way.'],
+      ['AI budget', '$1.65 / month', 'Unused money carries over, up to $5. Quiet days cost $0.'],
+      ['Critic model', 'Different AI', 'The Critic runs on a different model than the Portfolio agent, so they don’t share blind spots.']
+    ].map(([name, value, plain]) => ({ name, value, plain }));
+    const dot = (c) => 'width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: ' + c;
+    const health = [
+      ['Robinhood connection', 'Key held by the separate read-only messenger · 8 of 8 lookups allowed, 0 order tools', '#3fd08f'],
+      ['Agentic account safety', 'No margin · cash under your cap · tripwire: no changes you didn’t make', '#3fd08f'],
+      ['Real orders blocked', 'Daily hostile-order test passed at 9:55 AM', '#3fd08f'],
+      ['Today’s run', 'Started 10:00:04, finished 10:41. No retries needed.', '#3fd08f'],
+      ['Price data', '1 of 20 quotes was too old (Stock F), set aside', '#f5b54a'],
+      ['Earnings and filings feeds', 'SEC filings OK · earnings calendar OK · news OK', '#3fd08f'],
+      ['AI budget', '$1.51 used this year, $4.10 available this month', '#3fd08f'],
+      ['Phone alerts', 'Last delivered 10:42 AM (approval card)', '#3fd08f']
+    ].map(([name, detail, c]) => ({ name, detail, dot: dot(c) }));
+    const history = [
+      { ver: 'v1.5', what: 'TradeLog-Pro scanners and checks added as separate strategies', when: 'Approved Oct 2 · current' },
+      { ver: 'v1.4', what: 'Fairer comparison for the no-AI version; clearer AI budget', when: 'Approved Sep 28' },
+      { ver: 'v1.0', what: 'First rulebook', when: 'Sep 28' }
+    ];
+    return { tweaks, levers, health, history };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+"""Append-only local persistence."""
+

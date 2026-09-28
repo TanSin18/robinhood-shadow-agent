@@ -1,0 +1,247 @@
+{
+  "get_accounts": {
+    "additionalProperties": false,
+    "type": "object"
+  },
+  "get_crypto_orders": {
+    "additionalProperties": false,
+    "properties": {
+      "created_at_gte": {
+        "type": "string"
+      },
+      "cursor": {
+        "type": "string"
+      },
+      "order_id": {
+        "type": "string"
+      },
+      "rhs_account_number": {
+        "type": "string"
+      },
+      "side": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "state_group": {
+        "type": "string"
+      },
+      "symbol": {
+        "type": "string"
+      },
+      "updated_at_gte": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "rhs_account_number"
+    ],
+    "type": "object"
+  },
+  "get_equity_historicals": {
+    "additionalProperties": false,
+    "properties": {
+      "adjustment_type": {
+        "type": "string"
+      },
+      "bounds": {
+        "type": "string"
+      },
+      "end_time": {
+        "type": "string"
+      },
+      "interval": {
+        "type": "string"
+      },
+      "start_time": {
+        "type": "string"
+      },
+      "symbols": {
+        "items": {
+          "type": "string"
+        },
+        "type": [
+          "null",
+          "array"
+        ]
+      }
+    },
+    "required": [
+      "symbols",
+      "start_time"
+    ],
+    "type": "object"
+  },
+  "get_equity_orders": {
+    "additionalProperties": false,
+    "properties": {
+      "account_number": {
+        "type": "string"
+      },
+      "created_at_gte": {
+        "type": "string"
+      },
+      "cursor": {
+        "type": "string"
+      },
+      "order_id": {
+        "type": "string"
+      },
+      "placed_agent": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "symbol": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "account_number"
+    ],
+    "type": "object"
+  },
+  "get_equity_positions": {
+    "additionalProperties": false,
+    "properties": {
+      "account_number": {
+        "type": "string"
+      },
+      "cursor": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "account_number"
+    ],
+    "type": "object"
+  },
+  "get_equity_quotes": {
+    "additionalProperties": false,
+    "properties": {
+      "symbols": {
+        "items": {
+          "type": "string"
+        },
+        "type": [
+          "null",
+          "array"
+        ]
+      }
+    },
+    "required": [
+      "symbols"
+    ],
+    "type": "object"
+  },
+  "get_option_chains": {
+    "additionalProperties": false,
+    "properties": {
+      "ids": {
+        "type": "string"
+      },
+      "underlying_symbol": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "get_option_instruments": {
+    "additionalProperties": false,
+    "properties": {
+      "chain_id": {
+        "type": "string"
+      },
+      "chain_symbol": {
+        "type": "string"
+      },
+      "cursor": {
+        "type": "string"
+      },
+      "expiration_dates": {
+        "type": "string"
+      },
+      "ids": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "strike_price": {
+        "type": "string"
+      },
+      "tradability": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "get_option_orders": {
+    "additionalProperties": false,
+    "properties": {
+      "account_number": {
+        "type": "string"
+      },
+      "chain_ids": {
+        "type": "string"
+      },
+      "created_at_gte": {
+        "type": "string"
+      },
+      "cursor": {
+        "type": "string"
+      },
+      "order_id": {
+        "type": "string"
+      },
+      "placed_agent": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "underlying_type": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "account_number"
+    ],
+    "type": "object"
+  },
+  "get_option_quotes": {
+    "additionalProperties": false,
+    "properties": {
+      "instrument_ids": {
+        "items": {
+          "type": "string"
+        },
+        "type": [
+          "null",
+          "array"
+        ]
+      }
+    },
+    "required": [
+      "instrument_ids"
+    ],
+    "type": "object"
+  },
+  "get_portfolio": {
+    "additionalProperties": false,
+    "properties": {
+      "account_number": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "account_number"
+    ],
+    "type": "object"
+  }
+}

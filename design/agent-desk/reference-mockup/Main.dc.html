@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Today</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1720px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd3da; border: 1px solid #2a2c31; background: #17181b; padding: 7px 12px; border-radius: 999px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #3fd08f"></span>Paper only · real orders blocked</span>
+</header>
+
+<div style="display: flex; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Tuesday, November 17</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">Official run finished at 10:41 AM · day 51 of the one-year experiment</p>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<section style="grid-column: span 2; background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 30px; height: 30px; border-radius: 8px; background: #2a2340; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b9a3ff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"></path></svg></span>
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">What happened today, in plain English</h2>
+</div>
+<p style="margin: 0; font-size: 17px; line-height: 1.65; color: #e4e6ea">The scanners looked at 551 stocks and funds. Three stocks were interesting enough to ask the AI about. The strongest was <b style="color: #f2f3f5">Stock B</b>: it raised its sales forecast this morning, and two of our scanners (earnings drift and trend) liked it at the same time.</p>
+<p style="margin: 0; font-size: 17px; line-height: 1.65; color: #e4e6ea">The Critic, a second AI that tries to find holes, worried that 41% of Stock B's sales come from one customer. The Portfolio agent pointed to the company's filing, and the Critic accepted that. The safety checks then sized it small: about <b style="color: #f2f3f5">$31</b>, with at most <b style="color: #f2f3f5">$1.75</b> at risk. It's waiting for your yes or no.</p>
+<p style="margin: 0; font-size: 17px; line-height: 1.65; color: #e4e6ea">Nothing else was bought. That's normal: most days the right move is to wait.</p>
+<div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #2a2c31; padding-top: 16px">
+<label for="ask" style="font-size: 13px; color: #a1a6b0">Ask the Explainer about today</label>
+<div style="display: flex; gap: 10px">
+<input id="ask" type="text" placeholder="Why didn't we buy Stock C?" value="{{askText}}" style="flex-grow: 1; height: 44px; box-sizing: border-box; background: #0f1012; border: 1px solid #33363c; border-radius: 10px; padding: 0 14px; color: #f2f3f5; font-size: 15px; font-family: inherit">
+<button type="button" onClick="{{askFirst}}" style="height: 44px; padding: 0 18px; border-radius: 10px; border: none; background: #3dc6ff; color: #06202b; font-size: 14px; font-weight: 600; cursor: pointer">Ask</button>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{questions}}" as="q" hint-placeholder-count="3">
+<button type="button" onClick="{{q.pick}}" style="min-height: 36px; padding: 6px 12px; border-radius: 999px; border: 1px solid #33363c; background: #1d1f23; color: #cfd3da; font-size: 13px; cursor: pointer">{{q.text}}</button>
+</sc-for>
+</div>
+<sc-if value="{{hasAnswer}}" hint-placeholder-val="{{ false }}">
+<div style="background: #1d1a2b; border: 1px solid #3a3160; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; color: #b9a3ff; font-weight: 600">Explainer · uses only today's saved records</span>
+<span style="font-size: 15px; line-height: 1.6; color: #e4e6ea">{{answer}}</span>
+</div>
+</sc-if>
+</div>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Needs you</h2>
+<span style="font-size: 12px; color: #f5b54a">Open until 4:00 PM</span>
+</div>
+<sc-if value="{{pending}}" hint-placeholder-val="{{ true }}">
+<div style="background: #0f1012; border: 1px solid #2f5566; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-size: 13px; font-weight: 600; color: #3dc6ff">PAPER BUY</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #a1a6b0">limit $84.77</span>
+</div>
+<span style="font-size: 26px; font-weight: 700">Stock B · about $31</span>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="background: #17181b; border-radius: 8px; padding: 10px 12px"><div style="font-size: 12px; color: #a1a6b0">Most we can lose</div><div style="font-size: 18px; font-weight: 600; color: #ff8a6b">$1.75</div></div>
+<div style="background: #17181b; border-radius: 8px; padding: 10px 12px"><div style="font-size: 12px; color: #a1a6b0">AI's chance it works</div><div style="font-size: 18px; font-weight: 600">56%</div></div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #cfd3da"><b>Why:</b> raised its sales forecast; two scanners agree. <b>Critic's worry:</b> relies on one big customer. <b>We sell if</b> it drops below $80 or after 20 trading days.</p>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{approve}}" style="flex-grow: 1; height: 46px; border-radius: 10px; border: none; background: #3fd08f; color: #06251a; font-size: 15px; font-weight: 700; cursor: pointer">Yes, buy on paper</button>
+<button type="button" onClick="{{skip}}" style="flex-grow: 1; height: 46px; border-radius: 10px; border: 1px solid #3a3d44; background: transparent; color: #f2f3f5; font-size: 15px; font-weight: 600; cursor: pointer">No, skip</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+<div style="background: #0f1012; border: 1px solid #2a2c31; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 16px; font-weight: 600">{{doneTitle}}</span>
+<span style="font-size: 14px; color: #a1a6b0; line-height: 1.5">{{doneText}}</span>
+</div>
+</sc-if>
+<p style="margin: 0; font-size: 13px; color: #8a8f99; line-height: 1.5">Your answers are tracked too: the scoreboard compares "AI alone" with "AI plus your choices".</p>
+</section>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">How today's ideas were narrowed down</h2>
+<a href="Pipeline.dc.html" style="font-size: 14px; font-weight: 500">See every idea in the Decision room</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{funnel}}" as="f" hint-placeholder-count="7">
+<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr) 360px; gap: 16px; align-items: center">
+<span style="font-size: 14px; color: #cfd3da">{{f.stage}}</span>
+<div style="height: 30px; background: #1d1f23; border-radius: 6px; position: relative">
+<div style="{{f.barStyle}}"></div>
+<span style="position: absolute; left: 10px; top: 6px; font-family: 'Geist Mono', monospace; font-size: 14px; font-weight: 500; color: #f2f3f5">{{f.count}}</span>
+</div>
+<span style="font-size: 13px; color: #a1a6b0">{{f.who}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{money}}" as="m" hint-placeholder-count="4">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: #a1a6b0">{{m.label}}</span>
+<span style="font-size: 28px; font-weight: 700; font-family: 'Geist Mono', monospace; letter-spacing: -0.02em">{{m.value}}</span>
+<span style="{{m.deltaStyle}}">{{m.delta}}</span>
+<span style="font-size: 13px; color: #8a8f99; line-height: 1.45">{{m.note}}</span>
+</section>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<section style="grid-column: span 2; background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">This week</h2>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{week}}" as="d" hint-placeholder-count="5">
+<button type="button" onClick="{{d.pick}}" style="{{d.cardStyle}}">
+<span style="font-size: 13px; color: #a1a6b0">{{d.day}}</span>
+<span style="font-size: 16px; font-weight: 600; color: #f2f3f5">{{d.title}}</span>
+<span style="font-size: 13px; color: #a1a6b0">{{d.cost}}</span>
+</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #cfd3da; background: #1d1f23; border-radius: 10px; padding: 14px 16px">{{weekDetail}}</p>
+</section>
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Is the AI helping yet?</h2>
+<span style="font-size: 22px; font-weight: 700; color: #f5b54a">Too early to tell</span>
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #cfd3da">We judge the AI after one full year. So far its stock picks rank slightly better than the scanners alone, but not by enough to be sure.</p>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 13px; color: #a1a6b0"><span>Experiment progress</span><span>51 of 365 days</span></div>
+<div style="height: 10px; background: #1d1f23; border-radius: 999px"><div style="width: 14%; height: 10px; background: #3dc6ff; border-radius: 999px"></div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 13px; color: #a1a6b0"><span>Confidence the AI picks better</span><span>64% (need 80%)</span></div>
+<div style="height: 10px; background: #1d1f23; border-radius: 999px"><div style="width: 64%; height: 10px; background: #b9a3ff; border-radius: 999px"></div></div>
+</div>
+<a href="Scoreboard.dc.html" style="font-size: 14px; font-weight: 500">Open the full scoreboard</a>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1720}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { answerIdx: -1, card: 'pending', dayIdx: 1 };
+  }
+  renderVals() {
+    const qa = [
+      { text: 'Why didn’t we buy Stock C?', a: 'The Research agent gave Stock C a 45% chance of beating its sector over the next 20 trading days, which is below even odds, so it was rejected. It is still tracked: in 20 trading days we will see whether rejecting it was right.' },
+      { text: 'What does the Critic do?', a: 'The Critic is a separate AI that sees the proposal and the evidence, but not the Portfolio agent’s reasoning. Its only job is to find reasons the idea could fail. Some objections block the trade outright; others get one reply.' },
+      { text: 'Why so small, only $31?', a: 'Stock B moves around a lot (32% yearly volatility), so the safety rules shrink the position. If it falls to the $80 stop, the loss is about $1.75, well under 1% of the account.' },
+      { text: 'What did today cost?', a: 'About $0.05 of AI usage: $0.008 for Research, $0.011 for Portfolio and $0.031 for the Critic. This year so far: $1.51 of the $19.80 budget.' }
+    ];
+    const idx = this.state.answerIdx;
+    const questions = qa.map((q, i) => ({ text: q.text, pick: () => this.setState({ answerIdx: i }) }));
+    const funnel = [
+      ['Stocks and funds checked', 551, 'Code: the daily screen'],
+      ['Had a scanner signal', 11, 'Code: squeeze, rotation, earnings drift, trend…'],
+      ['Liquid and cheap to trade', 7, 'Code: spread, volume, price filters'],
+      ['Read by the AI', 3, 'Earnings Analyst + Filings & News Analyst'],
+      ['Picked', 1, 'Portfolio agent'],
+      ['Survived the Critic', 1, 'Critic agent (different AI model)'],
+      ['Sent to you', 1, 'Safety checks and sizing: code']
+    ].map(([stage, count, who]) => {
+      const pct = Math.max(1.5, Math.sqrt(count / 551) * 100);
+      const ai = who.indexOf('agent') >= 0 || who.indexOf('Analyst') >= 0;
+      return { stage, count, who, barStyle: 'position: absolute; left: 0; top: 0; height: 30px; border-radius: 6px; width: ' + pct + '%; background: ' + (ai ? '#3a3160' : '#1f4a5c') };
+    });
+    const up = 'font-size: 14px; font-weight: 600; color: #3fd08f';
+    const down = 'font-size: 14px; font-weight: 600; color: #ff8a6b';
+    const flat = 'font-size: 14px; font-weight: 600; color: #a1a6b0';
+    const money = [
+      { label: 'Our AI account (paper)', value: '$498.10', delta: '−0.4% this week', deltaStyle: down, note: 'After paying for the AI' },
+      { label: 'Same scanners, no AI', value: '$501.00', delta: '+0.2% this week', deltaStyle: up, note: 'The comparison that matters most' },
+      { label: 'Just holding the market (VTI)', value: '$497.00', delta: '−0.6% this week', deltaStyle: down, note: 'What doing nothing clever gets' },
+      { label: 'AI cost this year', value: '$1.51', delta: 'of $19.80 budget', deltaStyle: flat, note: '3 of 5 days cost $0 this week' }
+    ];
+    const days = [
+      { day: 'Mon', title: 'Quiet day', cost: '$0 · code only', text: 'Only funds showed signals, and funds never use the AI. We stayed in cash. The no-AI comparison bought one fund.' },
+      { day: 'Tue', title: 'AI ran', cost: '$0.05', text: 'Three stocks were researched; Stock B was picked, passed the Critic and was sent to you.' },
+      { day: 'Wed', title: 'Holding check', cost: '$0.04', text: 'Stock A filed its quarterly report showing stock piling up in warehouses. The AI suggested selling half, which you approved.' },
+      { day: 'Thu', title: 'Stop hit', cost: '$0 · code only', text: 'Stock B fell below $80 after an analyst downgrade. The rules sold it automatically for a loss of about $1.90. No AI needed.' },
+      { day: 'Fri', title: 'Quiet day', cost: '$0 · code only', text: 'Nothing new qualified. The weekly summary went to your phone at 4:30 PM.' }
+    ];
+    const week = days.map((d, i) => ({ ...d, pick: () => this.setState({ dayIdx: i }), cardStyle: 'display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 96px; padding: 14px; border-radius: 10px; cursor: pointer; text-align: left; background: ' + (i === this.state.dayIdx ? '#1d2a31' : '#1d1f23') + '; border: 1px solid ' + (i === this.state.dayIdx ? '#3dc6ff' : '#2a2c31') }));
+    const card = this.state.card;
+    return {
+      questions,
+      askText: idx >= 0 ? qa[idx].text : '',
+      hasAnswer: idx >= 0,
+      answer: idx >= 0 ? qa[idx].a : '',
+      askFirst: () => this.setState({ answerIdx: 0 }),
+      funnel,
+      money,
+      week,
+      weekDetail: days[this.state.dayIdx].text,
+      pending: card === 'pending',
+      done: card !== 'pending',
+      doneTitle: card === 'yes' ? 'Bought on paper: Stock B at $84.60' : 'Skipped: Stock B',
+      doneText: card === 'yes' ? 'The price was checked again when you tapped yes. It is tracked in both "AI alone" and "AI plus your choices".' : 'Tracked anyway: "AI alone" still records it, so we learn whether skipping was right.',
+      approve: () => this.setState({ card: 'yes' }),
+      skip: () => this.setState({ card: 'no' })
+    };
+  }
+}
+</script>
+</body>
+</html>

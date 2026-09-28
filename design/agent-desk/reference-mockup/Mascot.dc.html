@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team avatar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: {{px}}; height: {{px}}; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; border-radius: 50%">
+
+<sc-if value="{{isOwl}}" hint-placeholder-val="{{ true }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Pip, Earnings Analyst">
+<path d="M34 54 C32 30 46 20 60 20 C76 20 88 30 86 54 L86 78 L34 78 Z" fill="#2b1d16"></path>
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#6b5bd6"></path>
+<path d="M50 82 L60 98 L70 82 Z" fill="#f2f3f5"></path>
+<path d="M50 82 L44 104 M70 82 L76 104" stroke="#5446b8" stroke-width="2"></path>
+<rect x="52" y="68" width="16" height="16" rx="6" fill="#c9926f"></rect>
+<circle cx="38" cy="54" r="5" fill="#e0ac8a"></circle>
+<circle cx="82" cy="54" r="5" fill="#e0ac8a"></circle>
+<ellipse cx="60" cy="50" rx="22" ry="25" fill="#e0ac8a"></ellipse>
+<path d="M38 50 C38 30 50 25 60 25 C72 25 84 32 82 50 C76 40 66 36 54 36 C46 38 40 42 38 50 Z" fill="#2b1d16"></path>
+<circle cx="51" cy="53" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="53" r="2.6" fill="#1b1530"></circle>
+<circle cx="51" cy="53" r="7" fill="none" stroke="#f5b54a" stroke-width="2"></circle>
+<circle cx="69" cy="53" r="7" fill="none" stroke="#f5b54a" stroke-width="2"></circle>
+<path d="M58 53 L62 53" stroke="#f5b54a" stroke-width="2"></path>
+<path d="M53 64 Q60 69 67 64" stroke="#8a3f2c" stroke-width="2" fill="none" stroke-linecap="round"></path>
+</svg>
+</sc-if>
+
+<sc-if value="{{isBeagle}}" hint-placeholder-val="{{ false }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Biscuit, Filings and News Analyst">
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#c98a3f"></path>
+<path d="M48 82 Q60 92 72 82" stroke="#f4ead9" stroke-width="5" fill="none"></path>
+<rect x="80" y="96" width="4" height="14" rx="1.5" fill="#3dc6ff"></rect>
+<rect x="52" y="68" width="16" height="16" rx="6" fill="#8c5638"></rect>
+<circle cx="38" cy="53" r="5" fill="#a86b47"></circle>
+<circle cx="82" cy="53" r="5" fill="#a86b47"></circle>
+<ellipse cx="60" cy="50" rx="22" ry="25" fill="#a86b47"></ellipse>
+<path d="M39 58 C41 74 51 79 60 79 C69 79 79 74 81 58 C77 66 70 70 60 70 C50 70 43 66 39 58 Z" fill="#1e1410"></path>
+<path d="M38 44 C38 26 50 22 60 22 C72 22 82 28 82 44 C78 36 70 34 60 34 C50 34 42 38 38 44 Z" fill="#1e1410"></path>
+<circle cx="44" cy="30" r="5" fill="#1e1410"></circle>
+<circle cx="53" cy="25" r="5" fill="#1e1410"></circle>
+<circle cx="63" cy="24" r="5" fill="#1e1410"></circle>
+<circle cx="73" cy="27" r="5" fill="#1e1410"></circle>
+<circle cx="79" cy="34" r="4.5" fill="#1e1410"></circle>
+<circle cx="51" cy="52" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="52" r="2.6" fill="#1b1530"></circle>
+<path d="M46 46 L55 45 M65 45 L74 46" stroke="#1e1410" stroke-width="2.2" stroke-linecap="round"></path>
+<path d="M54 64 Q60 68 66 64" stroke="#f4ead9" stroke-width="2" fill="none" stroke-linecap="round"></path>
+</svg>
+</sc-if>
+
+<sc-if value="{{isBeaver}}" hint-placeholder-val="{{ false }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Maple, Portfolio builder">
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#2f5fb3"></path>
+<path d="M52 82 L60 94 L68 82 Z" fill="#f2f3f5"></path>
+<path d="M52 82 L46 108 M68 82 L74 108" stroke="#244c92" stroke-width="2"></path>
+<circle cx="84" cy="100" r="3.5" fill="#f5b54a"></circle>
+<rect x="52" y="68" width="16" height="16" rx="6" fill="#d9a584"></rect>
+<circle cx="38" cy="53" r="5" fill="#f1c7a3"></circle>
+<circle cx="82" cy="53" r="5" fill="#f1c7a3"></circle>
+<ellipse cx="60" cy="50" rx="22" ry="25" fill="#f1c7a3"></ellipse>
+<circle cx="60" cy="19" r="10" fill="#d9a441"></circle>
+<path d="M38 48 C36 30 48 24 60 24 C72 24 84 30 82 48 C78 38 70 34 60 34 C50 34 42 38 38 48 Z" fill="#d9a441"></path>
+<circle cx="51" cy="52" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="52" r="2.6" fill="#1b1530"></circle>
+<path d="M46 46 Q51 43 55 46 M65 46 Q69 43 74 46" stroke="#b8862f" stroke-width="2" fill="none" stroke-linecap="round"></path>
+<path d="M52 63 Q60 70 68 63" stroke="#a8453a" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+</svg>
+</sc-if>
+
+<sc-if value="{{isRaccoon}}" hint-placeholder-val="{{ false }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Pickle, Critic">
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#3a3d44"></path>
+<rect x="48" y="72" width="24" height="14" rx="5" fill="#3a3d44"></rect>
+<circle cx="38" cy="53" r="5" fill="#c68b64"></circle>
+<circle cx="82" cy="53" r="5" fill="#c68b64"></circle>
+<ellipse cx="60" cy="50" rx="22" ry="25" fill="#c68b64"></ellipse>
+<path d="M38 46 C36 26 52 20 64 22 C76 24 86 32 82 46 C78 36 66 30 50 34 C44 36 40 40 38 46 Z" fill="#2a2c31"></path>
+<circle cx="51" cy="53" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="53" r="2.6" fill="#1b1530"></circle>
+<path d="M45 47 L56 47" stroke="#2a2c31" stroke-width="2.6" stroke-linecap="round"></path>
+<path d="M64 45 L75 40" stroke="#2a2c31" stroke-width="2.6" stroke-linecap="round"></path>
+<path d="M54 65 L67 63" stroke="#7a3b2a" stroke-width="2.2" stroke-linecap="round"></path>
+<circle cx="88" cy="104" r="9" fill="none" stroke="#cfd3da" stroke-width="3"></circle>
+<path d="M82 110 L74 118" stroke="#cfd3da" stroke-width="3.5" stroke-linecap="round"></path>
+</svg>
+</sc-if>
+
+<sc-if value="{{isTurtle}}" hint-placeholder-val="{{ false }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Nugget, Safety rules">
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#2f3238"></path>
+<path d="M28 120 L34 90 L52 83 L55 120 Z" fill="#f5b54a"></path>
+<path d="M92 120 L86 90 L68 83 L65 120 Z" fill="#f5b54a"></path>
+<rect x="30" y="104" width="25" height="5" fill="#f2f3f5"></rect>
+<rect x="65" y="104" width="25" height="5" fill="#f2f3f5"></rect>
+<rect x="52" y="68" width="16" height="16" rx="6" fill="#744a30"></rect>
+<circle cx="38" cy="54" r="5" fill="#8d5a3b"></circle>
+<circle cx="82" cy="54" r="5" fill="#8d5a3b"></circle>
+<ellipse cx="60" cy="51" rx="22" ry="25" fill="#8d5a3b"></ellipse>
+<path d="M36 42 C36 24 48 17 60 17 C72 17 84 24 84 42 Z" fill="#3dc6ff"></path>
+<rect x="32" y="39" width="56" height="7" rx="3.5" fill="#2aa6dc"></rect>
+<rect x="57" y="18" width="6" height="21" rx="2" fill="#2aa6dc"></rect>
+<circle cx="51" cy="55" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="55" r="2.6" fill="#1b1530"></circle>
+<path d="M53 66 Q60 70 67 66" stroke="#3a1f12" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+</svg>
+</sc-if>
+
+<sc-if value="{{isParrot}}" hint-placeholder-val="{{ false }}">
+<svg width="{{size}}" height="{{size}}" viewBox="0 0 120 120" role="img" aria-label="Bubbles, Explainer">
+<path d="M34 54 C32 26 48 18 60 18 C74 18 88 26 86 54 L90 96 L30 96 Z" fill="#151012"></path>
+<path d="M16 120 C16 94 36 82 60 82 C84 82 104 94 104 120 Z" fill="#2fb67c"></path>
+<path d="M50 82 Q60 90 70 82" stroke="#1f8e5e" stroke-width="3" fill="none"></path>
+<rect x="52" y="68" width="16" height="16" rx="6" fill="#d6a07c"></rect>
+<ellipse cx="60" cy="50" rx="22" ry="25" fill="#f0c09a"></ellipse>
+<path d="M38 46 C40 28 52 24 62 24 C74 24 82 32 82 46 C74 36 62 34 50 38 C44 40 40 42 38 46 Z" fill="#151012"></path>
+<circle cx="51" cy="53" r="2.6" fill="#1b1530"></circle>
+<circle cx="69" cy="53" r="2.6" fill="#1b1530"></circle>
+<path d="M52 63 Q60 70 68 63" stroke="#a8453a" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+<path d="M36 50 C36 20 84 20 84 50" stroke="#cfd3da" stroke-width="3" fill="none"></path>
+<rect x="31" y="45" width="8" height="14" rx="3" fill="#cfd3da"></rect>
+<rect x="81" y="45" width="8" height="14" rx="3" fill="#cfd3da"></rect>
+<path d="M35 59 C37 70 46 72 52 70" stroke="#cfd3da" stroke-width="2" fill="none"></path>
+<circle cx="53" cy="70" r="2.8" fill="#cfd3da"></circle>
+</svg>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["owl","beagle","beaver","raccoon","turtle","parrot"],"default":"owl"},"size":{"editor":"int","min":24,"max":320,"default":160},"$preview":{"width":160,"height":160}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const k = this.props.kind ?? 'owl';
+    const size = this.props.size ?? 160;
+    return { size, px: size + 'px', isOwl: k === 'owl', isBeagle: k === 'beagle', isBeaver: k === 'beaver', isRaccoon: k === 'raccoon', isTurtle: k === 'turtle', isParrot: k === 'parrot' };
+  }
+}
+</script>
+</body>
+</html>

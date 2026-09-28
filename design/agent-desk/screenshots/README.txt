@@ -1,0 +1,1 @@
+Export each screen of the Agent Desk canvas as PNG (Share > Export in the canvas) and drop them here: 1-today.png, 2-decision-room.png, 3-road-to-money.png, 4-scoreboard.png, 5-controls.png, 6-tweaks-health.png

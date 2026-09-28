@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Scoreboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1900px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd3da; border: 1px solid #2a2c31; background: #17181b; padding: 7px 12px; border-radius: 999px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #3fd08f"></span>Paper only · real orders blocked</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Is the multi-agent setup working for us?</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">Four tests, checked every day. The AI keeps its job only if it beats the same scanners without AI, after paying for itself.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{tests}}" as="t" hint-placeholder-count="4">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; color: #a1a6b0">{{t.name}}</span>
+<span style="{{t.verdictStyle}}">{{t.verdict}}</span>
+<span style="font-size: 15px; font-weight: 600; font-family: 'Geist Mono', monospace">{{t.number}}</span>
+<span style="font-size: 14px; line-height: 1.5; color: #cfd3da">{{t.plain}}</span>
+</section>
+</sc-for>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Account value, every approach side by side</h2>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="5">
+<button type="button" onClick="{{l.toggle}}" aria-pressed="{{l.on}}" style="{{l.legendStyle}}"><span style="{{l.swatch}}"></span>{{l.name}}</button>
+</sc-for>
+</div>
+</div>
+<svg width="1272" height="320" viewBox="0 0 1272 320" role="img" aria-label="Account value over 51 days for each approach">
+<line x1="60" y1="40" x2="1260" y2="40" stroke="#23252a"></line>
+<line x1="60" y1="120" x2="1260" y2="120" stroke="#23252a"></line>
+<line x1="60" y1="200" x2="1260" y2="200" stroke="#23252a"></line>
+<line x1="60" y1="280" x2="1260" y2="280" stroke="#2f3238"></line>
+<text x="50" y="44" fill="#8a8f99" font-size="12" text-anchor="end" font-family="Geist Mono, monospace">$510</text>
+<text x="50" y="124" fill="#8a8f99" font-size="12" text-anchor="end" font-family="Geist Mono, monospace">$505</text>
+<text x="50" y="204" fill="#8a8f99" font-size="12" text-anchor="end" font-family="Geist Mono, monospace">$500</text>
+<text x="50" y="284" fill="#8a8f99" font-size="12" text-anchor="end" font-family="Geist Mono, monospace">$495</text>
+<text x="60" y="308" fill="#8a8f99" font-size="12" font-family="Geist, sans-serif">Oct 1</text>
+<text x="660" y="308" fill="#8a8f99" font-size="12" text-anchor="middle" font-family="Geist, sans-serif">Oct 26</text>
+<text x="1260" y="308" fill="#8a8f99" font-size="12" text-anchor="end" font-family="Geist, sans-serif">Nov 20</text>
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="5">
+<polyline points="{{l.points}}" fill="none" stroke="{{l.color}}" stroke-width="{{l.width}}" stroke-dasharray="{{l.dash}}" stroke-opacity="{{l.opacity}}" stroke-linejoin="round" stroke-linecap="round"></polyline>
+</sc-for>
+</svg>
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #cfd3da">After 51 days every line is within about $5 of the others. That's normal: with small positions, real differences take months to show. The picking test below reacts faster, because it scores every idea the AI looks at, not just the ones we buy.</p>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Which scanners are finding money?</h2>
+<p style="margin: 0; font-size: 14px; color: #a1a6b0">Each idea source from TradeLog-Pro runs its own paper account. Return after costs, compared with just holding VTI.</p>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{arms}}" as="a" hint-placeholder-count="8">
+<div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 64px 118px; gap: 12px; align-items: center">
+<span style="font-size: 14px; color: #e4e6ea">{{a.name}}</span>
+<div style="height: 22px; position: relative; background: #1d1f23; border-radius: 4px">
+<div style="position: absolute; left: 50%; top: -3px; width: 1px; height: 28px; background: #4a4e56"></div>
+<div style="{{a.barStyle}}"></div>
+</div>
+<span style="{{a.valStyle}}">{{a.val}}</span>
+<span style="{{a.statusStyle}}">{{a.status}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 13px; color: #8a8f99">Center line = same as VTI. Trade counts are still small, so "Leading" is not proof yet.</p>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">When the AI says a chance, is it honest?</h2>
+<p style="margin: 0; font-size: 14px; color: #a1a6b0">Research forecasts grouped by what it said, against how often it actually happened. Matching bars = honest.</p>
+<svg width="580" height="260" viewBox="0 0 580 260" role="img" aria-label="Stated chance versus actual hit rate by bucket">
+<line x1="40" y1="220" x2="570" y2="220" stroke="#2f3238"></line>
+<sc-for list="{{calib}}" as="c" hint-placeholder-count="4">
+<rect x="{{c.x1}}" y="{{c.y1}}" width="40" height="{{c.h1}}" rx="3" fill="#3a3160"></rect>
+<rect x="{{c.x2}}" y="{{c.y2}}" width="40" height="{{c.h2}}" rx="3" fill="#b9a3ff"></rect>
+<text x="{{c.lx}}" y="244" fill="#a1a6b0" font-size="13" text-anchor="middle" font-family="Geist, sans-serif">{{c.label}}</text>
+<text x="{{c.lx}}" y="{{c.ny}}" fill="#e4e6ea" font-size="12" text-anchor="middle" font-family="Geist Mono, monospace">{{c.n}}</text>
+</sc-for>
+</svg>
+<div style="display: flex; gap: 18px; font-size: 13px; color: #a1a6b0">
+<span style="display: flex; gap: 8px; align-items: center"><span style="width: 12px; height: 12px; border-radius: 3px; background: #3a3160"></span>What the AI said</span>
+<span style="display: flex; gap: 8px; align-items: center"><span style="width: 12px; height: 12px; border-radius: 3px; background: #b9a3ff"></span>What actually happened</span>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #cfd3da">So far it's a little overconfident at 70% and above. Until 50 forecasts are scored, the system automatically halves its confidence before sizing anything.</p>
+</section>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Report card for each agent</h2>
+<div style="display: grid; grid-template-columns: 220px 150px 150px 170px 130px minmax(0, 1fr); gap: 0; font-size: 14px">
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">Agent</span>
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">Calls scored</span>
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">Right</span>
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">Beats simple guess?</span>
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">Cost so far</span>
+<span style="padding: 10px 12px; color: #a1a6b0; font-size: 13px; border-bottom: 1px solid #2a2c31">In plain English</span>
+<sc-for list="{{cards}}" as="r" hint-placeholder-count="5">
+<span style="padding: 14px 12px; font-weight: 600; border-bottom: 1px solid #23252a">{{r.agent}}</span>
+<span style="padding: 14px 12px; font-family: 'Geist Mono', monospace; border-bottom: 1px solid #23252a">{{r.scored}}</span>
+<span style="padding: 14px 12px; font-family: 'Geist Mono', monospace; border-bottom: 1px solid #23252a">{{r.right}}</span>
+<span style="{{r.beatStyle}}">{{r.beat}}</span>
+<span style="padding: 14px 12px; font-family: 'Geist Mono', monospace; border-bottom: 1px solid #23252a">{{r.cost}}</span>
+<span style="padding: 14px 12px; color: #cfd3da; line-height: 1.45; border-bottom: 1px solid #23252a">{{r.plain}}</span>
+</sc-for>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<sc-for list="{{splits}}" as="s" hint-placeholder-count="3">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">{{s.title}}</h2>
+<span style="{{s.numStyle}}">{{s.num}}</span>
+<span style="font-size: 14px; line-height: 1.5; color: #cfd3da">{{s.plain}}</span>
+</section>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { hidden: {} };
+  }
+  renderVals() {
+    const tests = [
+      { name: 'Money test', verdict: 'Behind, too early', color: '#f5b54a', number: 'AI −0.4% vs no-AI +0.2%', plain: 'After paying for the AI, our account is slightly behind the same scanners without AI.' },
+      { name: 'Picking test', verdict: 'Slightly ahead', color: '#3fd08f', number: '0.58 vs 0.52 · 64% sure', plain: 'The AI ranks stocks a little better than the scanners do. We need to be 80% sure before trusting it.' },
+      { name: 'Honesty test', verdict: 'A bit overconfident', color: '#f5b54a', number: '31 of 50 forecasts scored', plain: 'When the AI says 70%, it has been right about 58% of the time so far.' },
+      { name: 'Cost test', verdict: 'On budget', color: '#3fd08f', number: '$1.51 of $19.80', plain: 'AI ran on 19 of 51 days. Quiet days cost nothing.' }
+    ].map((t) => ({ ...t, verdictStyle: 'font-size: 22px; font-weight: 700; color: ' + t.color }));
+    const series = (seed, drift, vol) => {
+      const pts = []; let v = 500;
+      for (let i = 0; i < 51; i++) {
+        v += drift + vol * (Math.sin(i * 0.9 + seed) * 0.6 + Math.sin(i * 0.37 + seed * 2) * 0.4);
+        pts.push(v);
+      }
+      return pts;
+    };
+    const defs = [
+      { key: 'ai', name: 'Our AI account', color: '#b9a3ff', width: 3, dash: '', pts: series(1, -0.035, 0.9) },
+      { key: 'you', name: 'AI + your choices', color: '#e7ddff', width: 1.5, dash: '5 4', pts: series(1.3, -0.02, 0.85) },
+      { key: 'noai', name: 'Same scanners, no AI', color: '#3dc6ff', width: 3, dash: '', pts: series(2, 0.02, 0.8) },
+      { key: 'vti', name: 'Hold VTI', color: '#9aa0aa', width: 2, dash: '', pts: series(4, -0.06, 1.2) },
+      { key: 'cash', name: 'Cash', color: '#5b606a', width: 1.5, dash: '2 5', pts: Array(51).fill(500) }
+    ];
+    const hidden = this.state.hidden;
+    const lines = defs.map((d) => {
+      const on = !hidden[d.key];
+      const points = d.pts.map((v, i) => (60 + i * 24) + ',' + (200 - (v - 500) * 16).toFixed(1)).join(' ');
+      return { name: d.name, color: d.color, width: d.width, dash: d.dash, points, on: on ? 'true' : 'false', opacity: on ? 1 : 0,
+        toggle: () => this.setState({ hidden: { ...hidden, [d.key]: on } }),
+        legendStyle: 'display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 13px; background: #1d1f23; border: 1px solid #2a2c31; color: ' + (on ? '#f2f3f5' : '#6b707a'),
+        swatch: 'width: 14px; height: 4px; border-radius: 2px; background: ' + d.color + '; opacity: ' + (on ? 1 : 0.35) };
+    });
+    const armData = [
+      ['Earnings drift', 3.1, 9, 'Leading'], ['Sector rotation', 1.4, 6, 'Leading'], ['Trend (funds)', 0.6, 5, 'Needs more trades'],
+      ['Mean reversion', 0.2, 8, 'Needs more trades'], ['Setup finder', -0.4, 7, 'Needs more trades'], ['Day tendencies', -0.9, 12, 'Watch'],
+      ['Squeeze release', -1.8, 10, 'Watch'], ['Market-bias filter', -2.6, 4, 'Retire review at 60']
+    ];
+    const arms = armData.map(([name, v, n, status]) => {
+      const w = Math.min(50, Math.abs(v) * 12);
+      const pos = v >= 0;
+      const col = pos ? '#3fd08f' : '#ff8a6b';
+      const stCol = status === 'Leading' ? '#3fd08f' : status === 'Watch' ? '#f5b54a' : status.indexOf('Retire') === 0 ? '#ff8a6b' : '#a1a6b0';
+      return { name: name + ' · ' + n, val: (pos ? '+' : '−') + Math.abs(v).toFixed(1) + '%',
+        barStyle: 'position: absolute; top: 3px; height: 16px; border-radius: 3px; background: ' + col + '; width: ' + w + '%; ' + (pos ? 'left: 50%' : 'right: 50%'),
+        valStyle: 'font-family: Geist Mono, monospace; font-size: 13px; text-align: right; color: ' + col,
+        status, statusStyle: 'font-size: 12px; font-weight: 600; color: ' + stCol };
+    });
+    const buckets = [['40–50%', 45, 44, 9], ['50–60%', 55, 57, 11], ['60–70%', 65, 61, 7], ['70%+', 75, 58, 4]];
+    const calib = buckets.map(([label, said, got, n], i) => {
+      const base = 60 + i * 130;
+      const h1 = said * 2.4, h2 = got * 2.4;
+      return { label, n: 'n=' + n, x1: base, x2: base + 44, y1: 220 - h1, y2: 220 - h2, h1, h2, lx: base + 42, ny: 220 - Math.max(h1, h2) - 8 };
+    });
+    const good = '#3fd08f', warn = '#f5b54a', bad = '#ff8a6b';
+    const cardRows = [
+      ['Earnings Analyst', '18', '11 of 18', 'Yes, slightly', good, '$0.34', 'The best reader so far. Its picks beat their sector more often than not.'],
+      ['Filings & News Analyst', '13', '6 of 13', 'Not yet', warn, '$0.31', 'About a coin flip so far. Too few calls to judge.'],
+      ['Portfolio agent', '9', '5 of 9', 'Too few to say', warn, '$0.29', 'Picked 9 ideas; 5 would have made money after costs.'],
+      ['Critic', '9', '4 of 6 vetoes', 'Yes, slightly', good, '$0.54', 'Of 6 ideas it blocked, 4 would have lost money. Its blocks are helping.'],
+      ['Explainer', '—', '—', 'Not scored', '#a1a6b0', '$0.03', 'Writes the daily story. Checked for facts that don’t match the records.']
+    ];
+    const cards = cardRows.map(([agent, scored, right, beat, col, cost, plain]) => ({ agent, scored, right, beat, cost, plain,
+      beatStyle: 'padding: 14px 12px; font-weight: 600; border-bottom: 1px solid #23252a; color: ' + col }));
+    const splits = [
+      { title: 'Choosing vs timing', num: 'Choosing +$2.10 · Timing −$0.40', color: '#e4e6ea', plain: 'The AI’s choices of what to buy added a little. Waiting for the code’s entry signal cost a little. Timing rules may need a look.' },
+      { title: 'Your yes/no decisions', num: '−$0.60 vs AI alone', color: '#ff8a6b', plain: 'The ideas you skipped would have made a bit more than the ones you approved. Early days; 7 decisions so far.' },
+      { title: 'Stop rule', num: 'Day 51 of 365', color: '#e4e6ea', plain: 'At one year, the AI is switched off unless it is at least 80% likely to pick better and not losing to the no-AI version.' }
+    ].map((s) => ({ ...s, numStyle: 'font-size: 18px; font-weight: 700; font-family: Geist Mono, monospace; color: ' + s.color }));
+    return { tests, lines, arms, calib, cards, splits };
+  }
+}
+</script>
+</body>
+</html>

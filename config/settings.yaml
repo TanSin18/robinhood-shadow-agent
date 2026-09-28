@@ -1,0 +1,41 @@
+stage: 1
+broker: paper
+starting_cash_usd: 500.00
+research_model_name: gpt-5.6-luna
+portfolio_model_name: gpt-5.6-terra
+critic_model_name: gpt-5.6-terra
+daily_api_budget_usd: 0.40
+full_llm_cycle_time_et: '10:00'
+weekly_report_day_et: Friday
+weekly_report_time_et: '16:30'
+paper_lanes:
+  stocks_etfs_starting_cash_usd: 500.00
+  options_starting_cash_usd: 500.00
+approval_expiry_minutes: 30
+broker_proxy_socket: data/runtime/robinhood-read.sock
+risk:
+  agentic_account_id: REPLACE_WITH_AGENTIC_ACCOUNT_ID
+  instrument_whitelist: [SPY, QQQ, VTI, SOXX, XLE, XLU, GLD, TLT, AAPL, MSFT, NVDA, AMZN, GOOGL, META]
+  target_position_fraction: 0.10
+  target_volatility_fraction: 0.20
+  max_quote_age_seconds: 60
+  max_limit_distance_fraction: 0.005
+  max_position_fraction: 0.25
+  max_open_positions: 5
+  options_unlocked: true  # Paper long calls/puts only; real tools remain unavailable.
+  max_orders_per_day: 5
+  daily_loss_fraction: 0.03
+  drawdown_buy_block_fraction: 0.10
+  drawdown_lock_fraction: 0.15
+  short_term_tax_fraction: 0.35
+  long_term_tax_fraction: 0.15
+observability:
+  otlp_endpoint: http://127.0.0.1:6006/v1/traces
+  trace_viewer_base_url: http://127.0.0.1:6006
+  mlflow_tracking_uri: ./mlruns/mlflow.db
+notifications:
+  pushover_enabled: true
+  keychain_service: com.openai.robinhood-shadow.pushover
+  user_account: PUSHOVER_USER
+  token_account: PUSHOVER_TOKEN
+  dashboard_base_url: http://127.0.0.1:8765

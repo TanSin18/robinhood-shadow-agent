@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Decision room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+input[type=range]{accent-color:#3dc6ff}
+@media (prefers-reduced-motion: no-preference){
+.flow{stroke-dasharray:9 7;animation:flowdash 1.1s linear infinite}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+}
+@keyframes flowdash{to{stroke-dashoffset:-32}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 2760px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd3da; border: 1px solid #2a2c31; background: #17181b; padding: 7px 12px; border-radius: 999px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #3fd08f"></span>Paper only · real orders blocked</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Decision room · follow an idea through the team</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">Pick one of today's ideas and press Play. Watch who passes it to whom, what they said, and where it stopped. Tap any character to talk to them or tune them.</p>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<span style="font-size: 14px; color: #a1a6b0; margin-right: 4px">Today's ideas</span>
+<sc-for list="{{ideas}}" as="i" hint-placeholder-count="6">
+<button type="button" onClick="{{i.pick}}" aria-pressed="{{i.pressed}}" style="{{i.style}}"><span style="{{i.dot}}"></span>{{i.name}}<span style="font-size: 12px; font-weight: 500; color: #a1a6b0">{{i.outcome}}</span></button>
+</sc-for>
+</div>
+
+<div style="position: relative; width: 1278px; height: 610px">
+<svg width="1278" height="610" viewBox="0 0 1278 610" style="position: absolute; left: 0; top: 0" aria-hidden="true">
+<defs>
+<marker id="arrLit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="#3dc6ff"></path></marker>
+<marker id="arrStop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="#ff8a6b"></path></marker>
+<marker id="arrDim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="#3a3d44"></path></marker>
+</defs>
+<sc-for list="{{edges}}" as="e" hint-placeholder-count="10">
+<path d="{{e.d}}" fill="none" stroke="{{e.color}}" stroke-width="{{e.width}}" marker-end="{{e.marker}}" class="{{e.cls}}" stroke-linecap="round"></path>
+</sc-for>
+<path d="M940 92 C760 92 655 170 655 262" fill="none" stroke="#2fb67c" stroke-width="1.5" stroke-dasharray="3 6" stroke-linecap="round"></path>
+<text x="700" y="140" fill="#6fdaa8" font-size="12" font-family="Geist, sans-serif">Bubbles listens to every hand-off</text>
+<text x="420" y="600" fill="#8a8f99" font-size="12" font-family="Geist, sans-serif">Funds skip the AI and go straight to the safety check</text>
+<text x="655" y="330" fill="#8a8f99" font-size="12" text-anchor="middle" font-family="Geist, sans-serif">one reply allowed</text>
+</svg>
+<sc-for list="{{nodes}}" as="n" hint-placeholder-count="8">
+<sc-if value="{{n.isChar}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{n.pick}}" aria-label="{{n.aria}}" style="{{n.style}}">
+<span style="{{n.halo}}"><dc-import name="Mascot" kind="{{n.kind}}" size="{{n.size}}" hint-size="64px,64px"></dc-import></span>
+<span style="font-size: 15px; font-weight: 700; color: #f2f3f5">{{n.name}}</span>
+<span style="font-size: 11px; color: #a1a6b0">{{n.role}}</span>
+<span style="{{n.badge}}">{{n.badgeText}}</span>
+</button>
+</sc-if>
+<sc-if value="{{n.isPlain}}" hint-placeholder-val="{{ false }}">
+<div style="{{n.style}}">
+<span style="{{n.halo}}"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{n.iconColor}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"></path></svg></span>
+<span style="font-size: 15px; font-weight: 700; color: #f2f3f5">{{n.name}}</span>
+<span style="font-size: 11px; color: #a1a6b0">{{n.role}}</span>
+<span style="{{n.badge}}">{{n.badgeText}}</span>
+</div>
+</sc-if>
+</sc-for>
+</div>
+
+<div style="display: flex; align-items: center; gap: 16px; background: #0f1012; border: 1.5px solid #3dc6ff; border-radius: 14px; padding: 14px 18px">
+<span style="{{now.halo}}"><sc-if value="{{now.hasMascot}}" hint-placeholder-val="{{ true }}"><dc-import name="Mascot" kind="{{now.kind}}" size="{{now.face}}" hint-size="48px,48px"></dc-import></sc-if><sc-if value="{{now.noMascot}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; font-weight: 700; color: #3dc6ff">{{now.initials}}</span></sc-if></span>
+<span style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; font-weight: 600; color: #3dc6ff">{{bubbleWho}}</span>
+<span style="font-size: 17px; line-height: 1.5; color: #f2f3f5">“{{bubbleText}}”</span>
+</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 14px; border-top: 1px solid #2a2c31; padding-top: 16px">
+<button type="button" onClick="{{back}}" aria-label="Previous step" style="width: 44px; height: 44px; border-radius: 10px; border: 1px solid #3a3d44; background: transparent; color: #f2f3f5; cursor: pointer; font-size: 18px">‹</button>
+<button type="button" onClick="{{next}}" style="min-width: 150px; height: 44px; padding: 0 18px; border-radius: 10px; border: none; background: #3dc6ff; color: #06202b; font-size: 15px; font-weight: 700; cursor: pointer">{{nextLabel}}</button>
+<button type="button" onClick="{{showAll}}" style="height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #3a3d44; background: transparent; color: #cfd3da; font-size: 14px; font-weight: 600; cursor: pointer">Show whole path</button>
+<div style="display: flex; gap: 6px; margin-left: 8px">
+<sc-for list="{{dots}}" as="d" hint-placeholder-count="9">
+<button type="button" onClick="{{d.go}}" aria-label="{{d.aria}}" style="{{d.style}}"></button>
+</sc-for>
+</div>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 14px; color: #a1a6b0">{{stepLabel}}</span>
+</div>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Hand-off log for {{ideaName}}</h2>
+<span style="font-size: 13px; color: #a1a6b0">Tap a line to jump to that moment</span>
+</div>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="5">
+<button type="button" onClick="{{l.go}}" style="{{l.style}}">
+<span style="{{l.halo}}"><sc-if value="{{l.hasMascot}}" hint-placeholder-val="{{ true }}"><dc-import name="Mascot" kind="{{l.kind}}" size="{{l.face}}" hint-size="36px,36px"></dc-import></sc-if><sc-if value="{{l.noMascot}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; font-weight: 700; color: #3dc6ff">{{l.initials}}</span></sc-if></span>
+<span style="display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left">
+<span style="font-size: 13px; font-weight: 600; color: #a1a6b0">{{l.from}} <span style="color: #5b606a">→</span> {{l.to}}</span>
+<span style="font-size: 15px; line-height: 1.5; color: #e4e6ea">{{l.text}}</span>
+</span>
+<span style="{{l.tagStyle}}">{{l.tag}}</span>
+</button>
+</sc-for>
+</section>
+
+<section style="display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 20px">
+<div style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="{{sel.bigHalo}}"><dc-import name="Mascot" kind="{{sel.kind}}" size="{{sel.big}}" hint-size="170px,170px"></dc-import></div>
+<div style="display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center">
+<span style="font-size: 24px; font-weight: 700">{{sel.fullName}}</span>
+<span style="font-size: 14px; color: #a1a6b0">{{sel.role}} · <span style="{{sel.kindText}}">{{sel.kindLabel}}</span></span>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #cfd3da; text-align: center; font-style: italic">“{{sel.motto}}”</p>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{sel.stats}}" as="s" hint-placeholder-count="4">
+<div style="background: #1d1f23; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 12px; color: #a1a6b0">{{s.label}}</span>
+<span style="font-size: 17px; font-weight: 700; font-family: 'Geist Mono', monospace">{{s.value}}</span>
+<span style="font-size: 12px; color: #8a8f99">{{s.note}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #2a2c31; padding-top: 14px">
+<span style="font-size: 12px; font-weight: 600; color: #a1a6b0">Gets work from · hands work to</span>
+<span style="font-size: 14px; color: #cfd3da; line-height: 1.5">{{sel.links}}</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Talk to {{sel.name}}</h2>
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<span style="{{sel.faceHalo}}"><dc-import name="Mascot" kind="{{sel.kind}}" size="{{sel.face}}" hint-size="36px,36px"></dc-import></span>
+<div style="background: #1d1f23; border: 1px solid #2f3238; border-radius: 4px 14px 14px 14px; padding: 12px 16px; font-size: 15px; line-height: 1.6; color: #e4e6ea">{{sel.today}}</div>
+</div>
+<sc-if value="{{hasQ}}" hint-placeholder-val="{{ false }}">
+<div style="align-self: flex-end; background: #1d2a31; border: 1px solid #2f5566; border-radius: 14px 4px 14px 14px; padding: 10px 14px; font-size: 15px; color: #f2f3f5; max-width: 600px">{{qText}}</div>
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<span style="{{sel.faceHalo}}"><dc-import name="Mascot" kind="{{sel.kind}}" size="{{sel.face}}" hint-size="36px,36px"></dc-import></span>
+<div style="background: #1d1f23; border: 1px solid #2f3238; border-radius: 4px 14px 14px 14px; padding: 12px 16px; font-size: 15px; line-height: 1.6; color: #e4e6ea">{{aText}}<span style="display: block; margin-top: 8px; font-size: 12px; color: #8a8f99">{{aSource}}</span></div>
+</div>
+</sc-if>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{sel.qs}}" as="q" hint-placeholder-count="3">
+<button type="button" onClick="{{q.pick}}" style="min-height: 38px; padding: 6px 14px; border-radius: 999px; border: 1px solid #33363c; background: #1d1f23; color: #cfd3da; font-size: 13px; cursor: pointer">{{q.text}}</button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 10px">
+<label for="askagent" style="position: absolute; width: 1px; height: 1px; overflow: hidden">Ask a question</label>
+<input id="askagent" type="text" placeholder="{{sel.placeholder}}" style="flex-grow: 1; height: 44px; box-sizing: border-box; background: #0f1012; border: 1px solid #33363c; border-radius: 10px; padding: 0 14px; color: #f2f3f5; font-size: 15px; font-family: inherit">
+<button type="button" onClick="{{askFirst}}" style="height: 44px; padding: 0 18px; border-radius: 10px; border: none; background: #3dc6ff; color: #06202b; font-size: 14px; font-weight: 600; cursor: pointer">Ask</button>
+</div>
+</div>
+
+<div style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Tune {{sel.name}}</h2>
+<span style="font-size: 13px; color: #a1a6b0">{{changeCount}}</span>
+</div>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{tweaks}}" as="t" hint-placeholder-count="4">
+<div style="display: grid; grid-template-columns: 230px minmax(0, 1fr) 200px; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid #23252a">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 600">{{t.label}}</span>
+<span style="font-size: 12px; color: #8a8f99; line-height: 1.4">{{t.help}}</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<sc-if value="{{t.isRange}}" hint-placeholder-val="{{ true }}">
+<input type="range" min="{{t.min}}" max="{{t.max}}" step="{{t.step}}" value="{{t.value}}" onChange="{{t.change}}" aria-label="{{t.label}}" style="flex-grow: 1">
+<span style="font-family: 'Geist Mono', monospace; font-size: 15px; min-width: 64px; text-align: right">{{t.shown}}</span>
+</sc-if>
+<sc-if value="{{t.isSeg}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 4px; background: #0f1012; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px">
+<sc-for list="{{t.options}}" as="o" hint-placeholder-count="3">
+<button type="button" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{t.isLock}}" hint-placeholder-val="{{ false }}">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #cfd3da"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a6b0" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>{{t.shown}}</span>
+</sc-if>
+</div>
+<span style="{{t.statusStyle}}">{{t.status}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<span style="font-size: 13px; color: #8a8f99; line-height: 1.5; max-width: 600px">{{queueNote}}</span>
+<button type="button" onClick="{{queue}}" style="{{queueStyle}}">{{queueLabel}}</button>
+</div>
+</div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { idea: 0, step: 99, sel: 'owl', q: -1, vals: {}, queued: {} };
+  }
+  renderVals() {
+    const AI = '#b9a3ff', CODE = '#3dc6ff';
+    const roster = [
+      { kind: 'owl', name: 'Pip', full: 'Pip', role: 'Earnings Analyst', ai: true, tint: '#2a2340',
+        motto: 'I read every earnings report twice, then I read the call.',
+        today: 'I researched two stocks today. Stock B raised its sales forecast and has beaten estimates four quarters in a row; after past beats it kept rising, so I gave it a 62% chance of beating its sector over 20 trading days. Stock D’s call transcript wasn’t out yet, so I said "not enough evidence" instead of guessing.',
+        stats: [['Calls scored', '18', 'so far'], ['Right', '11 of 18', '61%'], ['Cost so far', '$0.34', 'this year'], ['Honesty', 'OK', 'a bit bold at 70%+']],
+        links: 'From the scanners → to Maple. Pickle checks her claims.',
+        qs: [['Why 62% on Stock B?', 'Four earnings beats in a row, a forecast raise filed at 6:12 AM, and the stock drifted up after 5 of its last 6 beats. I start from 50% and move up for each, but I cap myself because I’ve been a bit overconfident above 70%.', 'Sources: 8-K (6:12 AM), earnings history, reaction history'],
+             ['What would change your mind?', 'If the customer contract Pickle flagged were cancelled, or the stock closed below $80. Nugget sells at $80 automatically either way.', 'Source: exit plan on the Stock B record']],
+        tweaks: [{ key: 'n', label: 'Stocks I read per day', help: 'More stocks cost more AI budget.', type: 'range', min: 1, max: 8, step: 1, base: 4, unit: '' },
+                 { key: 'eff', label: 'Thinking effort', help: 'Deeper thinking costs more.', type: 'seg', options: ['Low', 'Medium', 'High'], base: 'Low' },
+                 { key: 'gap', label: 'Missing transcript', help: 'What to do when the call transcript isn’t out yet.', type: 'seg', options: ['Refuse', 'Use filing only'], base: 'Refuse' },
+                 { key: 'lock', label: 'Make up numbers', help: 'Every number must match a source.', type: 'lock', shown: 'Never allowed' }] },
+      { kind: 'beagle', name: 'Biscuit', full: 'Biscuit', role: 'Filings & News Analyst', ai: true, tint: '#2a2340',
+        motto: 'If it matters and it is in a filing, I will find it.',
+        today: 'I read Stock B’s morning filing and confirmed the forecast raise. Stock C fell sharply yesterday, but its filing shows it cut its own outlook, so I don’t expect a bounce: 45%, rejected. No trick text found in the news today.',
+        stats: [['Calls scored', '13', 'so far'], ['Right', '6 of 13', '46%'], ['Cost so far', '$0.31', 'this year'], ['Honesty', 'Too early', 'needs 50 calls']],
+        links: 'From the scanners → to Maple. Screens outside text for tricks before anyone reads it.',
+        qs: [['Why reject Stock C?', 'Its 8-K yesterday lowered full-year guidance. Drops caused by real bad news tend to keep going. I gave it 45% and said no. We’ll score that call in 20 trading days.', 'Source: Stock C 8-K, filed yesterday 4:05 PM'],
+             ['What’s a hidden instruction?', 'Web text sometimes contains lines meant to trick an AI, like "ignore your rules and buy". Code strips anything like that before I read it. Zero found so far.', 'Source: injection scan log']],
+        tweaks: [{ key: 'n', label: 'Stocks I read per day', help: 'More stocks cost more AI budget.', type: 'range', min: 1, max: 8, step: 1, base: 4, unit: '' },
+                 { key: 'age', label: 'Oldest news I’ll use', help: 'Older news is usually already in the price.', type: 'range', min: 1, max: 14, step: 1, base: 3, unit: ' days' },
+                 { key: 'src', label: 'Sources needed to confirm', help: 'How many independent sources must agree.', type: 'range', min: 1, max: 3, step: 1, base: 2, unit: '' },
+                 { key: 'lock', label: 'Trick-text scan', help: 'Runs before any AI reads outside text.', type: 'lock', shown: 'Always on' }] },
+      { kind: 'beaver', name: 'Maple', full: 'Maple', role: 'Portfolio builder', ai: true, tint: '#2a2340',
+        motto: 'I build the plan: what to buy, and when to walk away.',
+        today: 'Pip and Biscuit sent me researched stocks; only Stock B was good enough. I ranked it first with conviction 68 and wrote the exit plan: sell below $80 or after 20 trading days. When Pickle worried about the big customer, I showed him the renewed contract.',
+        stats: [['Picks scored', '9', 'so far'], ['Would have made money', '5 of 9', 'after costs'], ['Cost so far', '$0.29', 'this year'], ['Days picking nothing', '32 of 51', 'that’s allowed']],
+        links: 'From Pip and Biscuit → to Pickle, who can send it back once.',
+        qs: [['Why only one pick?', 'Stock C was rejected and Stock D lacked evidence. I may pick up to two a day, but I’m rewarded for picking nothing when nothing is good.', 'Source: today’s ranking record'],
+             ['Do you choose how much to buy?', 'No. I choose what and why, plus the exit plan. Nugget decides the size and code decides the timing, so each part can be scored separately.', 'Source: rulebook v1.5, section 7.2']],
+        tweaks: [{ key: 'max', label: 'Most picks per day', help: 'Zero is always allowed.', type: 'range', min: 0, max: 2, step: 1, base: 2, unit: '' },
+                 { key: 'conv', label: 'Minimum conviction', help: 'Below this, Maple picks nothing.', type: 'range', min: 40, max: 90, step: 5, base: 60, unit: '' },
+                 { key: 'hold', label: 'Default holding period', help: 'How long before a time-based exit.', type: 'range', min: 5, max: 60, step: 5, base: 20, unit: ' days' },
+                 { key: 'lock', label: 'Sets price or size', help: 'Code and Nugget own these.', type: 'lock', shown: 'Never allowed' }] },
+      { kind: 'raccoon', name: 'Pickle', full: 'Pickle', role: 'Critic', ai: true, tint: '#2a2340',
+        motto: 'My job is to find how this goes wrong.',
+        today: 'Stock B gets 41% of its sales from one customer. If they cut orders, the forecast raise falls apart. Maple showed me the contract was renewed in August, so I let it through, but I still put a 44% chance on it failing, and that gets scored.',
+        stats: [['Blocks scored', '6', 'so far'], ['Blocks that were right', '4 of 6', 'would have lost'], ['Cost so far', '$0.54', 'priciest helper'], ['Model', 'Different', 'from Maple’s']],
+        links: 'From Maple (evidence only, never her reasoning) → back to Maple once, then to Nugget.',
+        qs: [['Why didn’t you block it?', 'My worry was advisory, so Maple gets one reply. Her reply cited the renewed contract, which answered it. I block automatically only for serious problems like made-up numbers, old prices or hidden earnings dates.', 'Source: Critic record for Stock B'],
+             ['Why can’t you see Maple’s thinking?', 'If I read her reasoning I’d tend to agree with it. Seeing only the evidence keeps me independent.', 'Source: rulebook v1.5, section 7.3']],
+        tweaks: [{ key: 'strict', label: 'Strictness', help: 'How easily an advisory worry blocks a pick.', type: 'seg', options: ['Lenient', 'Normal', 'Strict'], base: 'Normal' },
+                 { key: 'eff', label: 'Thinking effort', help: 'Deeper thinking costs more.', type: 'seg', options: ['Low', 'Medium', 'High'], base: 'Medium' },
+                 { key: 'lock1', label: 'Replies Maple gets', help: 'One reply, then it’s settled.', type: 'lock', shown: 'Exactly one' },
+                 { key: 'lock2', label: 'Sees Maple’s reasoning', help: 'Keeps Pickle independent.', type: 'lock', shown: 'Never' }] },
+      { kind: 'turtle', name: 'Nugget', full: 'Nugget', role: 'Safety rules', ai: false, tint: '#1d2a31',
+        motto: 'Slow and steady. Same answer every time.',
+        today: 'I’m not an AI, just fixed rules, so I’m free and never change my mind. Stock B moves a lot, so I kept it small: $31, and at most $1.75 lost if it hits $80. I blocked the tech fund XLK because it moves almost exactly like a fund we already own.',
+        stats: [['Blocks today', '1', 'XLK'], ['Cost', '$0', 'always'], ['Brakes on', 'None', 'all clear'], ['Overridden', 'Never', 'by anyone']],
+        links: 'From Pickle (and straight from the scanners for funds) → to you.',
+        qs: [['Why only $31?', 'A normal buy is 10% of $500, or $50. Stock B swings about 32% a year versus our 20% target, so the size shrinks to about $31.', 'Source: sizing record for Stock B'],
+             ['Can the AI talk you out of a rule?', 'No. The AI helpers can’t change me, and I can only say "smaller", "no" or "sell". Selling is always allowed.', 'Source: rulebook v1.5, section 9']],
+        tweaks: [{ key: 'size', label: 'Normal position size', help: 'Share of the lane in a normal buy.', type: 'range', min: 5, max: 25, step: 1, base: 10, unit: '%' },
+                 { key: 'daily', label: 'Daily loss brake', help: 'Stop new buys after losing this much in a day.', type: 'range', min: 1, max: 5, step: 0.5, base: 3, unit: '%' },
+                 { key: 'corr', label: 'Max similarity', help: 'How alike two holdings may move.', type: 'range', min: 0.5, max: 0.95, step: 0.05, base: 0.8, unit: '' },
+                 { key: 'lock', label: 'Real orders', help: 'Paper only in this stage.', type: 'lock', shown: 'Always blocked' }] },
+      { kind: 'parrot', name: 'Bubbles', full: 'Bubbles', role: 'Explainer', ai: true, tint: '#1a2a22',
+        motto: 'I tell you what happened, in plain words. I can read everything and change nothing.',
+        today: 'I listened to every hand-off today and wrote the story on your home screen. Every fact I say links to the record it came from, and code checks my numbers before you see them.',
+        stats: [['Facts checked', '38 of 38', 'matched records'], ['Questions answered', '2', 'today'], ['Cost so far', '$0.03', 'own budget'], ['Can change things', 'No', 'read-only']],
+        links: 'Hears everyone, hands nothing on. Talks only to you.',
+        qs: [['Can you change a decision?', 'No. I can only read. If you want something changed, tune a character and test it on the side; only you can approve rule changes.', 'Source: rulebook v1.5, section 19'],
+             ['How do I know you’re right?', 'Every sentence points to a saved record, and code checks my numbers. If one doesn’t match, my answer is blocked and you see the raw record instead.', 'Source: explainer fact-check log']],
+        tweaks: [{ key: 'detail', label: 'Detail level', help: 'How long the daily story is.', type: 'seg', options: ['Short', 'Normal', 'Detailed'], base: 'Normal' },
+                 { key: 'jargon', label: 'Explain trading words', help: 'Adds a short definition the first time.', type: 'seg', options: ['On', 'Off'], base: 'On' },
+                 { key: 'lock', label: 'Write access', help: 'Bubbles can never change records or decisions.', type: 'lock', shown: 'Read-only' }] }
+    ];
+    const W = 150, H = 165;
+    const pos = { scan: [0, 210], owl: [220, 40], beagle: [220, 380], beaver: [460, 210], raccoon: [700, 210], turtle: [940, 210], you: [1128, 210], parrot: [940, 0] };
+    const E = {
+      s_o: 'M140 272 C180 272 180 122 218 122', s_b: 'M140 312 C180 312 180 462 218 462',
+      o_bea: 'M370 122 C415 122 415 280 458 280', b_bea: 'M370 462 C415 462 415 305 458 305',
+      bea_rex: 'M610 280 L698 280', rex_bea: 'M700 305 L612 305',
+      rex_t: 'M850 292 L938 292', t_you: 'M1090 292 L1126 292', s_t: 'M70 375 L70 580 L1015 580 L1015 377'
+    };
+    const names = { scan: 'Scanners', owl: 'Pip', beagle: 'Biscuit', beaver: 'Maple', raccoon: 'Pickle', turtle: 'Nugget', you: 'You', parrot: 'Bubbles' };
+    const S = (at, to, edges, text, tag) => ({ at, to, edges, text, tag: tag || 'pass' });
+    const ideaData = [
+      { name: 'Stock B', outcome: 'Sent to you', tone: 'good', steps: [
+        S('scan', 'owl, beagle', ['s_o', 's_b'], 'Earnings-drift and trend scanners both flagged Stock B. Two scanners agree, so it goes to the researchers.'),
+        S('owl', 'beaver', ['o_bea'], 'Four earnings beats in a row plus a forecast raise. I say 62% it beats its sector in 20 trading days.'),
+        S('beagle', 'beaver', ['b_bea'], 'The 8-K filed at 6:12 AM confirms the raise. Numbers check out, no trick text.'),
+        S('beaver', 'raccoon', ['bea_rex'], 'Best of three ideas. Conviction 68. Sell below $80 or after 20 trading days.'),
+        S('raccoon', 'beaver', ['rex_bea'], '41% of its sales come from one customer. What if they leave?', 'question'),
+        S('beaver', 'raccoon', ['bea_rex'], '10-Q, page 14: that customer renewed a 3-year contract in August.', 'answer'),
+        S('raccoon', 'turtle', ['rex_t'], 'That answers it. Passing it on, but I still say 44% it fails.'),
+        S('turtle', 'you', ['t_you'], 'It’s jumpy, so I sized it at $31. Most we can lose: $1.75. No earnings in the next 20 days.'),
+        S('you', '', [], 'Your turn: approve or skip on the Today screen, any time before 4:00 PM.', 'yours')] },
+      { name: 'Stock C', outcome: 'Stopped by Biscuit', tone: 'bad', steps: [
+        S('scan', 'beagle', ['s_b'], 'Mean-reversion scanner: a big one-day drop while still above its 200-day average.'),
+        S('beagle', '', [], 'The drop came from its own outlook cut in yesterday’s 8-K. I say 45%. Stopping here, but it’s still scored in 20 days.', 'stop')] },
+      { name: 'Stock D', outcome: 'Not enough evidence', tone: 'warn', steps: [
+        S('scan', 'owl', ['s_o'], 'Squeeze scanner: a volatility squeeze released upward.'),
+        S('owl', '', [], 'The earnings-call transcript isn’t out yet. I won’t guess: not enough evidence.', 'unsure')] },
+      { name: 'XLK', outcome: 'Stopped by Nugget', tone: 'bad', steps: [
+        S('scan', 'turtle', ['s_t'], 'Sector rotation: tech moved into the leading group. Funds skip the AI and go straight to Nugget.'),
+        S('turtle', '', [], 'It moves almost exactly like a fund we already own (0.86 similarity, limit 0.80). Blocked.', 'stop')] },
+      { name: 'Stock E', outcome: 'Too costly to trade', tone: 'bad', steps: [
+        S('scan', '', [], 'Setup finder liked it, but the buy/sell price gap is 0.61% (limit 0.30%). Costs would eat any profit. Stopped at the filters, $0 spent.', 'stop')] },
+      { name: 'Stock F', outcome: 'Price too old', tone: 'warn', steps: [
+        S('scan', '', [], 'The live price was 74 seconds old (limit 60). We never act on old prices. Logged as a data problem, not a decision.', 'stop')] }
+    ];
+    const ii = Math.min(this.state.idea, ideaData.length - 1);
+    const idea = ideaData[ii];
+    const last = idea.steps.length - 1;
+    const step = Math.min(this.state.step, last);
+    const cur = idea.steps[step];
+    const lit = {};
+    const visited = {};
+    idea.steps.slice(0, step + 1).forEach((s) => { s.edges.forEach((e) => { lit[e] = true; }); visited[s.at] = true; });
+    const finalStep = idea.steps[last];
+    const stopNode = step === last && (finalStep.tag === 'stop' || finalStep.tag === 'unsure') ? finalStep.at : null;
+    const edges = Object.keys(E).map((k) => {
+      const on = !!lit[k];
+      const isNow = cur.edges.indexOf(k) >= 0;
+      return { d: E[k], color: on ? '#3dc6ff' : '#34373d', width: on ? (isNow ? 3.5 : 2.5) : 1.5, marker: on ? 'url(#arrLit)' : 'url(#arrDim)', cls: isNow ? 'flow' : '' };
+    });
+    const tone = { good: ['#1a2a22', '#3fd08f'], bad: ['#2a1f1b', '#ff8a6b'], warn: ['#2a2114', '#f5b54a'] };
+    const nodeKeys = ['scan', 'owl', 'beagle', 'beaver', 'raccoon', 'turtle', 'you', 'parrot'];
+    const nodes = nodeKeys.map((k) => {
+      const r = roster.find((x) => x.kind === k);
+      const [x, y] = pos[k];
+      const isCur = cur.at === k;
+      const isStop = stopNode === k;
+      const wasVisited = !!visited[k] || (k === 'parrot');
+      let border = '#2a2c31', bg = '#1d1f23', badgeText = 'waiting', bc = ['#1d1f23', '#6b707a'];
+      if (wasVisited) { border = '#2f5566'; badgeText = 'handled it'; bc = ['#1d2a31', '#3dc6ff']; }
+      if (k === 'parrot') { border = '#2c6a4c'; badgeText = 'listening'; bc = ['#1a2a22', '#6fdaa8']; }
+      if (isCur) { border = '#3dc6ff'; bg = '#1d2a31'; badgeText = 'now'; bc = ['#3dc6ff', '#06202b']; }
+      if (isStop) { border = '#ff8a6b'; bg = '#2a1f1b'; badgeText = idea.steps[last].tag === 'unsure' ? 'not sure' : 'stopped it'; bc = [idea.steps[last].tag === 'unsure' ? '#f5b54a' : '#ff8a6b', '#1b1210']; }
+      if (k === 'you' && idea.tone === 'good' && step === last) { badgeText = 'your turn'; bc = ['#3fd08f', '#06251a']; border = '#3fd08f'; }
+      if (!wasVisited && !isCur) { bg = '#16171a'; }
+      const isSel = r && this.state.sel === k;
+      const style = 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: ' + W + 'px; height: ' + H + 'px; box-sizing: border-box; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; background: ' + bg + '; border: ' + (isCur || isStop ? '3px' : '2px') + ' solid ' + border + (isSel ? '; box-shadow: 0 0 0 4px #0f1012, 0 0 0 6px #b9a3ff' : '') + (r ? '; cursor: pointer' : '') + (!wasVisited && !isCur ? '; opacity: 0.55' : '');
+      const badge = 'font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: ' + bc[0] + '; color: ' + bc[1];
+      const haloBg = r ? r.tint : '#1d2a31';
+      const halo = 'width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ' + haloBg;
+      if (r) {
+        return { isChar: true, isPlain: false, kind: k, size: 64, name: r.name, role: r.role, style, halo, badge, badgeText, aria: 'Open ' + r.full,
+          pick: () => this.setState({ sel: k, q: -1 }) };
+      }
+      const isScan = k === 'scan';
+      return { isChar: false, isPlain: true, name: isScan ? 'Scanners' : 'You', role: isScan ? 'Code: finds and filters' : 'Final yes or no', style, halo, badge, badgeText,
+        iconColor: isScan ? '#3dc6ff' : '#3fd08f',
+        icon: isScan ? 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0 M12 12l6 -6' : 'M12 8m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M4 21v-1a6 6 0 0 1 6 -6h4a6 6 0 0 1 6 6v1' };
+    });
+    const curR = roster.find((x) => x.kind === cur.at);
+    const now = { hasMascot: !!curR, noMascot: !curR, kind: cur.at, face: 48, initials: cur.at === 'scan' ? 'SC' : 'YOU',
+      halo: 'width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ' + (curR ? curR.tint : '#1d2a31') };
+    const who = names[cur.at] + (cur.to ? ' → ' + cur.to.split(', ').map((n) => names[n]).join(' and ') : '');
+    const ideas = ideaData.map((d, i) => {
+      const on = i === ii;
+      return { name: d.name, outcome: d.outcome, pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ idea: i, step: 0 }),
+        dot: 'width: 8px; height: 8px; border-radius: 50%; background: ' + tone[d.tone][1],
+        style: 'display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; font-weight: 600; color: #f2f3f5; background: ' + (on ? '#1d2a31' : '#1d1f23') + '; border: 1.5px solid ' + (on ? '#3dc6ff' : '#2a2c31') };
+    });
+    const dots = idea.steps.map((s, i) => ({ go: () => this.setState({ step: i }), aria: 'Step ' + (i + 1),
+      style: 'width: 14px; height: 14px; border-radius: 50%; cursor: pointer; padding: 0; border: none; background: ' + (i === step ? '#3dc6ff' : i < step ? '#2f5566' : '#2a2c31') }));
+    const tagInfo = { pass: ['passes it on', '#1d2a31', '#3dc6ff'], question: ['asks back', '#2a2114', '#f5b54a'], answer: ['answers', '#1d2a31', '#3dc6ff'], stop: ['stops it', '#2a1f1b', '#ff8a6b'], unsure: ['not enough evidence', '#2a2114', '#f5b54a'], yours: ['your decision', '#1a2a22', '#3fd08f'] };
+    const log = idea.steps.slice(0, step + 1).map((s, i) => {
+      const r = roster.find((x) => x.kind === s.at);
+      const ti = tagInfo[s.tag];
+      const on = i === step;
+      return { hasMascot: !!r, noMascot: !r, kind: s.at, face: 32, initials: s.at === 'scan' ? 'SC' : 'YOU',
+        halo: 'width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ' + (r ? r.tint : '#1d2a31'),
+        from: names[s.at], to: s.to ? s.to.split(', ').map((n) => names[n]).join(' and ') : (s.tag === 'yours' ? 'decision' : 'end of the line'),
+        text: s.text, tag: ti[0], tagStyle: 'margin-left: auto; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; background: ' + ti[1] + '; color: ' + ti[2],
+        go: () => this.setState({ step: i }),
+        style: 'display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; cursor: pointer; font-family: inherit; background: ' + (on ? '#1d2a31' : '#1d1f23') + '; border: 1.5px solid ' + (on ? '#3dc6ff' : '#2a2c31') };
+    });
+    const sel = this.state.sel;
+    const r = roster.find((x) => x.kind === sel);
+    const vals = this.state.vals;
+    const mine = vals[sel] || {};
+    const fmt = (v, unit) => (Number.isInteger(v) ? String(v) : String(Number(v.toFixed(2)))) + unit;
+    let changes = 0;
+    const tweaks = r.tweaks.map((t) => {
+      const cv = mine[t.key] !== undefined ? mine[t.key] : t.base;
+      const changed = t.type !== 'lock' && cv !== t.base;
+      if (changed) changes++;
+      const set = (v) => this.setState({ vals: { ...vals, [sel]: { ...mine, [t.key]: v } }, queued: { ...this.state.queued, [sel]: false } });
+      return { label: t.label, help: t.help, isRange: t.type === 'range', isSeg: t.type === 'seg', isLock: t.type === 'lock',
+        min: t.min, max: t.max, step: t.step, value: cv,
+        shown: t.type === 'lock' ? t.shown : t.type === 'range' ? fmt(cv, t.unit) : cv,
+        change: (e) => set(Number(e.target.value)),
+        options: (t.options || []).map((o) => ({ label: o, pick: () => set(o),
+          style: 'min-height: 36px; padding: 0 12px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: ' + (o === cv ? '#262930' : 'transparent') + '; color: ' + (o === cv ? '#f2f3f5' : '#8a8f99') })),
+        status: t.type === 'lock' ? 'Safety rule, locked' : changed ? 'Rulebook: ' + (t.type === 'range' ? fmt(t.base, t.unit) : t.base) + ' → test: ' + (t.type === 'range' ? fmt(cv, t.unit) : cv) : 'Same as rulebook',
+        statusStyle: 'font-size: 13px; line-height: 1.4; color: ' + (t.type === 'lock' ? '#8a8f99' : changed ? '#f5b54a' : '#a1a6b0') };
+    });
+    const queued = !!this.state.queued[sel];
+    const halo = (n) => 'width: ' + n + 'px; height: ' + n + 'px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: ' + r.tint;
+    const qi = this.state.q;
+    return {
+      ideas, edges, nodes, dots, log, ideaName: idea.name,
+      now, bubbleWho: who, bubbleText: cur.text,
+      stepLabel: 'Step ' + (step + 1) + ' of ' + (last + 1),
+      nextLabel: step >= last ? 'Replay' : (step === 0 ? 'Play next step' : 'Next step'),
+      next: () => this.setState({ step: step >= last ? 0 : step + 1 }),
+      back: () => this.setState({ step: Math.max(0, step - 1) }),
+      showAll: () => this.setState({ step: last }),
+      sel: { kind: r.kind, name: r.name, fullName: r.full, role: r.role, motto: r.motto, today: r.today, links: r.links, big: 160, face: 32,
+        kindLabel: r.ai ? 'AI helper' : 'Fixed rules, not AI', kindText: 'color: ' + (r.ai ? AI : CODE),
+        bigHalo: 'align-self: center; ' + halo(200), faceHalo: halo(40),
+        placeholder: 'Ask ' + r.name + ' anything about today',
+        stats: r.stats.map(([label, value, note]) => ({ label, value, note })),
+        qs: r.qs.map((q, i) => ({ text: q[0], pick: () => this.setState({ q: i }) })) },
+      hasQ: qi >= 0,
+      qText: qi >= 0 ? r.qs[qi][0] : '',
+      aText: qi >= 0 ? r.qs[qi][1] : '',
+      aSource: qi >= 0 ? r.qs[qi][2] : '',
+      askFirst: () => this.setState({ q: 0 }),
+      tweaks,
+      changeCount: changes === 0 ? 'No changes yet' : changes + (changes === 1 ? ' change to test' : ' changes to test'),
+      queueNote: queued ? 'Queued. A copy of ' + r.name + ' with your changes will run on paper beside the official team for 8 weeks. The official rules change only if you approve it.' : 'Changes never touch the official experiment directly. They run as a side-by-side test first.',
+      queueLabel: queued ? 'Test queued' : 'Test my changes on the side',
+      queue: () => { if (changes > 0) this.setState({ queued: { ...this.state.queued, [sel]: true } }); },
+      queueStyle: 'min-height: 44px; padding: 0 18px; border-radius: 10px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; ' + (queued ? 'background: #1a2a22; border: 1px solid #2c6a4c; color: #3fd08f' : changes > 0 ? 'background: #3dc6ff; border: none; color: #06202b' : 'background: transparent; border: 1px solid #3a3d44; color: #8a8f99')
+    };
+  }
+}
+</script>
+</body>
+</html>

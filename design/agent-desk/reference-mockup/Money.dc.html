@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Desk: Road to money</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1012}
+a{color:#3dc6ff;text-decoration:none}a:hover{color:#8adcff}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1440px; height: 2000px; box-sizing: border-box; background: #0f1012; color: #f2f3f5; font-family: 'Geist', system-ui, sans-serif; padding: 28px 56px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dc6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"></path><path d="M14 7h6v6"></path></svg>
+<span style="font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Agent Desk</span>
+</div>
+<nav style="display: flex; gap: 2px; background: #17181b; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px" aria-label="Sections">
+<a href="Main.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Today</a>
+<a href="Pipeline.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Decision room</a>
+<a href="Money.dc.html" style="padding: 9px 12px; border-radius: 7px; background: #262930; color: #f2f3f5; font-size: 14px; font-weight: 600">Road to money</a>
+<a href="Scoreboard.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Is the AI working?</a>
+<a href="Controls.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Controls</a>
+<a href="Tuning.dc.html" style="padding: 9px 12px; border-radius: 7px; color: #a1a6b0; font-size: 14px; font-weight: 500">Tweaks and health</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<span style="font-size: 12px; color: #f5b54a; border: 1px solid #5a4520; background: #2a2114; padding: 6px 10px; border-radius: 999px">Sample data</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Road to real money</h1>
+<p style="margin: 0; font-size: 15px; color: #a1a6b0">How close we are to trusting this with real dollars, what the AI is earning versus costing, and what we're missing.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Ready for real money?</h2>
+<span style="font-size: 15px; font-weight: 700; color: #f5b54a">2 of 5 gates met</span>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #cfd3da">At this pace, all five could be met in about <b style="color: #f2f3f5">19 weeks</b>, if the AI keeps doing as well as it is now. Until then, real money stays off.</p>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{gates}}" as="g" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: 30px 250px minmax(0, 1fr) 150px; gap: 14px; align-items: center">
+<span style="{{g.dot}}">{{g.mark}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 600">{{g.name}}</span>
+<span style="font-size: 12px; color: #8a8f99">{{g.plain}}</span>
+</div>
+<div style="height: 12px; background: #1d1f23; border-radius: 999px"><div style="{{g.bar}}"></div></div>
+<span style="font-family: 'Geist Mono', monospace; font-size: 14px; text-align: right; color: #cfd3da">{{g.val}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Is the AI paying for itself?</h2>
+<span style="font-size: 13px; color: #a1a6b0">Extra profit the AI added over the same scanners without AI, minus what it cost</span>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px; gap: 12px; align-items: center"><span style="font-size: 14px; color: #cfd3da">AI added</span><div style="height: 26px; background: #1d1f23; border-radius: 6px"><div style="width: 62%; height: 26px; background: #3fd08f; border-radius: 6px"></div></div><span style="font-family: 'Geist Mono', monospace; color: #3fd08f; text-align: right">+$2.10</span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px; gap: 12px; align-items: center"><span style="font-size: 14px; color: #cfd3da">AI cost</span><div style="height: 26px; background: #1d1f23; border-radius: 6px"><div style="width: 45%; height: 26px; background: #ff8a6b; border-radius: 6px"></div></div><span style="font-family: 'Geist Mono', monospace; color: #ff8a6b; text-align: right">−$1.51</span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px; gap: 12px; align-items: center"><span style="font-size: 14px; color: #cfd3da">Timing cost</span><div style="height: 26px; background: #1d1f23; border-radius: 6px"><div style="width: 12%; height: 26px; background: #ff8a6b; border-radius: 6px"></div></div><span style="font-family: 'Geist Mono', monospace; color: #ff8a6b; text-align: right">−$0.40</span></div>
+</div>
+<div style="border-top: 1px solid #2a2c31; padding-top: 14px; display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-size: 15px; font-weight: 600">Net so far</span>
+<span style="font-size: 30px; font-weight: 700; font-family: 'Geist Mono', monospace; color: #3fd08f">+$0.19</span>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #cfd3da">Barely positive. On $500 this is tiny either way; what matters is whether it stays positive as trades add up.</p>
+</section>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Hits and misses</h2>
+<span style="font-size: 13px; color: #a1a6b0">Ideas from the last 30 days, checked 20 trading days later. The fastest way to find what to tweak.</span>
+</div>
+<div style="display: flex; gap: 4px; background: #0f1012; border: 1px solid #2a2c31; border-radius: 10px; padding: 4px">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+<button type="button" onClick="{{f.pick}}" style="{{f.style}}">{{f.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 150px 220px 170px 150px minmax(0, 1fr) 140px; font-size: 14px">
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">Idea</span>
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">What we did</span>
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">Who decided</span>
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">20 days later</span>
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">What it teaches</span>
+<span style="padding: 8px 10px; font-size: 12px; color: #a1a6b0; border-bottom: 1px solid #2a2c31">Verdict</span>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+<span style="padding: 12px 10px; font-weight: 600; border-bottom: 1px solid #23252a">{{r.idea}}</span>
+<span style="padding: 12px 10px; color: #cfd3da; border-bottom: 1px solid #23252a">{{r.did}}</span>
+<span style="padding: 12px 10px; color: #cfd3da; border-bottom: 1px solid #23252a">{{r.who}}</span>
+<span style="{{r.afterStyle}}">{{r.after}}</span>
+<span style="padding: 12px 10px; color: #cfd3da; line-height: 1.45; border-bottom: 1px solid #23252a">{{r.lesson}}</span>
+<span style="padding: 12px 10px; border-bottom: 1px solid #23252a"><span style="{{r.chip}}">{{r.verdict}}</span></span>
+</sc-for>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Opportunity radar · today</h2>
+<span style="font-size: 13px; color: #a1a6b0">Free code scans every 30 minutes. The AI wakes only when something qualifies.</span>
+<div style="display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 6px; align-items: end; height: 120px">
+<sc-for list="{{scans}}" as="s" hint-placeholder-count="13">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<span style="font-size: 11px; font-family: 'Geist Mono', monospace; color: #cfd3da">{{s.n}}</span>
+<div style="{{s.bar}}"></div>
+<span style="font-size: 10px; color: #8a8f99">{{s.t}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 16px; font-size: 12px; color: #a1a6b0">
+<span style="display: flex; gap: 6px; align-items: center"><span style="width: 10px; height: 10px; border-radius: 3px; background: #1f4a5c"></span>Signals found (free)</span>
+<span style="display: flex; gap: 6px; align-items: center"><span style="width: 10px; height: 10px; border-radius: 3px; background: #b9a3ff"></span>AI woke up</span>
+</div>
+<div style="border-top: 1px solid #2a2c31; padding-top: 12px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600; color: #a1a6b0">Earnings coming up this week (busy days for Pip)</span>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #2a2114; color: #f5b54a">Tue · 4 companies</span>
+<span style="font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #2a2114; color: #f5b54a">Wed · 11 companies</span>
+<span style="font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #1d1f23; color: #cfd3da">Thu · 6 companies</span>
+<span style="font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #1d1f23; color: #cfd3da">Fri · 2 companies</span>
+</div>
+</div>
+</section>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">What we learned this week</h2>
+<span style="font-size: 13px; color: #a1a6b0">From Bubbles, every Friday, based on what actually happened</span>
+<sc-for list="{{lessons}}" as="l" hint-placeholder-count="3">
+<div style="background: #1d1f23; border-radius: 12px; padding: 14px 16px; display: flex; gap: 14px; align-items: center">
+<span style="font-size: 22px; font-weight: 700; color: #b9a3ff; font-family: 'Geist Mono', monospace">{{l.n}}</span>
+<span style="flex-grow: 1; font-size: 15px; line-height: 1.5; color: #e4e6ea">{{l.text}}</span>
+<button type="button" onClick="{{l.act}}" style="{{l.btnStyle}}">{{l.btn}}</button>
+</div>
+</sc-for>
+</section>
+</div>
+
+<section style="background: #17181b; border: 1px solid #2a2c31; border-radius: 16px; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">The real-money ladder</h2>
+<span style="font-size: 13px; color: #a1a6b0">Climb one rung at a time. Each rung must show profit after costs before the next unlocks.</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{ladder}}" as="r" hint-placeholder-count="5">
+<div style="{{r.style}}">
+<span style="font-size: 12px; font-weight: 700; color: #a1a6b0">RUNG {{r.n}}</span>
+<span style="font-size: 20px; font-weight: 700">{{r.title}}</span>
+<span style="font-size: 13px; line-height: 1.45; color: #cfd3da">{{r.what}}</span>
+<span style="{{r.stateStyle}}">{{r.state}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px">
+<div style="background: #0f1012; border: 1px dashed #3a3d44; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 15px; font-weight: 600">Copy to Robinhood card (preview)</span><span style="font-size: 12px; color: #8a8f99">Unlocks at rung 2</span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; font-size: 14px">
+<span style="color: #a1a6b0">Stock</span><span style="font-family: 'Geist Mono', monospace">Stock B</span>
+<span style="color: #a1a6b0">Buy amount</span><span style="font-family: 'Geist Mono', monospace">$50.00 (dollar order)</span>
+<span style="color: #a1a6b0">Limit price</span><span style="font-family: 'Geist Mono', monospace">$84.77</span>
+<span style="color: #a1a6b0">Then set a stop</span><span style="font-family: 'Geist Mono', monospace">$80.00</span>
+<span style="color: #a1a6b0">Sell by</span><span style="font-family: 'Geist Mono', monospace">Dec 15 if not stopped</span>
+</div>
+<span style="font-size: 13px; color: #8a8f99; line-height: 1.5">You place the order yourself in Robinhood, then tap "I placed it" and enter your fill price. The app never places real orders.</span>
+</div>
+<div style="background: #0f1012; border: 1px dashed #3a3d44; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 15px; font-weight: 600">Paper vs real fills</span>
+<span style="font-size: 14px; color: #cfd3da; line-height: 1.5">Starts when you place your first real trade. Shows your real fill next to the paper fill, so we learn whether real trading costs more than the simulation assumed.</span>
+<div style="display: flex; gap: 10px">
+<div style="flex-grow: 1; background: #17181b; border-radius: 10px; padding: 12px"><div style="font-size: 12px; color: #a1a6b0">Avg extra cost per real trade</div><div style="font-size: 18px; font-weight: 700; font-family: 'Geist Mono', monospace; color: #8a8f99">Not yet</div></div>
+<div style="flex-grow: 1; background: #17181b; border-radius: 10px; padding: 12px"><div style="font-size: 12px; color: #a1a6b0">Real trades copied</div><div style="font-size: 18px; font-weight: 700; font-family: 'Geist Mono', monospace; color: #8a8f99">0</div></div>
+</div>
+</div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'all', tested: {} };
+  }
+  renderVals() {
+    const g = (name, plain, pct, val, met) => ({ name, plain, val, mark: met ? '✓' : '',
+      dot: 'width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; ' + (met ? 'background: #1a2a22; color: #3fd08f; border: 1px solid #3fd08f' : 'background: #1d1f23; color: #5b606a; border: 1px solid #3a3d44'),
+      bar: 'height: 12px; border-radius: 999px; width: ' + pct + '%; background: ' + (met ? '#3fd08f' : '#3dc6ff') });
+    const gates = [
+      g('Enough time', 'At least 6 months of daily runs', 28, '51 of 183 days', false),
+      g('Enough trades', 'At least 30 finished trades', 30, '9 of 30', false),
+      g('AI is honest', 'Its chances match reality (50 checks)', 62, '31 of 50', false),
+      g('Beats no-AI after costs', 'More profit than the same scanners without AI', 100, '+$0.19 net', true),
+      g('Losses under control', 'Never down more than 10% from the peak', 100, 'worst: 2.1%', true)
+    ];
+    const f = this.state.filter;
+    const filters = [['all', 'All'], ['missed', 'Missed gains'], ['avoided', 'Avoided losses'], ['bad', 'Bad buys']].map(([k, label]) => ({ label,
+      pick: () => this.setState({ filter: k }),
+      style: 'min-height: 36px; padding: 0 12px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: ' + (k === f ? '#262930' : 'transparent') + '; color: ' + (k === f ? '#f2f3f5' : '#8a8f99') }));
+    const tone = { good: ['#1a2a22', '#3fd08f'], bad: ['#2a1f1b', '#ff8a6b'], warn: ['#2a2114', '#f5b54a'] };
+    const all = [
+      ['Stock C', 'Skipped', 'Biscuit (rejected)', -6.2, 'Rejecting stocks that fell on their own bad news worked.', 'Good call', 'good', 'avoided'],
+      ['Stock G', 'Skipped', 'Pickle (blocked)', 8.4, 'Pickle blocked over an earnings date that was later confirmed safe. Stale calendars cost us.', 'Missed gain', 'bad', 'missed'],
+      ['Stock H', 'Bought $44', 'Maple picked, you approved', 5.1, 'Earnings drift plus trend agreement is our best combo so far.', 'Good call', 'good', 'all'],
+      ['XLE', 'Skipped', 'Nugget (too similar)', 3.0, 'The similarity limit cost a small gain. Fine for now; worth a side test at 0.85.', 'Missed gain', 'warn', 'missed'],
+      ['Stock J', 'Bought $38', 'Maple picked, Pickle let through', -4.6, 'Squeeze-scanner ideas keep failing after a big run-up.', 'Bad buy', 'bad', 'bad'],
+      ['Stock K', 'You skipped', 'You', 4.2, 'You skipped a card the team liked. Your skips are 1 for 4 so far.', 'Missed gain', 'warn', 'missed']
+    ];
+    const rows = all.filter((r) => f === 'all' || r[7] === f || (f === 'avoided' && r[6] === 'good' && r[1] === 'Skipped')).map(([idea, did, who, pct, lesson, verdict, t]) => ({ idea, did, who, lesson, verdict,
+      after: (pct >= 0 ? '+' : '−') + Math.abs(pct).toFixed(1) + '%',
+      afterStyle: 'padding: 12px 10px; font-family: Geist Mono, monospace; border-bottom: 1px solid #23252a; color: ' + (pct >= 0 ? '#3fd08f' : '#ff8a6b'),
+      chip: 'font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; background: ' + tone[t][0] + '; color: ' + tone[t][1] }));
+    const counts = [2, 1, 3, 0, 4, 2, 1, 1, 0, 2, 3, 1, 2];
+    const woke = [0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0];
+    const times = ['10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '1:00', '1:30', '2:00', '2:30', '3:00', '3:30', '4:00'];
+    const scans = counts.map((n, i) => ({ n, t: times[i],
+      bar: 'width: 100%; border-radius: 4px; height: ' + Math.max(4, n * 20) + 'px; background: ' + (woke[i] ? '#b9a3ff' : '#1f4a5c') }));
+    const tested = this.state.tested;
+    const lessons = [
+      ['1', 'Pickle blocked a winner because the earnings date was stale. Refresh earnings dates twice a day.', 'cal'],
+      ['2', 'Earnings drift + trend is our best pairing (3 of 3). Let Pip read more of these.', 'pip'],
+      ['3', 'Squeeze ideas lost 2 of 3 times after big run-ups. Try skipping squeezes that already rose 15%+.', 'sq']
+    ].map(([n, text, k]) => ({ n, text,
+      act: () => this.setState({ tested: { ...tested, [k]: true } }),
+      btn: tested[k] ? 'Test queued' : 'Test on the side',
+      btnStyle: 'min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; ' + (tested[k] ? 'background: #1a2a22; border: 1px solid #2c6a4c; color: #3fd08f' : 'background: #3dc6ff; border: none; color: #06202b') }));
+    const rung = (n, title, what, state) => {
+      const cur = state === 'You are here';
+      const locked = state.indexOf('Locked') === 0;
+      return { n, title, what, state,
+        style: 'border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: ' + (cur ? '#1d2a31' : '#1d1f23') + '; border: ' + (cur ? '2px solid #3dc6ff' : '1px solid #2a2c31') + (locked ? '; opacity: 0.7' : ''),
+        stateStyle: 'align-self: flex-start; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; ' + (cur ? 'background: #3dc6ff; color: #06202b' : locked ? 'background: #1d1f23; color: #8a8f99; border: 1px solid #3a3d44' : 'background: #1a2a22; color: #3fd08f') };
+    };
+    const ladder = [
+      rung('1', 'Paper only', 'Prove the setup on fake money. All 5 gates must pass.', 'You are here'),
+      rung('2', '$50 copies', 'You copy approved trades by hand, $50 each. 15 trades.', 'Locked · needs 5 gates'),
+      rung('3', '$100 copies', 'Same, $100 each, if rung 2 made money after costs.', 'Locked'),
+      rung('4', '$250 copies', 'Larger size, only if rung 3 held up.', 'Locked'),
+      rung('5', 'Review', 'Decide together whether any automation is worth it.', 'Locked')
+    ];
+    return { gates, filters, rows, scans, lessons, ladder };
+  }
+}
+</script>
+</body>
+</html>

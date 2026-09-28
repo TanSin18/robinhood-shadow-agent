@@ -1,0 +1,78 @@
+# Current handoff — September 28, 2026
+
+## Actual status
+
+Phase 0 safety/read-only integration is implemented; its installed scheduled
+full-cycle proof is still missing. The target was September 29 at 10:00 AM ET.
+Verify current records on the primary Mac; do not infer that this future run
+succeeded from this document.
+
+Last primary-code test result: **589 passed**, 27 SDK deprecation warnings.
+This is historical evidence for the primary checkout, not automatic proof for
+this export or a new machine. Private freeze/test receipts were deliberately
+not copied because they contain machine-specific metadata.
+
+## Latest runtime repairs
+
+- Live quotes lacked permanent instrument IDs. Resolve absent equity IDs from
+  the approved option-chain read's matching, unambiguous underlying identity.
+  Cited content hashes retained; URL identifiers parsed, never fetched.
+- Underlying symbols may be blank in the actual provider response. Conflicting
+  underlying identities still fail closed; never map an option to an equity ID.
+- Historical reads split into individual tickers after live 10-symbol requests
+  failed. Keep the full 550-day window.
+- Refresh equities after slower history/options collection and again before
+  issuance. The 60-second freshness limit was not relaxed.
+- Added malformed-record and identity-conflict regression tests.
+
+The last live diagnostic retrieved 14 resolved equity quotes, 14 volatility
+series, 377 completed daily bars per ticker and 534 retained option quotes.
+Some invalid option records were excluded and some after-hours prices were stale.
+It did not invoke models, create cards/fills or mutate official results.
+
+## Important unfinished items
+
+- The approved design retires the 14-symbol primary universe, but runtime still
+  uses that whitelist and a hardcoded 14-symbol bound. Broader S&P 500-plus-ETF
+  discovery is an implementation gap. Do not call these agent-discovered picks.
+- News collection is disabled. Biscuit and Bubbles are not implemented agents.
+- Agent Desk Ask and Tune are disabled/read-only, not connected capabilities.
+- Research/Portfolio/Critic are conditional on the AI-needed gate; ETF-only
+  discovery can result in a code-only day.
+- Full Phase 1 accountability, baselines, broader discovery, calibrated forecasts
+  and Phase 2 research are not complete merely because modules/plans exist.
+
+## Primary machine boundaries
+
+The primary runtime is in the operator's Documents/Codex directory. Its broker
+proxy uses a separate macOS identity and private deployment under
+`/Users/Shared/RobinhoodShadow`, never the agent's token access. The approved
+preregistration remains byte-exact and pins eleven read methods.
+
+Dashboard 8765 is the existing operational UI. Preview 8766 is a separate UI
+checkout and manual process. Neither was restarted by the market-data repair.
+
+iCloud offloading recurred during export: some main source/config/Git metadata
+became dataless. Download requests were issued. Recheck all required files before
+claiming scheduled readiness. Plan a separately approved primary-runtime move
+out of synchronized Documents after the gate; this export does not perform it.
+
+## Next permitted steps
+
+1. Confirm current local-file residency, authorization and installed service state.
+2. Obtain the matching installed scheduled-cycle receipt and run the operational gate.
+3. If it passes, review dashboard-only integration before any primary UI swap.
+4. Prepare/review preregistration v1.5 and a concrete implementation checklist for
+   broader discovery and the remaining agent features before enabling them.
+
+## Provenance
+
+Fresh source export; old Git history is intentionally not transferred because
+it has not been audited for historical credentials/runtime data. The primary
+dirty checkout and UI worktree are not modified or merged by publication.
+Only source, templates, specs, tests and UI reference assets are carried over.
+
+Export-only hygiene: the template dashboard URL is loopback rather than a
+personal network hostname; package discovery includes proxy/research modules;
+the pytest warning filter does not require optional SQLAlchemy at startup.
+These changes are not applied to the frozen primary checkout.
