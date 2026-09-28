@@ -76,3 +76,8 @@ Export-only hygiene: the template dashboard URL is loopback rather than a
 personal network hostname; package discovery includes proxy/research modules;
 the pytest warning filter does not require optional SQLAlchemy at startup.
 These changes are not applied to the frozen primary checkout.
+
+Export verification: Python syntax parsing passed. A full-suite attempt using
+the primary virtual environment stalled while iCloud files were unavailable
+and was stopped; it is not a passing export test result. Re-run tests in a
+fresh local environment before deployment. No live service was restarted.
