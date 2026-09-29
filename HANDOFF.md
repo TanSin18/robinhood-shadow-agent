@@ -2,6 +2,18 @@
 
 ## Operator-approved dashboard-only exception
 
+Deployment completed on September 28 at approximately 22:01 ET. Agent Desk is
+now the main page on 8765; operational controls/approvals/history are linked at
+`/legacy#controls`, `/legacy#decisions`, `/legacy#history`. Browser navigation
+from new home to legacy controls and back was verified; no live POST submitted.
+Full suite: **620 passed, 27 warnings**, including three front-door integration
+tests (paper approval/fill, pause, redirects, origin/CSRF and read-only pages).
+Runtime source fingerprint remained unchanged. Only the inbox launch service
+was restarted. Launchd bootstrap initially raced teardown; retry after confirming
+the old service was absent succeeded. Phase 0 scheduled proof remains missing.
+The versioned local release contains `inbox-before.plist` for rollback. The
+release is separate from the UI worktree; future Git pushes do not deploy it.
+
 The operator explicitly approved Agent Desk as the main screen before the
 scheduled Phase 0 proof, provided existing operational approval/control pages
 remain clearly linked. `agents.desk.frontdoor` composes the read-only Agent Desk
