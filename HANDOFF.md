@@ -1,5 +1,16 @@
 # Current handoff — September 28, 2026
 
+## Latest portability repair
+
+The seven export test failures are fixed using synthetic temporary settings and
+proxy source fixtures, plus `sys.executable` for child processes. No private
+settings were copied and no production configuration changed. The affected
+52-test group and 46-test focused safety group pass. See
+[Phase 0 closure progress](docs/phase0-closure-progress.md) for remaining gaps;
+this does not close model/budget alignment or the installed scheduled gate.
+Final fresh full suite: **601 passed, 0 failed, 31 warnings**. Independent review
+found and corrected a fixture exclusion-coverage weakness before this final run.
+
 ## Actual status
 
 Phase 0 safety/read-only integration is implemented; its installed scheduled
