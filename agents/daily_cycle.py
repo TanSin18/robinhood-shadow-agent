@@ -304,6 +304,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     from agents.codex_bridge import BudgetExceeded
     from agents.safety_events import safety_stopped
     rehearsal=data_mode=='whatif'
+    from agents.bounded_inference import BoundedInference, validate_registered_models
+    bounded_rehearsal = rehearsal and isinstance(bridge, BoundedInference)
+    if bounded_rehearsal:
+        validate_registered_models(config)
     if diagnostic_cap_waiver and not rehearsal:
         raise ValueError('Cap waiver is diagnostic only')
     if rehearsal:
@@ -460,7 +464,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 'corporate_action_exclusions':snapshot['exclusions'],
                 'source_hashes':source_hashes,'notification_policy':'log_only',
             })
-        if rehearsal and not diagnostic_cap_waiver:
+        if rehearsal and not diagnostic_cap_waiver and not bounded_rehearsal:
             # The current Phase 0 transport lacks hard output-token caps and
             # reserves .06/.14 per call: it cannot certify the registered .20
             # what-if ceiling. Do not spend first and discover the overrun later.
@@ -475,7 +479,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                             | ({'A'} if any(ticker not in snapshot['contracts'] for ticker in held) else set()))
         active_lanes=active_lanes or ['A']
         try:
-            for lane in ([] if diagnostic_cap_waiver else active_lanes):
+            for lane in ([] if diagnostic_cap_waiver or bounded_rehearsal else active_lanes):
                 for stage,amount in budget_allocator.stage_reservations.items():
                     identifier=budget_allocator.reserve(observed_at,lane=lane,stage=stage,amount=amount)
                     phase0_reservations.append({'id':identifier,'lane':lane,'stage':stage})

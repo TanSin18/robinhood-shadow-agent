@@ -1,5 +1,16 @@
 # Current handoff — September 28, 2026
 
+## Registered inference development checkpoint
+
+The isolated rehearsal now has a `--registered-api` path with the preregistered
+dated models, validated config, counted input tokens, hard output caps,
+standard pricing tier, no tools/retries/fallbacks, a full-run reservation and
+failure cost reporting. It was exercised only with offline synthetic API
+responses; no paid requests or installed-service changes were made.
+See [bounded inference status](docs/bounded-inference-status.md). Live API access,
+official per-lane integration, deployment and the scheduled gate remain pending.
+Fresh final suite: **615 passed, 0 failed, 34 warnings**. No paid API requests.
+
 ## Latest portability repair
 
 The seven export test failures are fixed using synthetic temporary settings and

@@ -172,10 +172,10 @@ def public_report(result):
     allowed=('status','data_mode','trigger','parent_official_run_id','cycle_id',
              'quote_count','volatility_count','market_open','api_cost_estimate_usd',
              'agents','ai_gate','error_type','official_records_unchanged','stages',
-             'quote_freshness','risk_proposals_evaluated','source_hash_count','elapsed_seconds','error_location','diagnostic_noncompliant','cap_waiver')
+             'quote_freshness','risk_proposals_evaluated','source_hash_count','elapsed_seconds','error_location','diagnostic_noncompliant','cap_waiver','uncertain_model_calls')
     report={k:result[k] for k in allowed if k in result}
     report.update(real_orders='blocked',cards_created=0,fills_created=0,
-                  scheduled_proof=False,news='disabled',cost_basis='estimated_api_equivalent',
+                  scheduled_proof=False,news='disabled',cost_basis=result.get('cost_basis','estimated_api_equivalent'),
                   model_execution='not proven unless a model stage is recorded')
     return report
 
@@ -185,7 +185,9 @@ def main():
     parser.add_argument('--official-database',required=True)
     parser.add_argument('--config',required=True)
     parser.add_argument('--output-dir',required=True)
-    parser.add_argument('--operator-diagnostic-cap-waiver',action='store_true',help='Explicit operator exception for this noncompliant diagnostic only')
+    transport=parser.add_mutually_exclusive_group()
+    transport.add_argument('--operator-diagnostic-cap-waiver',action='store_true',help='Explicit operator exception for this noncompliant diagnostic only')
+    transport.add_argument('--registered-api',action='store_true',help='Registered models and token caps; requires separate API access and matching config')
     args=parser.parse_args()
     os.umask(0o077)
     from config.loader import load_config
@@ -196,11 +198,15 @@ def main():
     before=official_digest(args.official_database)
     inbox=prepare(args.official_database,args.output_dir,config)
     reader=None
+    bridge=None
     started=datetime.now(timezone.utc)
     class NoUncheckedModel:
         def run(self,*args,**kwargs):
             raise RehearsalBlocked('REHEARSAL_MODEL_CAP_NOT_CERTIFIED')
     try:
+        if args.registered_api:
+            from agents.bounded_inference import configured_bridge
+            bridge=configured_bridge(inbox.path,config)
         print(json.dumps({'stage':'live_readonly_collection','status':'STARTED'}),flush=True)
         reader=LiveReader(inbox.path,config)
         # Log method names only. Never arguments, raw responses or account data.
@@ -209,7 +215,7 @@ def main():
             print(json.dumps({'read_method':tool}),flush=True)
             return call(tool,arguments)
         reader.gateway.call=progress
-        bridge=NoUncheckedModel()
+        bridge=bridge or NoUncheckedModel()
         if args.operator_diagnostic_cap_waiver:
             from agents.codex_bridge import CodexBridge
             bridge=CodexBridge(inbox.path,limit=Decimal('Infinity'))
@@ -230,6 +236,9 @@ def main():
         inbox.store.append_json('run_states',result)
     finally:
         if reader: reader.close()
+        if args.registered_api and bridge: bridge.close()
+    if args.registered_api and bridge:
+        result.update(bridge.cost_report())
     result['official_records_unchanged']=before==official_digest(args.official_database)
     result['elapsed_seconds']=round((datetime.now(timezone.utc)-started).total_seconds(),2)
     if not result['official_records_unchanged']: result['status']='ISOLATION_VERIFICATION_FAILED'
