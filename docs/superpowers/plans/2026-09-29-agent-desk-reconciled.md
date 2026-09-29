@@ -85,7 +85,9 @@ billing usage; provider usage determines the total. Keep sub-cent precision.
 
 ### Task 2: SOXX handoff, explicit decisions and stabilization regressions
 
-**Files:** create `agents/decision_packet.py`, `tests/test_decision_packet.py`;
+**Files:** create `agents/decision_packet.py`, `tests/test_decision_packet.py`,
+`agents/decision_capsule.py`, `agents/capsule_replay.py`,
+`tests/test_decision_capsule.py`, `tests/test_capsule_replay.py`;
 modify `agents/daily_cycle.py`, `agents/decision_room.py`, `agents/inbox.py`,
 `agents/inbox_web.py`, `agents/maintenance.py`; UI branch uses
 `agents/desk/` existing view/render modules and matching tests.
@@ -96,6 +98,117 @@ lane identity, timestamped bid/ask, paper held/pending quantities, settled cash,
 fractional policy, preliminary risk calculation and all calculation inputs.
 Exclude Portfolio's reasoning/rationale and raw broker histories. Preliminary
 quantity is non-executable; Risk recalculates after final quote/trigger/approval.
+
+#### P0: Decision capsule — operator-added September 29, 17:00 review
+
+This is required within Task 2, before claiming full replay proof. It is a
+development addition, not authorization to change the installed runtime now.
+The target is the Wednesday after-drill reviewed release, conditional on Phase 0
+sign-off, tests/review and explicit batch release approval. Thursday's official
+run is the first fully replayable-run target, not a guarantee. September 29
+remains an honest partial audit; never reconstruct missing historical inputs.
+
+**Interfaces:**
+- `write_capsule(directory: Path, capsule: dict) -> dict`: returns
+  `{'status': 'AVAILABLE', 'sha256': digest, 'schema_version': 1}` after verified
+  durable content-addressed write, or a non-sensitive unavailable/error code.
+- `load_capsule(directory: Path, digest: str) -> dict`: verifies exact content
+  hash and schema; rejects missing, truncated, changed or unsupported evidence.
+- `replay_capsule(capsule: dict, deterministic_runner, *, mode='recorded',
+  model_runner=None) -> dict`: deterministic runner consumes the frozen inputs;
+  default model results are recorded outputs, never claimed fresh judgments.
+  Alternate code is supplied by the checked-out branch/callable, not arbitrary
+  shell evaluation. Paid mode uses the isolated capped what-if transport only.
+
+**Capsule schema v1:**
+- Identity: schema version, cycle ID, run mode, capture start/end timestamps,
+  decision status and per-stage execution/completeness status.
+- Ordered quote snapshots at collection, post-collection refresh and final
+  refresh: instrument/contract identity, bid, ask, quote timestamp, observation
+  timestamp, source ID and content hash. Preserve each observation; never replace
+  an earlier quote with the final quote in all stages.
+- Realized-volatility input bars (including completion/interpolation flags),
+  lookback/method, computed volatility and as-of time; strategy feature inputs,
+  features, signals, exclusions and deterministic outputs needed to reproduce them.
+- Paper context exactly as read at each use, per lane AND comparison track:
+  settled/unsettled cash, held quantities and basis, marks/as-of timestamps,
+  pending paper commitments, applicable policy and risk context. Never substitute
+  balances read after a fill. No real account payloads or order histories.
+- Exact sanitized model requests at the dispatch boundary, including instructions,
+  structured packet, response schema and supported model settings; role/attempt
+  IDs, structured output or explicit failed-attempt status. The recorded payload
+  must equal what was sent after redaction. This capsule is not Critic input:
+  blind Critic construction still excludes Portfolio reasoning.
+- Deterministic proposal/timing/sizing/risk inputs, verdicts and reason codes,
+  execution stage outcome and declared clock values. Distinguish NOT_REACHED
+  from successful checks. Capture intermediate values, not only final outcomes.
+- Root registration hash/version, dated model IDs, exact prompt text/version/hash,
+  redacted behavioral configuration needed for deterministic replay, code source
+  fingerprint and dependency/version metadata. No private config dump.
+
+**Privacy and persistence:**
+- Build capture payloads using explicit allowlists; never serialize the reader's
+  raw responses, real account state, order histories, credentials or transport
+  objects. Exclude every account identifier including `account_last4`; exclude
+  tokens/authorization material at all depths. Tests cover nested leakage and
+  identifier echoes in text. Store sanitized exact outgoing packets, not a
+  differently-redacted approximation made after dispatch.
+- One canonical JSON capsule per completed official cycle, stored locally at
+  `data/decision_capsules/<sha256>.json`; exclusive/atomic no-clobber publication,
+  private directory/file permissions, symlink rejection, flush/fsync and hash
+  verification. Same content is idempotent; conflicting content never overwrites.
+  Do not ship capsules or their raw snapshots to GitHub. Read-only replay inputs.
+- Store capsule hash/schema/status in the cycle's appended completion evidence.
+  Persist the trading decision first, then attempt capsule publication; never
+  retroactively edit an earlier decision. Link an appended capture-completion
+  record to the cycle and project it into reports, as with accounting status.
+- Capsule write/serialization/disk failures cannot discard or fail an otherwise
+  completed decision or cause a second cycle. Record `CAPSULE_CAPTURE_FAILED`,
+  an unavailable capsule status and a deduplicated non-latching operator warning;
+  preserve the original outcome. If DB reporting also fails, use the private
+  sanitized error fallback. Never report AVAILABLE until durable/hash verified.
+- Interrupted cycles and missing stages remain incomplete, never padded. Bound
+  payload size explicitly; oversize evidence uses the same visible unavailable
+  path, not silent truncation. Measure typical size against the tens-of-KB target.
+
+**Replay and diff contract:**
+- Recorded mode is free: no model/broker calls, no wall-clock/current-market
+  reads, no official claims/cards/fills/scoreboard/memory writes. Re-run actual
+  deterministic functions on frozen inputs and replay clocks; do not merely echo
+  the stored outputs and call that a test. Compare exact Decimal outputs.
+- Reusing an old model output after a changed packet is explicitly marked
+  `RECORDED_OUTPUT_REUSED_ON_CHANGED_INPUT`, not a prediction of the new model's
+  response. List packet and decision changes by role/stage, plus risk outcomes.
+- Fresh-model mode is optional, requires explicit paid-call authorization and
+  runs only as `what_if`, with parent official run/hash, hard $0.20 ceiling,
+  existing mandatory token counts/reservations and no official write capability.
+  Store new evidence separately; never amend the original capsule or decision.
+- Reject tampered/incomplete capsules as `REPLAY_INCOMPLETE` or integrity failure,
+  naming exact missing stages/fields. Missing sources cannot be replaced by now.
+
+**TDD acceptance sequence:**
+- [ ] Write fixture-cycle capture/round-trip test first. A cycle using real
+  deterministic strategy/sizing/risk code plus fixture model responses writes a
+  capsule; recorded replay reproduces its deterministic outputs and role outputs.
+  Assert hash recorded, no additional model calls, no official table changes.
+- [ ] Run `python -m pytest tests/test_decision_capsule.py tests/test_capsule_replay.py -q`;
+  observe failure for missing capsule implementation before production changes.
+- [ ] Implement capture at actual read/dispatch/risk boundaries, canonical writer
+  and loader, then deterministic replay adapter. Re-run focused tests to green.
+- [ ] Add RED/GREEN tests for every refreshed quote version, per-track pre-fill
+  context, schema-repair attempts, code-only/no-trade cycles, missing stages,
+  changed packets with reused outputs, tampering, duplicate writes and no-clobber.
+- [ ] Inject permission/disk-full/serialization errors: original decision still
+  persists; capture unavailable + one warning, no safety latch or rerun. Verify
+  privacy canaries and source DB digest unchanged across replay; prohibit calls
+  to broker/model in recorded mode; verify paid mode cannot exceed $0.20 or write
+  official tables. No real paid replay as part of this fixture test sequence.
+- [ ] Run the full suite, independent review and sanitized source push. Report
+  fixture round-trip proof separately from first real-capsule replay proof.
+  No capsule-era claim for legacy September 29 data. Release batch approval and
+  installed full suite remain mandatory before first official capsule capture.
+
+#### Existing Task 2 handoff and stabilization steps
 
 - [ ] Regression test:
   ```python

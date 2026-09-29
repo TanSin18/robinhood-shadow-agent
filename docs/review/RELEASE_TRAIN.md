@@ -32,6 +32,16 @@ approved; tonight's Task 1 release does not itself establish Phase 0 sign-off.
 
 ## Task 2 development started September 29
 
+Operator addition from Claude's 17:00 review: decision capsules are P0 within
+Task 2. Each official cycle must retain content-addressed, append-only sanitized
+inputs/outputs and version provenance, with a hash linked to cycle evidence.
+Capture failure preserves the decision but blocks replay-ready claims. Default
+replay reuses recorded model outputs at zero model cost; optional paid what-if
+replay stays capped at $0.20 and requires separate paid-call authorization.
+Detailed capture/privacy/failure tests are in the reconciled Task 2 plan.
+Wednesday after-drill release and Thursday first real capsule are targets,
+conditional on gates and batch approval, not an automatic service change.
+
 Branch: `codex/task2-handoff-replay`, based on `73f37c8`.
 Wednesday evening is the target for replay evidence, not automatic deployment.
 Order: blind Critic dossier → agent-scope/lane filtering → explicit veto/sizing

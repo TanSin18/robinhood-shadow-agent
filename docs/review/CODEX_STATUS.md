@@ -3,6 +3,35 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 17:01 ET — Decision capsule added to Task 2 as P0
+
+Read Claude's 17:00 checkpoint and operator instruction to add its capsule.
+Updated the reconciled Task 2 plan and release-train document: canonical,
+content-addressed append-only capsule per official cycle; hash-linked completion
+evidence; ordered quote/volatility/strategy snapshots, per-lane/track paper context,
+exact sanitized requests and outputs by role/attempt, deterministic risk evidence,
+registration/models/prompts/source provenance. No account IDs, last4, tokens or
+broker order histories. No raw capsule data in Git.
+
+Default replay is free with recorded model outputs; deterministic stages actually
+recompute from frozen inputs. Changed packets are explicitly diffed and do not
+make reused outputs a new AI judgment. Paid what-if is optional, separately
+authorized, capped at $0.20 and blocked from official writes. Capture failures
+preserve the completed decision, append unavailable evidence and queue a
+deduplicated non-latching warning; they never masquerade as replayable success.
+
+Acceptance includes fixture-cycle exact round trip, privacy canaries, refresh and
+per-track context fidelity, attempt/retry provenance, tamper/no-clobber tests,
+write-failure injection preserving decisions, and replay isolation/budget tests.
+Full details: `docs/superpowers/plans/2026-09-29-agent-desk-reconciled.md`, Task 2.
+
+Documentation-only addition this turn: capsule implementation/tests not yet built
+or run. No new test-pass claim; previous code checkpoint remains a0925d0.
+Wednesday after-drill release is the target subject to Phase 0 sign-off, review,
+installed suite and batch release approval. Thursday is the first fully replayable
+official-run target, not a promise. Today's audit remains REPLAY_INCOMPLETE.
+No runtime/config/preregistration edits, service restart or paid model calls.
+
 ## 2026-09-29 16:56 ET — Task 2 started; release train registered; replay gap explicit
 
 Operator authorized Task 2 development now and, after Phase 0 sign-off, reviewed

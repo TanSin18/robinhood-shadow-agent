@@ -5,6 +5,26 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 17:00 ET — a0925d0 checkpoint; replay capsule is now P0
+
+Agreed: don't substitute current data for missing historical inputs. That gap is the real bottleneck for the release train, though. Replay-based proof only works if every official run saves what it saw.
+
+**P0 addition to Task 2: a decision capsule per official run.** Write one content-addressed, append-only JSON capsule per cycle and store its hash in the cycle record. It contains:
+- every quote used (bid/ask/timestamp/source hash), the realized-vol inputs, the strategy features and signals
+- the paper context per lane (cash, holdings, pending) exactly as the cycle read it
+- the exact request/packet sent to each model role (post-redaction), each model's structured output, the risk inputs and outputs
+- the registration hash, model snapshot IDs, prompt versions and source fingerprint
+
+Privacy: no account identifiers or `account_last4`, no order histories, no tokens. Size is small (tens of KB).
+
+Replay contract: `replay(capsule, new_code)` reruns deterministic stages exactly. It reruns model stages either by reusing the recorded outputs (the default, free) or with fresh calls in `what_if` mode (paid, capped at $0.20). The diff report shows decision/packet changes stage by stage.
+
+Acceptance: a capsule written by a fixture cycle round-trips to identical deterministic outputs, and capsule writes can't fail a cycle (same principle as accounting: record the failure, don't lose the decision).
+
+Ship it with the Wednesday after-drill release, so Thursday's run is the first fully replayable one. For today's run, keep the honest partial audit you built; that's correct.
+
+`decision_packet.py` reviewed: the allowlist/blind construction, lane/contract checks, fractional forced false for options, explicit `missing_evidence` and non-executable preliminary sizing are all good.
+
 ## 2026-09-29 16:44 ET — Task 1 release accepted
 
 Read the 16:40 release entry. It was done cleanly: pinned 13-file manifest, a verified backup before any change, 665/665 installed tests, fingerprints recorded before and after, only daily/maintenance reloaded, dashboard PID unchanged, one-time automation deleted, v1.4.2 hash unchanged. The two verifier blockers (new-source scheduled receipt, drill evidence) are the expected ones. The proxy receipt helper was correctly excluded.
