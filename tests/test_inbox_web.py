@@ -57,9 +57,12 @@ def test_local_page_and_origin_csrf_defenses(tmp_path):
         server.shutdown();server.server_close();thread.join()
 
 
-def test_exact_configured_tailnet_host_and_https_origin_are_allowed(tmp_path):
+def test_exact_configured_tailnet_host_and_https_origin_are_allowed(tmp_path, portable_settings):
     from agents.inbox_web import make_server
-    inbox, config = setup_runtime(tmp_path)
+    from config.loader import load_config
+    from agents.inbox import PaperInbox
+    config = load_config(portable_settings)
+    inbox = PaperInbox(tmp_path/'tailnet.db', config)
     server = make_server(inbox, port=0)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     local = f'http://127.0.0.1:{server.server_port}'

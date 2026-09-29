@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,12 +16,13 @@ def sha(payload):
     return hashlib.sha256(payload).hexdigest()
 
 
-def test_configuration_fingerprint_is_stable_across_processes():
+def test_configuration_fingerprint_is_stable_across_processes(portable_settings):
     hashes = []
     for seed in ('1', '2', '3'):
         result = subprocess.run([
-            '.venv/bin/python', '-c',
-            'from config.loader import load_config; print(load_config("config/settings.yaml").config_hash)',
+            sys.executable, '-c',
+            'import sys; from config.loader import load_config; print(load_config(sys.argv[1]).config_hash)',
+            str(portable_settings),
         ], env={**os.environ, 'PYTHONHASHSEED': seed}, capture_output=True, text=True, check=True)
         hashes.append(result.stdout.strip())
     assert hashes[0] == hashes[1] == hashes[2]
@@ -262,10 +264,10 @@ def test_background_detection_requires_actual_launchd_pid(monkeypatch, tmp_path)
     assert capture_runtime(tmp_path)['launchd_confirmed']
 
 
-def test_verifier_cli_reports_missing_evidence_without_writing_account(tmp_path):
+def test_verifier_cli_reports_missing_evidence_without_writing_account(tmp_path, portable_settings):
     result = subprocess.run([
-        '.venv/bin/python', '-m', 'scripts.verify_operations',
-        '--config', 'config/settings.yaml', '--database', str(tmp_path/'missing.db'),
+        sys.executable, '-m', 'scripts.verify_operations',
+        '--config', str(portable_settings), '--database', str(tmp_path/'missing.db'),
         '--test-report', str(tmp_path/'missing.xml'), '--test-manifest', str(tmp_path/'missing.json'),
         '--output-dir', str(tmp_path/'report'),
     ], capture_output=True, text=True)

@@ -18,6 +18,10 @@ UI animation, passing mock test or cached status as proof of installed operation
 11. Use tests before fixes, run the full suite and report all failures honestly.
 12. No automatic deployment on push, no duplicated scheduled runner, and no
     copying a development database over the primary experiment.
+13. Sync verified source, tests and handoff changes to the appropriate GitHub
+    branch at completed work checkpoints. Inspect staged changes for private
+    data; never publish credentials, private settings, databases or raw logs.
+    Report sync failures. A push is not permission to merge or deploy.
 
 For each handoff, update implemented vs planned behavior, exact tests run,
 known blockers and the next permitted step. Model/account changes are not

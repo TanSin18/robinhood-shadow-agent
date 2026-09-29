@@ -14,9 +14,6 @@ from agents.dashboard import dashboard_snapshot, set_paused
 from agents.dashboard_view import parse_filters, render_control, render_dashboard, shell
 from agents.inbox import PaperInbox
 from config.loader import load_config
-from agents.desk.router import render as render_desk
-from agents.desk.components import ROUTES
-from agents.desk.team import TEAM
 
 
 def scheduler_loaded():
@@ -48,9 +45,9 @@ def make_server(inbox, port=8765, *, proof=None, service_check=None, notificatio
 
         def send(self, status, content, content_type='text/html; charset=utf-8'):
             account = inbox.config.risk.agentic_account_id
-            if account and isinstance(content, str):
+            if account:
                 content = content.replace(account, '***' + account[-4:])
-            body = content.encode() if isinstance(content, str) else content
+            body = content.encode()
             self.send_response(status)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
@@ -58,7 +55,7 @@ def make_server(inbox, port=8765, *, proof=None, service_check=None, notificatio
             self.send_header('X-Content-Type-Options', 'nosniff')
             # Keep a usable Origin on same-origin form POSTs; disclose nothing cross-origin.
             self.send_header('Referrer-Policy', 'same-origin')
-            self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; img-src 'self'; font-src 'self'")
+            self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.end_headers()
             self.wfile.write(body)
 
@@ -70,13 +67,6 @@ def make_server(inbox, port=8765, *, proof=None, service_check=None, notificatio
                 return self.send(403, 'Local access only')
             parsed = urlparse(self.path)
             path = parsed.path
-            desk_assets = {'/assets/agent-desk.css': 'text/css; charset=utf-8',
-                           '/assets/agent-desk.js': 'text/javascript; charset=utf-8',
-                           '/assets/fonts/Geist.woff2': 'font/woff2',
-                           '/assets/fonts/GeistMono.woff2': 'font/woff2'}
-            desk_assets.update({f'/assets/avatars/{entry[2]}': 'image/svg+xml' for entry in TEAM.values() if entry[2]})
-            if path in desk_assets:
-                return self.send(200, (assets / path.removeprefix('/assets/')).read_bytes(), desk_assets[path])
             if path in {'/assets/dashboard.css', '/assets/dashboard.js', '/assets/decision-room.js'}:
                 kind = 'text/css' if path.endswith('.css') else 'text/javascript'
                 return self.send(200, (assets / path.rsplit('/', 1)[1]).read_text(), kind + '; charset=utf-8')
@@ -97,14 +87,14 @@ def make_server(inbox, port=8765, *, proof=None, service_check=None, notificatio
                     if not report:
                         return self.problem(404, 'Weekly report not found.')
                     return self.send(200, shell('Weekly report', '<main id="main"><h1>Weekly report</h1><a href="/">Back to dashboard</a><pre>' + html.escape(report['body']) + '</pre></main>'))
-                if path not in dict(ROUTES):
+                if path != '/':
                     return self.problem(404, 'Page not found.')
                 filters = parse_filters(query)
                 inbox.expire()
                 state = dashboard_snapshot(inbox)
                 readiness = proof.assess() if proof else None
                 service = service_check() if service_check else None
-                content=render_desk(path, state, inbox.config, csrf, filters)
+                content=render_dashboard(state, inbox.config, csrf, filters, readiness, service)
                 return self.send(200, content)
             except ValueError as error:
                 return self.problem(400, str(error))

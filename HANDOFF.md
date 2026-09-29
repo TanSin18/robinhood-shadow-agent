@@ -2,6 +2,21 @@
 
 ## Latest UI synchronization
 
+Pre-gate repair checkpoint: the full suite now passes **617 tests**, with 27
+SDK deprecation warnings. Reproduced all 36 failures before changes. Seven were
+the known export portability failures; reused synthetic fixtures and the active
+interpreter fixes from runtime commit 584b197 (tests only). The other 29 came
+from prematurely replacing the operational inbox renderer with the incomplete
+Agent Desk renderer. Restored `agents/inbox_web.py` to the unchanged main
+implementation. Agent Desk remains served by its separate read-only preview
+entrypoint; no Agent Desk screens, avatars or assets were removed.
+
+This is NOT proof of an operational Agent Desk replacement: approvals/controls,
+history/filter/security parity still need an explicit post-gate integration.
+Installed readiness assessment remains false: no fresh authenticated scheduled
+cycle for the installed code/configuration. No merge, deployment or restart.
+The older 36-failure result below is retained as historical evidence.
+
 Latest lane diagrams and preview polish are preserved on `ui/agent-desk`.
 Fresh suite: 581 passed, 36 failed; preview tests 6 passed, polish tests 3 passed.
 See [UI synchronization status](docs/ui-sync-status.md) for every failing test.

@@ -9,7 +9,6 @@ from agents.schemas import EvidenceItem, TradeProposal
 from config.loader import load_config
 
 SETTINGS = Path(__file__).parents[1] / "config" / "settings.yaml"
-LOCAL_SETTINGS = Path(__file__).parents[1] / "config" / "settings.local.yaml"
 
 
 def test_default_config_is_stage_one_paper_only() -> None:
@@ -27,7 +26,7 @@ def test_default_config_is_stage_one_paper_only() -> None:
     assert config.notifications.pushover_enabled is True
     assert config.notifications.keychain_service == 'com.openai.robinhood-shadow.pushover'
     assert config.notifications.dashboard_base_url == (
-        'https://tanmays-macbook-air.tail4c3ace.ts.net:8443'
+        'http://127.0.0.1:8765'
     )
     assert config.notifications.dashboard_url('decisions').endswith('/#decisions')
 
@@ -58,11 +57,11 @@ def test_runtime_validation_requires_starting_cash() -> None:
         config.validate_runtime_ready()
 
 
-def test_installed_service_config_uses_private_phone_dashboard_url() -> None:
-    config = load_config(LOCAL_SETTINGS)
+def test_private_phone_dashboard_config_roundtrips(portable_settings) -> None:
+    config = load_config(portable_settings)
 
     assert config.notifications.dashboard_base_url == (
-        'https://tanmays-macbook-air.tail4c3ace.ts.net:8443'
+        'https://shadow-fixture.example.ts.net:8443'
     )
 
 
