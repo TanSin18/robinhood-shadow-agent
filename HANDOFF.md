@@ -1,5 +1,15 @@
 # Current handoff — September 28, 2026
 
+## Latest live registered rehearsal
+
+Registered API rehearsal `f79f36f04cab4da3bf9c4cf6d955219c` completed all three
+model stages and final quote refresh in 60.14 seconds, estimated $0.01984755,
+without a cap waiver. Official records unchanged; no cards/fills. Fresh full
+suite: 615 passed, 34 warnings. Operator API key is in local login Keychain,
+not Git; no credential was displayed. Installed runtime/services unchanged.
+Market closed and news disabled: this is not the scheduled Phase 0 proof.
+See docs/bounded-inference-status.md. Older offline-only notes are historical.
+
 ## Registered inference development checkpoint
 
 The isolated rehearsal now has a `--registered-api` path with the preregistered

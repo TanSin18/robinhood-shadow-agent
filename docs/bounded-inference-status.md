@@ -1,5 +1,25 @@
 # Registered inference — isolated branch only
 
+## Live registered rehearsal — September 28, 2026
+
+After operator-created API credentials were stored in the operator login Keychain,
+an isolated in-memory configuration selected the byte-verified registered model
+IDs. No installed configuration or service was changed. The credential was
+passed only to the rehearsal process and was not printed or written to Git.
+
+Run `f79f36f04cab4da3bf9c4cf6d955219c` completed Research, Portfolio, Critic and
+final equity refresh in **60.14 seconds**, using the registered capped adapter
+without a cap waiver. It recorded 14 equity quotes and 14 volatility series.
+Estimated uncached API cost: **$0.01984755**; uncertain model calls: **0**.
+Official protected business-record digest was unchanged; zero cards and fills.
+The focused verification suite passed **26 tests**, with 7 warnings. Fresh full
+suite after this live test: **615 passed, 0 failed, 34 warnings** in 42.46 seconds.
+
+Market session was closed. News remains disabled. This proves the isolated
+registered API path, not market-hours fills, official budget integration,
+deployment, or installed scheduled-service readiness. Phase 0 remains open.
+The older offline-only statements below describe the implementation checkpoint.
+
 ## Implemented, offline verified
 
 Final verification: **615 passed, 0 failed, 34 warnings** in the full suite;
