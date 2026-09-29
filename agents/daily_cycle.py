@@ -362,7 +362,14 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         result['api_cost_estimate_usd']=str(sum((D(c['cost_usd']) for c in inbox.store.read_json('api_costs')[cost_start:]),D(0)))
         if isinstance(bridge, BoundedInference):
             result.update(bridge.cost_report())
-        if phase0_reservations:
+            from agents.cost_allocation import arm_costs, _exact_sum
+            attempts=bridge.allocation_records()
+            totals={lane:_exact_sum([D(0),*[D(a['allocations'].get(lane,'0')) for a in attempts]]) for lane in ('A','B')}
+            result['cost_allocation_attempts']=attempts
+            result['cost_allocation']=json.loads(json.dumps(arm_costs(totals),default=str))
+            if phase0_reservations:
+                budget_allocator.settle_attempts(cycle_id,phase0_reservations,attempts)
+        elif phase0_reservations:
             costs=inbox.store.read_json('api_costs')[cost_start:]
             by_stage={stage:(D(costs[index]['cost_usd']) if index<len(costs) else D(0))
                       for index,stage in enumerate(('research','portfolio','critic'))}
@@ -381,7 +388,13 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         name={'research':'Research Agent','portfolio':'Portfolio Agent','critic':'Critic'}[role]
         agents.append(name)
         trace_event('stage_started', role=role, agent=name)
-        agent=Agent(name=name,instructions=prompts.load(role,'hardening_v2').text,model=CodexSDKModel(bridge,model),output_type=schema)
+        instructions=prompts.load(role,'hardening_v2').text
+        if isinstance(bridge, BoundedInference):
+            from agents.cost_allocation import split_stage_input
+            blocks,common=split_stage_input(request,{c['instrument']:c['lane'] for c in model_candidates})
+            if not blocks: raise ValueError('COST_NO_REPRESENTED_LANE')
+            bridge.set_cost_context(blocks,common_input=instructions+'\n'+json.dumps(common,default=str))
+        agent=Agent(name=name,instructions=instructions,model=CodexSDKModel(bridge,model),output_type=schema)
         output=Runner.run_sync(agent,json.dumps(request,default=str),max_turns=1).final_output
         completed[role]=output.model_dump(mode='json')
         return output
@@ -513,6 +526,15 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     output=completed['critic'],candidate_decisions=critic_rows)
     except BudgetExceeded:
         return finish({'status':'NOT_ISSUED_BUDGET','reason':'Insufficient remaining estimated AI budget for the next review stage','decision':completed.get('portfolio'),'results':[]})
+    except Exception as error:
+        if not isinstance(bridge, BoundedInference): raise
+        safe_codes={'COST_NO_REPRESENTED_LANE','ALLOCATION_TOKEN_COUNT_FAILED','MODEL_REQUEST_FAILED',
+                    'MODEL_SCHEMA_INVALID','OUTPUT_TRUNCATED_AT_TOKEN_CAP','MODEL_RESPONSE_INCOMPLETE',
+                    'INPUT_TOKEN_CAP','INPUT_TOKEN_COUNT_FAILED','INVALID_USAGE','PROVIDER_ENVELOPE_VIOLATION',
+                    'RESPONSE_MODEL_MISMATCH','RESPONSE_PRICING_TIER_MISMATCH','UNEXPECTED_MODEL_TOOL'}
+        reason=str(error) if str(error) in safe_codes else 'INFERENCE_FAILED'
+        return finish({'status':'HOLD_OPERATIONAL','reason':reason,'error_type':type(error).__name__,
+                       'decision':completed.get('portfolio'),'results':[]})
     completion_time=clock()
     check_owner()
     wanted={p.instrument for p in decision.picks}|{t for lane in ('A','B') for track in ('agent_alone','with_approvals') for t in inbox.state(lane,track)['positions']}

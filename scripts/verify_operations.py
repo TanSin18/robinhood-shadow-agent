@@ -18,7 +18,7 @@ def write_report(assessment: dict, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     (destination / 'operational-readiness.json').write_text(json.dumps(assessment, indent=2) + '\n')
     lines = ['# Operational prerequisite check', '',
-             '**Research may proceed:** ' + ('yes' if assessment['ready'] else 'no'), '',
+             '**Research may proceed:** ' + ('yes' if assessment['research_implementation_allowed'] else 'no'), '',
              'Stage 1 real-money execution remains blocked.', '',
              '| Check | Result |', '|---|---|']
     lines += [f'| {name.replace("_", " ")} | {"verified" if value else "not proven"} |'
@@ -41,6 +41,8 @@ def main() -> int:
     parser.add_argument('--test-manifest', default='outputs/operational-test-run.json')
     parser.add_argument('--output-dir', default='outputs')
     parser.add_argument('--run-tests', action='store_true')
+    parser.add_argument('--drill-not-before', type=datetime.fromisoformat,
+                        help='Require drill events at or after this timezone-aware timestamp')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     report, manifest = Path(args.test_report).resolve(), Path(args.test_manifest).resolve()
@@ -60,7 +62,7 @@ def main() -> int:
             'exit_code': result.returncode, 'command': command,
         }, indent=2) + '\n')
     proof = OperationalProof(root=root, config_path=config_path, database=Path(args.database).resolve(),
-                             test_report=report, test_manifest=manifest)
+                             test_report=report, test_manifest=manifest,drill_not_before=args.drill_not_before)
     assessment = proof.assess()
     write_report(assessment, Path(args.output_dir))
     print(json.dumps(assessment, indent=2))

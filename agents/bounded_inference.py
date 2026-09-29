@@ -7,6 +7,8 @@ Crashes leave the reservation in place; uncertain calls retain their full bound.
 import json
 import os
 import threading
+import hashlib
+from uuid import uuid4
 from datetime import datetime, timezone
 from decimal import Decimal as D
 from pathlib import Path
@@ -63,6 +65,26 @@ class BoundedInference:
         self.uncertain_calls = 0
         self.reservation = None
         self.last_result = None
+        self.cost_context = None
+        self.cost_attempts = {}
+
+    def set_cost_context(self, blocks, *, common_input=''):
+        """Freeze actual stage blocks and shared content, separate from billing."""
+        if not blocks or set(blocks) - {'A','B'} or any(not v for v in blocks.values()):
+            raise ValueError('INVALID_COST_CONTEXT')
+        self.cost_context = json.loads(json.dumps(blocks, default=str))
+        self.cost_common_input = common_input
+
+    def allocation_records(self):
+        return json.loads(json.dumps(list(self.cost_attempts.values())))
+
+    def record_allocation(self, key, amount, basis, metadata):
+        from agents.cost_allocation import allocate_cost
+        allocation = allocate_cost(amount, metadata['lane_tokens'], common_tokens=metadata['common_tokens'])
+        row = {**metadata, 'attempt_id':key, 'cost_usd':str(amount), 'cost_basis':basis,
+               'allocations':{k:str(v) for k,v in allocation.items()}}
+        self.store.append_json('local_traces', {'event':'attempt_cost_allocation', **row})
+        self.cost_attempts[key] = row
 
     def bound(self, role):
         envelope = self.cost['stage_token_envelopes_per_attempt'][role]
@@ -96,6 +118,35 @@ class BoundedInference:
             raise ValueError('INPUT_TOKEN_COUNT_FAILED') from None
         if type(count) is not int or count < 0 or count > envelope['maximum_input_tokens']:
             raise ValueError('INPUT_TOKEN_CAP')
+        metadata = None
+        if self.cost_context is not None:
+            lane_tokens = {}
+            for lane, blocks in self.cost_context.items():
+                encoded = json.dumps(blocks, sort_keys=True, default=str)
+                try:
+                    tokens = self.client.responses.input_tokens.count(model=model,input=encoded).input_tokens
+                except Exception:
+                    raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED') from None
+                if type(tokens) is not int or tokens <= 0:
+                    raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
+                lane_tokens[lane] = tokens
+            try:
+                common_count = self.client.responses.input_tokens.count(**{**request,'input':self.cost_common_input}).input_tokens
+            except Exception:
+                raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED') from None
+            if type(common_count) is not int or common_count < 0:
+                raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
+            metadata = {'role':role, 'model':model, 'weight_basis':'input_tokens_only',
+                'weight_source':'actual_stage_structured_blocks_and_shared_content',
+                'token_counter':'provider_responses_input_tokens',
+                'tokenizer_revision':'not_exposed_by_provider',
+                'lane_tokens':lane_tokens, 'common_tokens':common_count,
+                'request_input_tokens':count,
+                'common_token_policy':'equal_split_among_represented_lanes',
+                'partition_method':'independently_counted_components_not_provider_billing',
+                'cycle_id':getattr(self,'cycle_id',None),
+                'packet_hash':hashlib.sha256(instructions.encode()).hexdigest(),
+                'candidate_dossier_hash':hashlib.sha256(json.dumps(self.cost_context,sort_keys=True).encode()).hexdigest()}
         self.before_generation()
         if self.reservation is None:
             total = sum((2*self.bound(r) for r in self.models),D(0))
@@ -104,7 +155,11 @@ class BoundedInference:
         bound = self.bound(role)
         self.charged += bound  # Retained unless trusted usage reconciles it.
         self.uncertain_calls += 1
+        attempt_id = uuid4().hex
+        if metadata is not None:
+            self.record_allocation(attempt_id,bound,'uncertain_reserved_bound',metadata)
         self.store.append_json('local_traces',{'event':'bounded_attempt_started','role':role,
+            'attempt_id':attempt_id,
             'model':model,'attempt':self.attempts[role],'input_tokens':count,
             'reserved_usd':str(bound),'data_mode':self.data_mode})
         try:
@@ -126,7 +181,10 @@ class BoundedInference:
                   + D(outputs)*D(str(pricing['output_usd_per_million_tokens'][model])))/D(1000000)
         self.charged += amount-bound
         self.uncertain_calls -= 1
+        if metadata is not None:
+            self.record_allocation(attempt_id,amount,'registered_uncached_upper_estimate',metadata)
         self.store.append_json('api_costs',{'timestamp':now.isoformat(),'model':model,'role':role,
+            'attempt_id':attempt_id,
             'attempt':self.attempts[role],'input_tokens':inputs,'output_tokens':outputs,
             'cost_usd':str(amount),'cost_basis':'registered_uncached_upper_estimate','data_mode':self.data_mode})
         if response.status=='incomplete' and getattr(response.incomplete_details,'reason',None)=='max_output_tokens':

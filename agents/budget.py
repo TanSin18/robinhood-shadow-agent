@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -176,3 +177,40 @@ class BudgetAllocator:
             ).rowcount
             if changed != 1:
                 raise BudgetUnavailable("budget reservation is missing or already settled")
+
+    def settle_attempts(self, cycle_id, reservations, attempts):
+        """Atomic, replay-safe settlement of this cycle; historical rows untouched."""
+        from agents.cost_allocation import _exact_sum
+        unique = {}
+        for row in attempts:
+            key = (row['role'], row['attempt_id'])
+            encoded = json.dumps(row, sort_keys=True)
+            if key in unique and unique[key] != encoded:
+                raise ValueError('ALLOCATION_CONFLICT')
+            unique[key] = encoded
+        pairs = {(r['stage'],r['lane']) for r in reservations}
+        totals = {pair:[] for pair in pairs}
+        for encoded in unique.values():
+            row = json.loads(encoded)
+            for lane, value in row['allocations'].items():
+                amount = D(value)
+                if not amount.is_finite() or amount < 0 or (row['role'],lane) not in pairs:
+                    raise ValueError('INVALID_ATTEMPT_ALLOCATION')
+                totals[(row['role'],lane)].append(amount)
+        with sqlite3.connect(self.path) as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('CREATE TABLE IF NOT EXISTS ai_cost_settlements (cycle_id TEXT PRIMARY KEY, payload TEXT NOT NULL)')
+            payload = json.dumps({'reservations':sorted(r['id'] for r in reservations),
+                                  'attempts':sorted(unique.values())}, sort_keys=True)
+            prior = db.execute('SELECT payload FROM ai_cost_settlements WHERE cycle_id=?',(cycle_id,)).fetchone()
+            if prior:
+                if prior[0] != payload: raise ValueError('ALLOCATION_CONFLICT')
+                return
+            for row in reservations:
+                actual = _exact_sum([D(0), *totals[(row['stage'],row['lane'])]])
+                existing = db.execute('SELECT lane,stage,amount,settled FROM ai_budget_reservations WHERE id=?',(row['id'],)).fetchone()
+                if not existing or existing[0:2] != (row['lane'],row['stage']) or existing[3]:
+                    raise BudgetUnavailable('budget reservation is missing or already settled')
+                if actual > D(existing[2]): raise BudgetUnavailable('allocation exceeds reserved lane bound')
+                db.execute('UPDATE ai_budget_reservations SET amount=?,settled=1 WHERE id=?',(str(actual),row['id']))
+            db.execute('INSERT INTO ai_cost_settlements VALUES (?,?)',(cycle_id,payload))

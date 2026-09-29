@@ -27,6 +27,9 @@ SERVICE_LABEL = 'com.openai.robinhood-daily'
 REQUIRED_READS = {'get_accounts', 'get_portfolio', 'get_equity_quotes', 'get_equity_historicals'}
 EXPECTED_AGENTS = ['Research Agent', 'Portfolio Agent', 'Critic']
 REQUIRED_TESTS = {
+    'shared_attempt_costs': {('tests.test_attempt_allocation','test_official_cycle_allocates_all_three_roles_to_a_only'),
+                            ('tests.test_attempt_allocation','test_settlement_uses_attempt_keys_not_order_and_is_idempotent'),
+                            ('tests.test_attempt_allocation','test_crash_before_close_retains_budget_and_durable_attempt_bound')},
     'approved_phase0_boundary': {('tests.test_preregistration_phase0','test_phase0_preflight_accepts_exact_approved_registration')},
     'isolated_proxy_auth': {('tests.test_robinhood_oauth','test_keychain_storage_round_trips_tokens_and_client_info'),('tests.test_market_reader','test_live_reader_uses_local_proxy_client_not_codex_session')},
     'application_write_denial': {('tests.test_direct_read_gateway','test_every_enforcement_layer_blocks_non_exact_tool_before_upstream')},
@@ -128,6 +131,7 @@ class OperationalProof(BaseModel):
     test_report: Path
     test_manifest: Path
     max_age_hours: int = Field(default=72, gt=0, le=168)
+    drill_not_before: datetime | None = None
 
     def assess(self, now: datetime | None = None) -> dict:
         now = now or datetime.now(timezone.utc)
@@ -135,6 +139,7 @@ class OperationalProof(BaseModel):
             raise ValueError('Readiness clock must be timezone-aware')
         gates = {name: False for name in REQUIRED_TESTS}
         gates['background_auth'] = False
+        gates['revocation_drill'] = False
         gates.update(proxy_auth=False,exact_read_capability=False,bounded_cash=False,
                      source_hashes=False,background_data_reads=False,scheduled_full_cycle=False)
         blockers, report_cases = [], set()
@@ -143,6 +148,23 @@ class OperationalProof(BaseModel):
                   'real_execution': 'blocked', 'cost_basis': 'estimated_api_equivalent',
                   'market_open_verified': False, 'evidence_valid': False}
         horizon = timedelta(hours=self.max_age_hours)
+        try:
+            path=self.root/'outputs/revocation-drill-receipt.json'
+            if path.is_symlink(): raise ValueError('symlink receipt')
+            drill=json.loads(path.read_text())
+            keys=('begun_at','revoked_read_failed_at','local_credentials_removed_at',
+                  'reauthorized_read_passed_at','receipt_generated_at')
+            if set(drill) != {'status',*keys} or drill['status']!='COMPLETED':
+                raise ValueError('incomplete sanitized receipt')
+            stamps=[_timestamp(drill[key]) for key in keys]
+            if stamps!=sorted(stamps) or stamps[-1]>now:
+                raise ValueError('invalid drill chronology')
+            if self.drill_not_before is not None:
+                if self.drill_not_before.tzinfo is None or stamps[0]<self.drill_not_before:
+                    raise ValueError('drill predates requested window')
+            gates['revocation_drill']=True
+        except (OSError, ValueError, TypeError, KeyError):
+            blockers.append('Sanitized completed revocation and reauthorization evidence is missing, invalid or outside the requested drill window.')
         try:
             config = load_config(self.config_path)
             from agents.preregistration import load_phase0_registration

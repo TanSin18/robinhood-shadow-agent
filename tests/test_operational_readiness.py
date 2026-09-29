@@ -92,9 +92,31 @@ def evidence(tmp_path):
     }
     store.append_json('run_states', result)
     store.append_json('run_states', receipt)
+    (root/'outputs').mkdir()
+    (root/'outputs/revocation-drill-receipt.json').write_text(json.dumps({
+        'status':'COMPLETED',
+        **{key:(now-timedelta(minutes=5-i)).isoformat() for i,key in enumerate([
+            'begun_at','revoked_read_failed_at','local_credentials_removed_at',
+            'reauthorized_read_passed_at','receipt_generated_at'])}}))
     proof = OperationalProof(root=root, config_path=config_path, database=database,
                              test_report=report, test_manifest=manifest)
     return proof, result, receipt, now
+
+
+def test_scheduled_success_cannot_mask_missing_drill(tmp_path):
+    proof,_,_,now=evidence(tmp_path)
+    (proof.root/'outputs/revocation-drill-receipt.json').unlink()
+    report=proof.assess(now)
+    assert report['gates']['scheduled_full_cycle']
+    assert not report['phase0_gate_passed']
+    assert not report['gates']['revocation_drill']
+
+
+def test_new_receipt_timestamp_cannot_relabel_old_drill(tmp_path):
+    proof,_,_,now=evidence(tmp_path)
+    proof=proof.model_copy(update={'drill_not_before':now-timedelta(minutes=2)})
+    report=proof.assess(now)
+    assert not report['ready']
 
 
 def replace_receipt(proof, receipt):

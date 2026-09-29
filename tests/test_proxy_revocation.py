@@ -49,7 +49,7 @@ async def test_drill_requires_success_rejection_then_new_authorization(tmp_path)
     assert (await advance('begin', state, storage, success, NOW))['status'] == 'AWAITING_REMOTE_REVOKE'
     assert 'private-test-token' not in state.read_text()
     assert state.stat().st_mode & 0o077 == 0
-    assert (await advance('verify-revoked', state, storage, rejected, NOW))['status'] == 'REMOTE_REJECTION_VERIFIED'
+    assert (await advance('verify-revoked', state, storage, rejected, NOW, clock=lambda: NOW))['status'] == 'REMOTE_REJECTION_VERIFIED'
     await advance('remove-local-credentials', state, storage, rejected, NOW)
     assert storage.deleted
     storage.token = 'new-private-test-token'

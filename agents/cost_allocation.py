@@ -5,10 +5,35 @@ does not read accounts, mutate budgets or invoke a tokenizer/provider.
 """
 from decimal import Decimal
 from fractions import Fraction
+import copy
 
 ARMS = ('agent_alone', 'agent_with_approvals', 'deterministic_no_ai',
         'seeded_random', 'vti', 'cash', 'exposure_matched_vti',
         'lane_b_delta_equivalent_underlying')
+
+
+def split_stage_input(request, instrument_lanes):
+    """Partition actual structured stage content; shared narrative stays common.
+
+    Symbol references are lane-specific input blocks too. Unknown/unmapped
+    references remain common; they never invent a represented lane.
+    """
+    common = copy.deepcopy(request)
+    blocks = {}
+    def extract(parent, field):
+        retained = []
+        for item in parent.get(field, []):
+            instrument = item.get('instrument') if isinstance(item, dict) else item
+            lane = instrument_lanes.get(str(instrument))
+            if lane in {'A','B'}:
+                blocks.setdefault(lane, []).append(item)
+            else:
+                retained.append(item)
+        if field in parent: parent[field] = retained
+    for field in ('candidates','strategy_signals','symbols','eligible_instruments'):
+        extract(common, field)
+    if isinstance(common.get('decision'), dict): extract(common['decision'],'picks')
+    return blocks, common
 
 
 def _exact_sum(values):

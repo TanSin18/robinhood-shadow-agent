@@ -85,9 +85,11 @@ def receipt(state):
                 'LOCAL_DELETION_IN_PROGRESS', 'AWAITING_REAUTHORIZATION', 'COMPLETED'}
     if state.get('status') not in statuses:
         raise ValueError('INVALID_DRILL_RECEIPT')
-    result = {'status': state['status']}
-    for key in ('begun_at', 'revoked_read_failed_at', 'local_credentials_removed_at',
-                'reauthorized_read_passed_at'):
+    result = {'status': state['status'], 'receipt_generated_at':datetime.now(timezone.utc).isoformat()}
+    keys = ('begun_at', 'revoked_read_failed_at', 'local_credentials_removed_at',
+            'reauthorized_read_passed_at')
+    stamps = []
+    for key in keys:
         if key in state:
             try:
                 stamp = datetime.fromisoformat(state[key])
@@ -96,6 +98,9 @@ def receipt(state):
             except (ValueError, TypeError):
                 raise ValueError('INVALID_DRILL_RECEIPT') from None
             result[key] = stamp.isoformat()
+            stamps.append(stamp)
+    if state['status'] == 'COMPLETED' and (len(stamps) != 4 or stamps != sorted(stamps)):
+        raise ValueError('INVALID_DRILL_RECEIPT')
     return result
 
 
