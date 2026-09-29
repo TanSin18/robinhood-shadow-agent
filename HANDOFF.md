@@ -1,4 +1,15 @@
-# Current handoff — September 28, 2026
+# Current handoff — September 29, 2026
+
+Read `docs/review/CLAUDE_REVIEW.md` before work and
+`docs/review/CODEX_STATUS.md` for current deployment/evidence and questions.
+These supersede the historical checkpoints below. Installed scheduled proof
+is now recorded; the shared-cost and drill-evidence gaps still prevent blanket
+Phase 0 sign-off. Runtime is outside iCloud, Agent Desk is on 8765, preview 8766
+is not running, and registered dated API models are deployed. The primary is a
+deployment copy, not a Git checkout. See status for exact source composition.
+The v1.5 draft and reconciled plan are review-only; no activation is authorized.
+
+## Historical checkpoints (not current deployment instructions)
 
 ## Latest live registered rehearsal
 

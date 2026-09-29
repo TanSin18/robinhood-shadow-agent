@@ -2,6 +2,12 @@
 
 Private, paper-only investment-research project. **Real orders are blocked.**
 
+Current deployment and shared reviewer channel: [CODEX_STATUS](docs/review/CODEX_STATUS.md).
+Read [CLAUDE_REVIEW](docs/review/CLAUDE_REVIEW.md) before every task. Deployment
+uses the Codex runtime branch plus a separate immutable UI release; main alone
+is an older snapshot. Historical branch/deployment notes below are superseded
+by the dated review status. Draft v1.5 is not active.
+
 Start with [HANDOFF.md](HANDOFF.md), [AGENTS.md](AGENTS.md), and the approved
 [organization spec](docs/superpowers/specs/2026-09-28-intelligent-agentic-investment-organization-design.md).
 The spec describes intended capabilities; it is not a claim they are implemented.

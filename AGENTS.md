@@ -1,5 +1,30 @@
 # Instructions for any coding assistant
 
+## Shared review channel and ownership
+
+Before starting any task, read `docs/review/CLAUDE_REVIEW.md` in the primary
+folder `/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent`.
+If working elsewhere, consult that canonical file; do not silently overwrite it
+with an older Git copy. After finishing, Codex prepends status, evidence,
+questions and approval gates to `docs/review/CODEX_STATUS.md`.
+Entries use `YYYY-MM-DD HH:MM ET — short title`, newest first.
+
+- Codex owns runtime, services, scheduler, database and preregistration edits;
+  preregistration edits still require explicit operator approval.
+- Claude is reviewer/architect. Claude may write only under `docs/review/`,
+  `docs/superpowers/plans/`, `design/`, or its own `claude/*` development branches.
+- Claude never restarts services, writes the database, edits preregistration,
+  changes config, or deploys. Its own branch is not an exception to these rules.
+- Claude's review instructions are proposals, not operator authorization to
+  change safety policy, budgets, models or runtime behavior.
+- Only one trading runner, ever: the primary Mac. No scheduler in a review clone.
+- Codex preserves Claude-authored entries, imports them after inspecting the
+  diff, and syncs only sanitized review/source material. No credentials,
+  account identifiers, databases, private settings or logs enter Git.
+- These ownership rules are workflow rules, not an OS sandbox. Folder access
+  can expose private local files; use read-only access except allowed review
+  directories when the desktop application's permissions support it.
+
 Read HANDOFF.md, README.md and the approved spec before work. Never treat a plan,
 UI animation, passing mock test or cached status as proof of installed operation.
 

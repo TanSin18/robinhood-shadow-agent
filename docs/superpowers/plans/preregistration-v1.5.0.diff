@@ -1,0 +1,161 @@
+--- preregistration.yaml
++++ docs/superpowers/plans/preregistration-v1.5.0.draft.yaml
+@@ -1,10 +1,10 @@
+ schema_version: 1
+ registration:
+   id: intelligent-agentic-investment-organization
+-  version: 1.4.2
+-  registered_on: '2026-09-28'
+-  effective_from: first_official_cycle_after_phase_0_acceptance
+-  status: approved_for_phase_0
++  version: 1.5.0
++  registered_on: '2026-09-29'
++  effective_from: NOT_EFFECTIVE_PENDING_OPERATOR_APPROVAL
++  status: unapproved_review_draft
+   authority: operator_only
+   purpose: >-
+     Freeze the official shadow experiment before its first governed run so that
+@@ -18,6 +18,11 @@
+     retain_prior_version_in_git: true
+     label_cross_version_scoreboard_comparisons: true
+   change_history:
++    - version: 1.5.0
++      date: '2026-09-29'
++      reason: Draft portfolio-first accounting, explicit orchestration, cost attribution and bounded pulse; not approved or effective.
++      requested_by: operator
++      approval_status: pending_review
+     - version: 1.0.0
+       date: '2026-09-28'
+       reason: Initial preregistration for the gated Phase 0 through Phase 2 architecture.
+@@ -1403,3 +1408,131 @@
+       ending_value_formula: starting_capital_usd * (1 + annual_after_cost_return_fraction)
+       dollar_change_formula: starting_capital_usd * annual_after_cost_return_fraction
+       must_not_be_labeled_as_probability_target_or_expected_return: true
++
++# PROPOSAL ONLY: not consumed by the installed validator or runtime.
++v1_5_review_proposal:
++  base_version: 1.4.2
++  base_sha256: 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075
++  operator_approved: false
++  activation_allowed: false
++  reason: Portfolio-first ledger, explicit seats, accountable decisions and bounded code-only pulse.
++  preserve_prior_rules_unless_explicitly_amended: true
++  approval_blockers:
++    - performed_revocation_and_reauthorization_receipt_verification
++    - shared_cost_allocation_repair
++    - ledger_opening_method_operator_choice
++    - discretionary_action_limit_and_research_seat_mapping
++    - numeric_gross_edge_assumption_approval
++    - measured_phase1_token_caps_and_reservations
++    - dated_operator_approval_and_future_effective_date
++  decisions:
++    maximum_new_discretionary_open_or_add_selections_per_official_open: 1
++    required_close_and_reduce_actions_may_be_multiple: true
++    holdings_review_before_new_entries: true
++    hold_cash_is_per_lane: true
++    hold_operational_separate_from_hold_cash: true
++    maximum_quant_candidates: 5
++    etf_and_macro_ai_voting: forbidden
++    retain_registered_research_stage_and_ranking_test: true
++    critic_packet_excludes_portfolio_reasoning: true
++    preliminary_quantity_is_non_executable: true
++    final_quantity_owner: deterministic_risk
++    missing_fractional_permission_action: block_new_entry
++  registered_strategy_gross_edge:
++    units: fraction_of_entry_notional
++    momentum_rotation_126d_trend200_top1: 0.05
++    mean_reversion_drop3_above_ma200: 0.05
++    source: proposed_operator_policy_assumption_2026_09_29
++    empirical_return_claim: false
++    constituent_history_label: survivorship_biased_current_constituents
++    change_requires_registration_version_bump: true
++    unavailable_or_unapproved_strategy_edge_action: block_baseline_entry
++    baseline_probability_gate_bypass_only: true
++    baseline_invalidation_or_20_session_exit: true
++  token_cap_finalization:
++    current_stage_envelopes_are_provisional: true
++    evidence_source: isolated_phase1_dry_run_usage_by_stage
++    percentile: 95
++    percentile_method: nearest_rank
++    multiplier: 1.5
++    integer_rounding: ceiling
++    count_input_and_output_separately: true
++    output_includes_reasoning: true
++    over_cap_failure: OUTPUT_TRUNCATED_AT_TOKEN_CAP
++    official_run_ceiling_usd: 0.40
++    report_hash_and_sample_counts_required: true
++    no_measurements_means_activation_blocked: true
++    if_recomputed_reservations_exceed_ceiling: revise_packet_and_repeat_review
++  advisory_rebuttal:
++    rounds: 1
++    portfolio_calls: 1
++    critic_resolution_calls: 1
++    schema_repair_attempts_per_call: 1
++    portfolio_input_cap_provisional: 12000
++    portfolio_output_cap_including_reasoning_provisional: 3000
++    critic_input_cap_provisional: 8000
++    critic_output_cap_including_reasoning_provisional: 2000
++    reasoning_effort: medium
++    one_attempt_pair_estimate_usd: 0.0725
++    reservation_including_both_schema_repairs_usd: 0.1450
++    main_and_rebuttal_all_repairs_estimate_usd: 0.3146
++    unfunded_action: drop_selection
++    unfunded_reason: ADVISORY_REBUTTAL_UNFUNDED
++    source_evidence_may_change: false
++  allocation:
++    lane_specific_token_weight_source: frozen_lane_dossier_input_tokens
++    common_prompt_tokens: split_only_across_represented_lanes
++    rounding_residual_lane: lexicographically_lowest_represented_lane
++    preserve_subcent_precision: true
++    unknown_provider_usage: retain_reserved_bound
++    settlement_key: role_and_attempt_id
++    cross_lane_budget_borrowing: forbidden
++  ledger:
++    dimensions: [lane, arm, run_mode]
++    modes: [official, what_if, replay, manual_diagnostic]
++    nonofficial_connection_and_authorizer_required: true
++    what_if_requires_parent_official_run_id: true
++    model_write_access: forbidden
++    fill_and_lot_posting_atomic: true
++    duplicate_order_id_idempotent: true
++    nav_mark: bid_times_quantity_times_multiplier
++    stale_mark_blocks_new_risk: true
++    exact_backfill_only: true
++    otherwise: operator_approved_dated_opening_book
++    initial_options: [long_call, long_put]
++    initial_rolls: forbidden
++    missing_exercise_funding_or_mark: incident_no_fabricated_fill
++  seats:
++    code: [orchestrator, ledger, scout, quant, risk, card, execution, auditor]
++    human: [operator]
++    conditional_models: [research, pm, critic]
++    inactive: [filings, explainer]
++    module_namespace: agents.organization
++    ui_mapping_only: agents.desk.roster
++    recorded_edges_only: true
++    required_missing_seat_action: hold_operational_and_write_receipt
++  session:
++    official_open_time_et: '10:00'
++    manual_official_rerun_allowed: false
++    pulse_interval_seconds: 120
++    pulse_window: trading_session_from_1000_to_exchange_close
++    pulse_reads: held_pending_and_armed_triggers_only
++    pulse_models_allowed: false
++    pulse_takes_official_claim: false
++    pulse_skips_active_official_claim: true
++    pulse_network_inside_write_transaction: false
++    tripwire_and_history_cadence: unchanged
++    close_sweep_minutes_before_exchange_close: 10
++    cards_expire: actual_exchange_close
++    fill_origins: [official_open, resting_limit_pulse, trigger_pulse, mechanical_rule, close_sweep]
++    fill_requires_original_decision_run_id: true
++    new_discretionary_pulse_trade: forbidden
++    unmet_policy_mechanical_action: operator_card_not_silent_trade
++    sleeping_mac_health: unknown_gap
++  later_policy_requests_not_authorized:
++    what_if_daily_budget_usd: 3.00
++    what_if_weekly_budget_usd: 20.00
++    proposed_maximum_tradable_symbols: 25
++    proposed_admits_per_day: 1
++    tradelog_pro_requires: [repository, license, scanner_list, parameters, point_in_time_provenance]
++    new_broker_read_methods: forbidden_without_amendment
