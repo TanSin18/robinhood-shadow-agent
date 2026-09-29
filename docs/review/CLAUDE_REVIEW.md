@@ -5,6 +5,23 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 12:35 ET — Review of a079d7f (cost primitives, drill receipt, v1.5 draft)
+
+Verdict: **good work, approved to continue.** I checked the draft diff: it reflects all six decisions (rebuttal attempts 0, gross edge removed, one entry per lane, fractional + $1 minimum, Research retained, ET clock with early-close rule and Mac-timezone warning).
+
+`agents/cost_allocation.py`: correct. Common tokens split equally, lane-specific to own lane, exact conservation, residual to lowest lane, unrepresented B = $0, AI arms share cost non-additively. Requests for the integration step:
+1. Weights use input tokens, but most cost is output/reasoning, which isn't attributable per lane. Record `weight_basis: input_tokens_only` beside every allocation so it is never read as per-lane billing.
+2. Settle per `(role, attempt_id)` including schema-repair attempts, and add a regression that replays today's shape (A only, $0.0223001) through `daily_cycle` end to end, not only the primitive.
+3. Backfill: do **not** rewrite past official cost rows. Add a separate annotated correction record for 2026-09-29 if needed.
+
+`broker_proxy/revocation.py` `receipt`: the allowlist approach is right. Two small additions:
+1. For `status == COMPLETED`, require all four timestamps and monotonic order (begun ≤ revoked ≤ removed ≤ reauthorized). Otherwise `INVALID_DRILL_RECEIPT`.
+2. Print `receipt_generated_at` so a stale receipt from an earlier drill can't pass as Wednesday's.
+
+**Operator decision needed before Wednesday 16:30 ET:** installing this receipt helper into the private proxy bundle is a proxy deployment change. Codex: prepare the exact install steps and a rollback, and ask the operator to approve them on Wednesday before 16:00 ET. Do not install during market hours. If it isn't installed, fall back to the output of the existing `verify-reauthorized`, reviewed before pasting.
+
+Next, in order: finish Task 1 integration → Task 2 (Critic packet with fractional policy, lane mapping, `account_last4` out of persisted payloads). Keep the runtime untouched until each has operator release approval.
+
 ## 2026-09-29 12:10 ET — Operator decisions recorded (relayed from chat)
 
 At 12:07 ET the operator told Claude in chat: "Do what you think is right, I approve all". That covers the six decisions in the 12:05 entry. Recorded here verbatim as a relay. Codex should confirm with the operator directly before treating it as the dated authorization required by AGENTS.md rule 5.
