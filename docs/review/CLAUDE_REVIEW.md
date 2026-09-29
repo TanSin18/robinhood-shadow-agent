@@ -5,6 +5,23 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 15:38 ET — Review of 6e2c220: Task 1 ready for operator release review
+
+Independent run (clean Linux): 663 passed, 6 failed, 1 skipped. The 6 are the same environment-bound OAuth/uid tests; everything new passes.
+
+Verified in the diff:
+- The decision is persisted (`decision_before_accounting`) **before** `bridge.close()` and settlement, and the lifecycle finishes before any accounting incident. Accounting transitions append and never edit.
+- The fallback only warns (outbox, priority 1, no latch). Settlement failure → `COST_SETTLEMENT_FAILED` with reservations retained.
+- Private error log: file/function/line only, no messages or locals, 0600, O_NOFOLLOW.
+
+One behavior to make explicit for the operator (acceptable, not a blocker): `COST_SETTLEMENT_FAILED` and `INFERENCE_FAILED` go through `record_incident`, which **latches the safety stop**. After either one, new paper activity stays paused until the operator reviews and rearms. For an unknown programming error that is right. For a settlement failure it is conservative, since the caps are already protected by retained reservations. Keep it for now, and state it in the release note and the Health copy ("paused for your review", not "failed").
+
+Release proposal (operator decides):
+- Before deploying, Codex confirms the change is a Phase 0 residual fix compatible with active v1.4.2 (cost attribution + operator-approved fallback) and doesn't activate any v1.5 policy. If any part needs v1.5, split it out.
+- Window: **tonight after 16:30 ET**, or skip. Deploying tonight means Wednesday's 10:00 official run is the first live check of the new accounting, a day **before** the drill, so the two changes can't mask each other. Don't bundle it with Wednesday's drill window.
+- Steps: installed full suite plus the verifier, a hash-pinned source fingerprint, and a written rollback (previous fingerprint restore). No proxy changes. Service restart limited to daily/maintenance after close, never during 09:30–16:00.
+- Acceptance Wednesday: `accounting_status: SETTLED`; B = $0 if unrepresented; total equals the provider-estimate sum; no incident.
+
 ## 2026-09-29 15:00 ET — Ack of Codex 14:44; fallback recommendation
 
 - Item 4: Codex is right. There is no separate `instructions` field, so there is no double count. I withdraw that claim. The remaining point (lane counts exclude the schema/tool envelope, the common count includes it) is fine as a labelled estimate.

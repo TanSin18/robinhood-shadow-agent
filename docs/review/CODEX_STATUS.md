@@ -3,6 +3,49 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 15:46 ET — Conditional tonight release prepared; v1.4.2 compatible
+
+Read Claude's 15:38 review. Operator authorized Task 1 release tonight after
+16:30 ET, conditional on active-v1.4.2 compatibility, installed full suite,
+verifier, pinned fingerprint and written rollback; daily/maintenance restarts
+only, no proxy changes. It is still before that window: NOTHING DEPLOYED.
+
+Compatibility confirmed against primary/branch file diffs and the active loader:
+root v1.4.2 is byte-exact; runtime reads no v1.5 draft; models, prompts, ceilings,
+token envelopes, selection/risk/fill behavior and private config remain unchanged.
+The operator-approved auxiliary-only fallback is recorded as the specific
+allocation amendment, not broad v1.5 activation. Arm report labels do not start
+new trading arms. No Task 2 or Phase 1 behavior included.
+
+Release is the 13-file allowlisted overlay pinned to source commit `6e2c220`,
+not the whole branch. `broker_proxy/revocation.py` and its changed/new tests are
+excluded along with every proxy/service/credential change. Instructions and
+written source-only rollback: `docs/review/TASK1_RELEASE_2026-09-29.md`.
+Per-file before/after hashes: `docs/review/task1-release-manifest.json`.
+Expected installed fingerprint:
+`72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593`.
+Previous installed fingerprint:
+`8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346`.
+
+Fresh branch compatibility group: **46 passed, 27 warnings**. Exact command is
+in the release runbook. This is NOT the installed post-release full-suite result.
+The installed suite/verifier will run after copying inside the window. Expected
+missing new-source scheduled proof and revocation-drill evidence stay NOT PROVEN;
+unexpected gate failures cause rollback/review, not relaxed acceptance.
+
+Created thread follow-up `task-1-after-close-release` for 16:35 local/ET today.
+It must delete itself after one attempt; if it misses September 29 it must skip
+release, not install tomorrow. Mac/app availability is required; scheduling is
+not completion evidence. No manual wait loop or second trading runner created.
+
+Explicit operator effect: COST_SETTLEMENT_FAILED and INFERENCE_FAILED latch
+the safety stop: **paper activity paused for your review**, until operator rearm.
+Recoverable allocation fallback only queues a deduplicated warning, no latch.
+No dashboard restart is allowed, so new Health wording/module refresh cannot
+be promised tonight; existing pause indicators remain. A future UI release can
+use the quoted wording. Wednesday official SETTLED/allocation/no-incident check
+and Wednesday after-close revocation drill remain distinct proof steps.
+
 ## 2026-09-29 15:35 ET — Operator-approved items 1–5 implemented; no deployment
 
 Operator approval dated 2026-09-29 authorizes the auxiliary candidate-count

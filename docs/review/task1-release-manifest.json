@@ -1,0 +1,61 @@
+{
+  "source_commit": "6e2c220eabef4e1d2153d06967c5b098c66dfac8",
+  "primary_root": "/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent",
+  "before_source_fingerprint": "8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346",
+  "expected_after_source_fingerprint": "72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593",
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/accounting_events.py": {
+      "before_sha256": null,
+      "after_sha256": "5f86a891fe2d4430c3a0301cc1713dad4fd13f410ba5bb34bf70cc0e8ca91d40"
+    },
+    "agents/bounded_inference.py": {
+      "before_sha256": "9fbe7fdde72c35ef0b92b70d096b62a278f506aaf59fe20173b3dd11b904e21e",
+      "after_sha256": "cbe0d44a3d3298dd33fc7b84eae29315ee78b53982f49f5ee38ccc9fd01b2c03"
+    },
+    "agents/budget.py": {
+      "before_sha256": "2007908ee376cf5b7e56a190616aa8611de3459bf1600011f54c7a5b117a7369",
+      "after_sha256": "a3db7790f1978fbcf15675a8488135d948578cda29c0005a163e29198c8d68ea"
+    },
+    "agents/cost_allocation.py": {
+      "before_sha256": null,
+      "after_sha256": "1fd9d06c01ef671d6703943d6af5dd5656814e5d09d47bebe890aaac9f106659"
+    },
+    "agents/daily_cycle.py": {
+      "before_sha256": "f96ba1e32b778d0e7d3ce4ced13a2d32da627cecfabfd96d5b4b9a03954d75e0",
+      "after_sha256": "7cf856d341bd398aba2713b047d67120102f6a75b326c9e907900feb9b62306e"
+    },
+    "agents/dashboard.py": {
+      "before_sha256": "6c1afe8477e0d47a022ece1f6f32e28a16209329252c4f2bf195072627b0d714",
+      "after_sha256": "4940f15093c8923f1b8a51b5f22ef15fa562ec9ae63b4874d5baa8cf2e64938e"
+    },
+    "agents/readiness.py": {
+      "before_sha256": "e81158883916a5db79e4292676645df009e64b009d7a275c86a1e545557eead4",
+      "after_sha256": "97402e6d4b1fd14e724131dc4d6c42098411afc9779be4b4cec1a7e63e69e2c2"
+    },
+    "scripts/verify_operations.py": {
+      "before_sha256": "1c6211ae80978e5a70f1ece16c3f2b4a5ad3330683de3e3c4ef4c587e5500836",
+      "after_sha256": "3422b0662ef3d315ebe38cae709dae26b5f19f9ee9cbf05fc7b9e21e901b55ac"
+    },
+    "tests/test_accounting_resilience.py": {
+      "before_sha256": null,
+      "after_sha256": "0f9efbc05414b3041cba485103d0f040acc8ced36ba96a210de1bc41d837fda9"
+    },
+    "tests/test_attempt_allocation.py": {
+      "before_sha256": null,
+      "after_sha256": "f70bf84756132f2d6545ed664c2af4af90c5fdb3dab4544bdd9b77b5ede92a15"
+    },
+    "tests/test_cost_allocation.py": {
+      "before_sha256": null,
+      "after_sha256": "79fea465d1741001bb53abe93d4f7b1df18c192174c54d1bf5e0d9c81be88600"
+    },
+    "tests/test_dashboard.py": {
+      "before_sha256": "3a2e494f2bc6aae797e66d219bfd0fff15fb78ded325bf7da180b92c464e4f92",
+      "after_sha256": "b033a8d6368467656f596bd6c8d15b2507c23248ad275e1069af88a73bef5278"
+    },
+    "tests/test_operational_readiness.py": {
+      "before_sha256": "778a96a7f5523d25726cf612e021f1527dfc97497cdc170f4e93566fb6f68aea",
+      "after_sha256": "b42d769ae5450e129d5c1db4005c9271d73f947aa9bcb1db726421705073248d"
+    }
+  }
+}
