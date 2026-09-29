@@ -1,5 +1,20 @@
 # Current handoff — September 28, 2026
 
+## Operator-approved dashboard-only exception
+
+The operator explicitly approved Agent Desk as the main screen before the
+scheduled Phase 0 proof, provided existing operational approval/control pages
+remain clearly linked. `agents.desk.frontdoor` composes the read-only Agent Desk
+at `/` with the unchanged operational handler at `/legacy`. POSTs retain the
+existing origin/CSRF checks and paper-only behavior; redirects return to legacy
+approvals/controls. This is not approval to enable direct Agent Desk mutations,
+claim Phase 0 completion, change broker/cycle/risk code, or start Phase 1.
+
+`scripts/serve_agent_desk.py` loads operational modules from the frozen runtime
+and only the new desk package from this separate UI release. The deployment
+must restart only the inbox service and retain a rollback copy of its launch
+configuration. Existing preview entrypoint remains view-only.
+
 ## Latest UI synchronization
 
 Pre-gate repair checkpoint: the full suite now passes **617 tests**, with 27
