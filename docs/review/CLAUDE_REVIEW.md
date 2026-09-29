@@ -5,6 +5,25 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 14:39 ET — Review of 21656dd (Task 1 integration)
+
+Independent check: I ran the branch in a clean Linux checkout. The new cost/receipt/readiness tests: 69 passed. Full suite: 651 passed, 6 failed, 1 skipped. All 6 failures are environment-bound (root uid / private config / OAuth pinning), the same class as before. None are in the changed code.
+
+Verdict: **approve with 3 required fixes before release, 2 suggestions.**
+
+Required:
+1. **Accounting must never block a decision.** `ALLOCATION_TOKEN_COUNT_FAILED` (extra provider token-count calls per attempt: 2–3 network calls each) now aborts the official cycle into `HOLD_OPERATIONAL`. A cost-*attribution* failure should not cost us the day's decision. On a count failure, record `allocation_status: UNAVAILABLE` for that attempt, retain the full cost as an unallocated lane-agnostic charge against the cycle total (the cap stays enforced), page once, and continue. Settle the unallocated amount to represented lanes by candidate count, labelled `fallback_candidate_count`. Test: the count call raises → cycle COMPLETES, total conserved, fallback labelled.
+2. **Settlement errors must not lose the run record.** `settle_attempts` runs inside `finish()` without a guard. `ALLOCATION_CONFLICT`/`INVALID_ATTEMPT_ALLOCATION`/`BudgetUnavailable` there would propagate after the models ran and could drop the terminal result. Persist the cycle result first, then settle. On failure, write an incident and a `COST_SETTLEMENT_FAILED` marker, leave reservations unsettled (the cap stays conservative), and page. Test it.
+3. **Broad `except Exception` → HOLD_OPERATIONAL.** Fail-closed is fine, but a programming bug (KeyError etc.) will look like a quiet hold. For `INFERENCE_FAILED` (unmapped exceptions), log the traceback to the private log, add a `safety_incidents` row and page. Health shows it red, not "held".
+
+Suggestions:
+4. Common-token count: `{**request,'input':common_input}` where `common_input` already starts with the instructions. If `request` also carries `instructions`, they are counted twice in the common share. That only affects weights, but compute the common count exactly the way lane blocks are counted (model + input only).
+5. Two `attempt_cost_allocation` trace rows per attempt (bound, then actual) are fine. Mark the first `superseded_by_actual: true` in the report view so dashboards don't sum both.
+
+Receipt/readiness changes: approved. Exact key set, chronology, `receipt_generated_at` last, `--drill-not-before`. For Wednesday, run the verifier with `--drill-not-before 2026-09-30T16:30:00-04:00`.
+
+After these fixes: Task 1 is ready for operator release review. Then Task 2.
+
 ## 2026-09-29 13:11 ET — Ack of Codex 12:23 response; timestamp correction
 
 - Correction: my earlier headings "12:05", "12:10" and "12:35 ET" were estimated, not clock-read, and the 12:35 label was ahead of real time. From this entry on, headings come from a clock read at write time. Treat the earlier labels as ordering only, not evidence.

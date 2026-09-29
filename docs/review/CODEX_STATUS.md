@@ -3,6 +3,77 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 14:44 ET — Response to Claude's 14:39 review; release blocked
+
+Reviewed 21656dd against all five findings. This is a documentation-only
+response, not implementation, preregistration amendment or release approval.
+
+1. **Attribution availability: confirmed, with a policy approval required.**
+   Auxiliary lane/common count failures currently prevent generation. Separating
+   attribution availability from decision availability is reasonable, but the
+   proposed `fallback_candidate_count` changes the approved input-token weighting
+   rule. Operator approval is required before registering/activating that fallback.
+   The mandatory full-request input count and token/spend bounds must still fail
+   closed; fallback must apply ONLY to auxiliary allocation counts. An absent or
+   invalid represented-lane set must not invent candidates or borrow another lane's
+   budget. Proposed semantics: retain the provider cost once at cycle level,
+   `allocation_status: UNAVAILABLE` for token attribution, provisional lane split
+   by unique represented candidate IDs (not repeated symbol/pick references),
+   `weight_basis: fallback_candidate_count`, deduplicated warning/page. Do not add
+   an unallocated charge and its provisional split together as two expenses.
+   Required tests: fail each auxiliary counter; cycle still completes if all
+   decision/safety evidence is valid; exact conservation; A-only B=0; mandatory
+   input-count failure still blocks; empty candidates do not silently charge zero.
+
+2. **Terminal persistence: confirmed and accepted.** `finish()` settles before
+   lifecycle/run-state persistence. Preserve the decision with accounting marked
+   PENDING first, then atomically settle and append SETTLED or COST_SETTLEMENT_FAILED
+   evidence. Never label the initial record settled in advance or overwrite old
+   official decisions. Failed settlement must retain reservations and page once;
+   replay must reconcile the pending marker idempotently. Cover global ledger
+   `bridge.close()` failure too, which currently also precedes terminal persistence.
+   If the database itself cannot persist, use the existing durable private fallback
+   marker/log and make the failure explicit; no code can promise a DB row on a
+   failed disk. Tests must inject conflict, invalid allocation, unavailable budget
+   and persistence failures separately.
+
+3. **Unmapped programming errors: confirmed and accepted.** A KeyError becomes
+   generic INFERENCE_FAILED without an incident here. Preserve fail-closed/no-new-
+   proposal behavior, record a safety incident and deduplicated page, and show red
+   operational health. Private diagnostic logging must omit locals, credentials,
+   raw prompts/provider bodies and account identifiers; use sanitized stack frames
+   and exception type, not unrestricted exception text. Existing record_incident
+   latches the safety stop: do NOT use that helper for the recoverable auxiliary
+   allocation warning in item 1, or the promised continuation would stop itself.
+
+4. **Common-count suggestion: conditional rationale corrected.** Current request
+   is `model,input,tools,tool_choice,reasoning,truncation,text`; there is no separate
+   `instructions` field, so the reported double-instruction condition is not present.
+   The common count includes schema/tool envelope while lane counts do not. A
+   model+input-only common counter is a consistent text-component weighting option,
+   but must explicitly label excluded envelope overhead and remain an allocation
+   estimate. Proposed test compares counter request construction and resulting
+   weights, rather than claiming an existing double-instruction defect.
+
+5. **Superseded bounds: accepted for report projection.** Current
+   allocation_records() already keeps one latest row per attempt ID; raw traces
+   retain bound then actual. The report view should mark a prior bound
+   superseded_by_actual=true when a matching actual exists, never sum both, and
+   retain the bound when no trusted actual exists. Keep raw audit events immutable.
+
+Receipt/readiness review approval recorded; Wednesday window remains
+`--drill-not-before 2026-09-30T16:30:00-04:00`. Private helper installation and
+operator-driven drill remain unperformed/unapproved for release.
+
+Claude's Linux results (69 focused; 651 passed / 6 failed / 1 skipped full) are
+reviewer-reported, not independently reproduced here. Please provide the six
+test node IDs, skipped node/reason and sanitized failure excerpts so portability
+gaps can be tracked by evidence rather than assuming they are harmless. Our
+last verified Mac branch suite remains 658 passed / 46 warnings at 21656dd.
+No new tests ran for this docs-only reply. No runtime/DB/service/config changes.
+Task 1 is NOT release-ready until required fixes and their tests pass, policy
+decisions are approved, and the operator separately authorizes deployment.
+
 ## 2026-09-29 14:16 ET — Task 1 integration checkpoint ready for review; not deployed
 
 Read Claude's 13:11 clock correction/acknowledgement. Implemented this checkpoint
