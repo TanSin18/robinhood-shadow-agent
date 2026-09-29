@@ -45,13 +45,17 @@ def configured_bridge(path, config):
 
 
 class BoundedInference:
+    database_mode = 'whatif'
+    data_mode = 'whatif'
+    ceiling_key = 'what_if_run_llm_ceiling'
+
     def __init__(self, path, *, client):
         self.path = Path(path)
-        require_database_role(self.path, 'whatif')
+        require_database_role(self.path, self.database_mode)
         self.models, self.cost = policy()
         self.client = client.with_options(max_retries=0, timeout=120.0)
         self.store = SQLiteStore(self.path)
-        self.ledger = CostLedger(self.path, D(str(self.cost['what_if_run_llm_ceiling'])))
+        self.ledger = CostLedger(self.path, D(str(self.cost[self.ceiling_key])))
         self.lock = threading.RLock()
         self.closed = False
         self.attempts = {r:0 for r in self.models}
@@ -71,6 +75,9 @@ class BoundedInference:
         with self.lock:
             return self._run(model,instructions,schema,read_tools,news,now)
 
+    def before_generation(self):
+        """Official adapters recheck mutable authorization after token counting."""
+
     def _run(self, model, instructions, schema, read_tools, news, now):
         if self.closed: raise ValueError('INFERENCE_CLOSED')
         if read_tools or news: raise ValueError('INFERENCE_TOOLS_FORBIDDEN')
@@ -89,6 +96,7 @@ class BoundedInference:
             raise ValueError('INPUT_TOKEN_COUNT_FAILED') from None
         if type(count) is not int or count < 0 or count > envelope['maximum_input_tokens']:
             raise ValueError('INPUT_TOKEN_CAP')
+        self.before_generation()
         if self.reservation is None:
             total = sum((2*self.bound(r) for r in self.models),D(0))
             self.reservation = self.ledger.reserve(now,total)
@@ -98,7 +106,7 @@ class BoundedInference:
         self.uncertain_calls += 1
         self.store.append_json('local_traces',{'event':'bounded_attempt_started','role':role,
             'model':model,'attempt':self.attempts[role],'input_tokens':count,
-            'reserved_usd':str(bound),'data_mode':'whatif'})
+            'reserved_usd':str(bound),'data_mode':self.data_mode})
         try:
             response = self.client.responses.create(**request,store=False,service_tier='default',
                 max_output_tokens=envelope['maximum_output_tokens_including_reasoning'])
@@ -120,7 +128,7 @@ class BoundedInference:
         self.uncertain_calls -= 1
         self.store.append_json('api_costs',{'timestamp':now.isoformat(),'model':model,'role':role,
             'attempt':self.attempts[role],'input_tokens':inputs,'output_tokens':outputs,
-            'cost_usd':str(amount),'cost_basis':'registered_uncached_upper_estimate','data_mode':'whatif'})
+            'cost_usd':str(amount),'cost_basis':'registered_uncached_upper_estimate','data_mode':self.data_mode})
         if response.status=='incomplete' and getattr(response.incomplete_details,'reason',None)=='max_output_tokens':
             raise ValueError('OUTPUT_TRUNCATED_AT_TOKEN_CAP')
         if response.status!='completed': raise ValueError('MODEL_RESPONSE_INCOMPLETE')

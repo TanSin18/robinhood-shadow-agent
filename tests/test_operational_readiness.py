@@ -293,7 +293,11 @@ def test_scheduled_entrypoint_records_its_own_background_context(tmp_path, monke
     db = tmp_path/'cycle.db'
     config = load_config('config/settings.yaml')
     monkeypatch.setattr(daily_cycle, 'datetime', Monday)
-    monkeypatch.setattr(daily_cycle, 'CodexBridge', lambda *a: daily_cycle.FixtureBridge(config, Monday.now()))
+    class FakeInference(daily_cycle.FixtureBridge):
+        def close(self): pass
+        def cost_report(self): return {'api_cost_estimate_usd':'0'}
+    monkeypatch.setattr('agents.scheduled_inference.configured_scheduled_bridge',
+                        lambda *a, **kw: FakeInference(config, Monday.now()))
     class FakeReader(daily_cycle.FixtureReader):
         def close(self): pass
     monkeypatch.setattr('agents.market_reader.LiveReader',lambda *a:FakeReader(config,Monday.now()))
@@ -322,7 +326,8 @@ def test_skipped_schedule_does_not_probe_auth_or_claim_success(tmp_path, monkeyp
     from config.loader import load_config
     monkeypatch.setattr('agents.cycle_lifecycle.CycleLifecycle.acquire', lambda *a, **kw: None)
     monkeypatch.setattr('agents.readiness.capture_runtime', lambda *a: pytest.fail('Skipped schedule must not probe auth'))
-    monkeypatch.setattr(daily_cycle, 'CodexBridge', lambda *a: pytest.fail('Skipped schedule must not call inference'))
+    monkeypatch.setattr('agents.scheduled_inference.configured_scheduled_bridge',
+                        lambda *a, **kw: pytest.fail('Skipped schedule must not call inference'))
     db = tmp_path/'cycle.db'
     monkeypatch.setattr('sys.argv', ['daily_cycle', '--config', 'config/settings.yaml',
                                    '--database', str(db), '--mode', 'live', '--scheduled'])

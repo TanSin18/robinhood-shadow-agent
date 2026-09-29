@@ -306,7 +306,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     rehearsal=data_mode=='whatif'
     from agents.bounded_inference import BoundedInference, validate_registered_models
     bounded_rehearsal = rehearsal and isinstance(bridge, BoundedInference)
-    if bounded_rehearsal:
+    if isinstance(bridge, BoundedInference):
         validate_registered_models(config)
     if diagnostic_cap_waiver and not rehearsal:
         raise ValueError('Cap waiver is diagnostic only')
@@ -351,6 +351,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 if not lifecycle.owns(db,cycle_id): raise ValueError('Cycle ownership lost')
 
     def finish(result):
+        if isinstance(bridge, BoundedInference):
+            bridge.close()
         result={**result,'cycle_id':cycle_id,'data_mode':data_mode,'timestamp':now.isoformat(),'agents':agents,'completed_stages':completed}
         result['trigger']=getattr(lifecycle,'trigger','fixture')
         if rehearsal:
@@ -358,6 +360,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             result.update(diagnostic_noncompliant=bool(diagnostic_cap_waiver),cap_waiver=bool(diagnostic_cap_waiver))
             result.pop('account_last4',None)
         result['api_cost_estimate_usd']=str(sum((D(c['cost_usd']) for c in inbox.store.read_json('api_costs')[cost_start:]),D(0)))
+        if isinstance(bridge, BoundedInference):
+            result.update(bridge.cost_report())
         if phase0_reservations:
             costs=inbox.store.read_json('api_costs')[cost_start:]
             by_stage={stage:(D(costs[index]['cost_usd']) if index<len(costs) else D(0))
@@ -593,7 +597,7 @@ def main():
     inbox=PaperInbox(args.database,config)
     now=datetime.now(timezone.utc)
     from agents.cycle_lifecycle import CycleLifecycle
-    lifecycle=CycleLifecycle(inbox.path, config.notifications.dashboard_base_url); claim=None; reader=None
+    lifecycle=CycleLifecycle(inbox.path, config.notifications.dashboard_base_url); claim=None; reader=None; bridge=None
     try:
         if args.mode=='live':
             claim=lifecycle.acquire(now,scheduled=args.scheduled)
@@ -604,8 +608,10 @@ def main():
             root=Path(__file__).resolve().parents[1]
             runtime=capture_runtime(root)
             source_hash=source_fingerprint(root)
+            from agents.scheduled_inference import configured_scheduled_bridge
+            bridge=configured_scheduled_bridge(inbox.path,config,lifecycle=lifecycle,cycle_id=claim['cycle_id'])
             reader=LiveReader(inbox.path,config)
-        result=run_fixture_cycle(inbox,config,datetime(2026,9,21,14,tzinfo=timezone.utc)) if args.mode=='fixture' else run_cycle(inbox,config,CodexBridge(args.database,config.daily_api_budget_usd,None,config.notifications.dashboard_base_url),now,reader=reader,cycle_id=claim['cycle_id'],lifecycle=lifecycle)
+        result=run_fixture_cycle(inbox,config,datetime(2026,9,21,14,tzinfo=timezone.utc)) if args.mode=='fixture' else run_cycle(inbox,config,bridge,now,reader=reader,cycle_id=claim['cycle_id'],lifecycle=lifecycle)
         if args.mode=='live':
             result['trigger']=claim['trigger']
             record_background_receipt(inbox.store,result,runtime,source_hash=source_hash,
@@ -613,11 +619,17 @@ def main():
     except Exception as error:
         # Do not echo provider exceptions, prompt contents or account payloads.
         result={'status':'FAILED','error_type':type(error).__name__,'remediation':'Inspect read-only auth, available cost budget and data freshness.'}
+        if bridge:
+            bridge.close()
+            result.update(bridge.cost_report())
+        if type(error) is ValueError and str(error).isupper() and len(str(error))<100:
+            result['failure_code']=str(error)
         inbox.store.append_json('run_states',result)
         if claim:
             lifecycle.finish(claim['cycle_id'],'FAILED',result,datetime.now(timezone.utc))
         print(json.dumps(result));raise SystemExit(1)
     finally:
+        if bridge: bridge.close()
         if reader: reader.close()
         lifecycle.close()
     print(json.dumps(result,indent=2))
