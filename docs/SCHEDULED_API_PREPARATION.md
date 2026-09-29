@@ -43,15 +43,21 @@ that refresh will succeed. Existing Pushover deliveries are recorded as delivere
 
 ## Explicit remaining gates
 
-1. An authenticated installed-service cycle under this exact code/configuration
-   has not yet been recorded. A skipped schedule or isolated rehearsal does not
-   satisfy this gate. Target: 2026-09-29 at 10:00 America/New_York.
+1. **Scheduled proof recorded:** the installed service completed cycle
+   `624a402038ff4a9ca922b609595a893a` on 2026-09-29 at 10:01:29 ET.
+   The verifier passed at 10:34 ET against the matching source/configuration and
+   624-test manifest. Research, Portfolio and Critic ran; estimated API cost was
+   $0.0223001. Portfolio selected SOXX; the final result was REJECTED, not a fill.
+   News was disabled. This proves scheduled operation, not strategy profitability.
 2. Shared-call lane cost settlement still uses equal shares, while the frozen
    registration requires input-token-share attribution. This existing accounting
    gap remains unresolved. Do not declare Phase 0 complete even if the automated
    scheduled receipt check passes. Phase 1 remains blocked.
 3. News and broader discovery remain outside this Phase 0 deployment. A valid
    no-AI/no-trade result must not be presented as a full research-system proof.
+4. Phase 1 still requires the v1.5 preregistration review/approval. The automated
+   verifier itself reports `research_implementation_allowed: false`. The older
+   research-layer continuation automation must not override this approval gate.
 
 Keep the Mac connected to power and the operator session available. Weekday
 wake is set to 09:50; AC sleep is disabled. These settings cannot guarantee
