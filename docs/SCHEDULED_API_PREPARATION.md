@@ -27,9 +27,19 @@ Preregistration v1.4.2 is unchanged. Real broker orders remain blocked.
 
 The installed runtime receives the reviewed adapter and matching private model
 configuration. Existing runtime/configuration files are backed up privately.
-The installed suite must pass and its source/configuration-bound manifest must
-be regenerated before restarting the daily and maintenance jobs. The broker
-proxy and dashboard release are not replaced.
+Installed suite: **624 passed, zero failed, zero skipped**, completed
+2026-09-29 02:15:26 UTC. The source/configuration-bound manifest was regenerated.
+Daily and maintenance jobs were then restarted; daily correctly skipped outside
+its trading window and maintenance completed with no notification failures.
+The broker proxy and dashboard release were not replaced. Both dashboard routes
+returned HTTP 200. No next-day claim exists and the safety stop is clear.
+
+Installed source fingerprint:
+`8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346`.
+
+The live authorization monitor reports `WARNING_3_DAYS`. Current read-only auth
+passed, but reauthorization is due soon; the warning is not an expiry or proof
+that refresh will succeed. Existing Pushover deliveries are recorded as delivered.
 
 ## Explicit remaining gates
 
