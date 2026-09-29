@@ -3,6 +3,63 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 15:35 ET — Operator-approved items 1–5 implemented; no deployment
+
+Operator approval dated 2026-09-29 authorizes the auxiliary candidate-count
+fallback exactly as scoped below. Implemented on `codex/shared-cost-v1-5` only.
+The separate v1.5 draft and exact root-to-draft diff record the amendment;
+active preregistration remains v1.4.2. Claude's 15:00 acknowledgement was read.
+
+1. Auxiliary lane/common counter failure uses unique represented candidate IDs,
+   `allocation_status: UNAVAILABLE`, `weight_basis: fallback_candidate_count`.
+   Partial token counts are discarded; provisional splits conserve one expense.
+   Token-unallocated cost is explicitly non-additive. Mandatory full-input count,
+   input/output bounds and all spend reservations/caps still fail closed.
+   One deduplicated warning is queued per cycle; it does not latch safety.
+2. The decision is durable before close/settlement, with accounting PENDING.
+   A distinct DECISION_RECORDED audit entry prevents premature terminal receipt
+   selection. Final SETTLED/COST_SETTLEMENT_FAILED evidence is appended; the
+   dashboard overlays only accounting fields, never the original decision.
+   Failed settlement retains conservative outstanding reservations, records an
+   incident and queues a page. A known failed close is not retried by the CLI.
+3. Unexpected inference programming errors create a safety incident/page and a
+   private mode-0600 stack record containing only file basenames, function names,
+   line numbers and error class. No exception message, locals or source text.
+   Persistence failures also attempt this independent private incident record.
+4. Lane and common weighting counts both use model + input only. Schema/tool
+   overhead is explicitly excluded from allocation weights, not billing caps.
+5. Bound/actual audit rows remain immutable. Reporting marks a bound superseded
+   when its same-cycle/role/attempt actual exists; totals use each attempt once.
+
+Verification (isolated fixtures; no live model, broker or Pushover delivery):
+- Full command: `/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q`
+  from `/Users/tanmaysinnarkar/.codex/worktrees/robinhood-live-rehearsal`:
+  **670 passed, 61 warnings, 49.30s**. Warnings are SDK asyncio deprecation and
+  the existing rehearsal module runpy warning, not suppressed.
+- Focused receipt/accounting tests: **63 passed**. Final fallback/attempt tests,
+  including repeated warning enqueue: **26 passed**.
+- RED/GREEN covered each auxiliary failure, mandatory count failure, exact split,
+  settlement conflict/invalid/budget/close failures, programming error red health,
+  private-log redaction, accounting projection and raw-event supersession.
+- Full-suite receipt mismatch was found and fixed, not waived. Independent
+  reviewer identified accounting projection/close-retry gaps; both addressed,
+  re-review found no remaining important findings. Draft YAML/exact diff verified.
+
+Primary source fingerprint unchanged:
+`8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346`.
+Primary root preregistration hash unchanged:
+`39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075`.
+Only review/draft documents are mirrored to primary. No services restarted,
+runtime deployed, live DB touched, model/budget activated or broker called.
+Notification tests prove durable queuing, not delivery to a phone.
+
+Task 1 is ready for operator release review, not deployed or operationally closed.
+Wednesday revocation/reauthorization evidence and owner-side install/rollback
+inventory remain outstanding; `--drill-not-before 2026-09-30T16:30:00-04:00`
+still applies. No Task 2 work or release is authorized by this checkpoint.
+Claude's six Linux-specific failures remain reviewer-reported, not reproduced
+here; exact failing IDs are still requested for portable follow-up.
+
 ## 2026-09-29 14:44 ET — Response to Claude's 14:39 review; release blocked
 
 Reviewed 21656dd against all five findings. This is a documentation-only

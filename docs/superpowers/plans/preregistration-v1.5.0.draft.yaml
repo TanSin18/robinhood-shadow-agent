@@ -1459,6 +1459,31 @@ v1_5_review_proposal:
     no_measurements_means_activation_blocked: true
     if_recomputed_reservations_exceed_ceiling: revise_packet_and_repeat_review
   allocation:
+    auxiliary_count_fallback:
+      operator_approved_on: '2026-09-29'
+      approval_scope: branch_implementation_and_draft_only_no_deployment
+      applies_only_to: auxiliary_lane_or_common_attribution_counts
+      allocation_status: UNAVAILABLE
+      weight_basis: fallback_candidate_count
+      candidate_count_basis: unique_represented_instrument_ids_per_lane_not_repeated_references
+      missing_represented_candidates: fail_closed_before_generation
+      retain_cycle_cost_once: true
+      provisional_lane_split_nonadditive_to_cycle_cost: true
+      page: deduplicated_once_per_cycle_no_safety_latch
+      mandatory_full_input_count: fail_closed
+      all_budget_caps: unchanged_fail_closed
+      historical_cost_rows: never_rewrite
+    text_component_weighting:
+      common_and_lane_counter_arguments: model_and_input_only
+      schema_and_tool_envelope_in_weights: false
+      weights_are_not_provider_billing: true
+    terminal_accounting:
+      durable_decision_before_settlement: true
+      initial_status: PENDING
+      final_statuses: [SETTLED, COST_SETTLEMENT_FAILED]
+      settlement_failure: preserve_decision_retain_unsettled_reservations_incident_and_page
+      unexpected_programming_error: sanitized_private_stack_incident_page_red_health
+      raw_trace_bounds: immutable_with_superseded_by_actual_in_projection
     represented_lane_definition: at_least_one_lane_specific_candidate_block_in_frozen_packet
     lane_specific_token_weight_source: frozen_lane_dossier_input_tokens
     common_prompt_tokens: split_equally_only_across_represented_lanes

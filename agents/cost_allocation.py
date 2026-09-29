@@ -74,3 +74,14 @@ def arm_costs(allocation: dict[str, Decimal]) -> dict:
             'lanes': {lane: {arm: allocation.get(lane, Decimal(0))
                             if arm in {'agent_alone', 'agent_with_approvals'} else Decimal(0)
                             for arm in ARMS} for lane in ('A', 'B')}}
+
+
+def allocation_trace_view(events):
+    """Project supersession; never edit or sum duplicate bound/actual events."""
+    rows=[copy.deepcopy(row) for row in events if row.get('event')=='attempt_cost_allocation']
+    actual={(row.get('cycle_id'),row['role'],row['attempt_id']) for row in rows
+            if row['cost_basis']!='uncertain_reserved_bound'}
+    for row in rows:
+        row['superseded_by_actual']=(row['cost_basis']=='uncertain_reserved_bound' and
+            (row.get('cycle_id'),row['role'],row['attempt_id']) in actual)
+    return rows

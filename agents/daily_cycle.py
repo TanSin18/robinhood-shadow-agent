@@ -351,8 +351,6 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 if not lifecycle.owns(db,cycle_id): raise ValueError('Cycle ownership lost')
 
     def finish(result):
-        if isinstance(bridge, BoundedInference):
-            bridge.close()
         result={**result,'cycle_id':cycle_id,'data_mode':data_mode,'timestamp':now.isoformat(),'agents':agents,'completed_stages':completed}
         result['trigger']=getattr(lifecycle,'trigger','fixture')
         if rehearsal:
@@ -362,24 +360,58 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         result['api_cost_estimate_usd']=str(sum((D(c['cost_usd']) for c in inbox.store.read_json('api_costs')[cost_start:]),D(0)))
         if isinstance(bridge, BoundedInference):
             result.update(bridge.cost_report())
-            from agents.cost_allocation import arm_costs, _exact_sum
+            from agents.cost_allocation import arm_costs, _exact_sum, allocation_trace_view
             attempts=bridge.allocation_records()
             totals={lane:_exact_sum([D(0),*[D(a['allocations'].get(lane,'0')) for a in attempts]]) for lane in ('A','B')}
             result['cost_allocation_attempts']=attempts
             result['cost_allocation']=json.loads(json.dumps(arm_costs(totals),default=str))
-            if phase0_reservations:
-                budget_allocator.settle_attempts(cycle_id,phase0_reservations,attempts)
-        elif phase0_reservations:
-            costs=inbox.store.read_json('api_costs')[cost_start:]
-            by_stage={stage:(D(costs[index]['cost_usd']) if index<len(costs) else D(0))
-                      for index,stage in enumerate(('research','portfolio','critic'))}
-            lane_count=len({row['lane'] for row in phase0_reservations}) or 1
-            for row in phase0_reservations:
-                budget_allocator.settle(row['id'],actual=by_stage[row['stage']]/lane_count)
+            result['cost_allocation_history']=allocation_trace_view(bridge.cost_history)
+        from agents.accounting_events import record_failure, enqueue_allocation_warning
+        result['accounting_status']='PENDING'
+        try:
+            # Durable decision first. Accounting transitions append, never replace.
+            inbox.store.append_json('run_states',{**result,'record_type':'decision_before_accounting',
+                                    'decision_status':result['status'],'status':'DECISION_RECORDED'})
+        except Exception as error:
+            record_failure(inbox.path,'TERMINAL_PERSISTENCE_FAILED',cycle_id,error,clock(),notify=not rehearsal)
+            raise
+        # Claim completion is durable before an accounting incident can latch
+        # safety. Later accounting evidence is appended, not a rerun/decision edit.
         if lifecycle is not None and not lifecycle.finish(cycle_id,result['status'],result,clock()):
             raise ValueError('Cycle ownership lost at completion')
-        inbox.store.append_json('run_states',result)
-        trace_event('cycle_terminal', payload=result)
+        try:
+            if isinstance(bridge, BoundedInference):
+                try:
+                    bridge.close()
+                except Exception:
+                    bridge.accounting_close_failed=True
+                    raise
+                if phase0_reservations:
+                    budget_allocator.settle_attempts(cycle_id,phase0_reservations,attempts)
+            elif phase0_reservations:
+                costs=inbox.store.read_json('api_costs')[cost_start:]
+                by_stage={stage:(D(costs[index]['cost_usd']) if index<len(costs) else D(0))
+                          for index,stage in enumerate(('research','portfolio','critic'))}
+                lane_count=len({row['lane'] for row in phase0_reservations}) or 1
+                for row in phase0_reservations:
+                    budget_allocator.settle(row['id'],actual=by_stage[row['stage']]/lane_count)
+            result['accounting_status']='SETTLED'
+        except Exception as error:
+            result['accounting_status']='COST_SETTLEMENT_FAILED'
+            result['accounting_incident']=record_failure(inbox.path,'COST_SETTLEMENT_FAILED',cycle_id,error,clock(),notify=not rehearsal)
+        if not rehearsal and any(a.get('allocation_status')=='UNAVAILABLE' for a in result.get('cost_allocation_attempts',[])):
+            try:
+                enqueue_allocation_warning(inbox.path,cycle_id,clock())
+                result['allocation_warning_status']='QUEUED'
+            except Exception as error:
+                result['allocation_warning_status']='QUEUE_FAILED'
+                record_failure(inbox.path,'ALLOCATION_WARNING_QUEUE_FAILED',cycle_id,error,clock(),notify=False)
+        try:
+            inbox.store.append_json('run_states',result)
+            trace_event('cycle_terminal', payload=result)
+        except Exception as error:
+            record_failure(inbox.path,'TERMINAL_PERSISTENCE_FAILED',cycle_id,error,clock(),notify=not rehearsal)
+            raise
         return result
 
     def run(role, schema, request):
@@ -533,6 +565,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     'INPUT_TOKEN_CAP','INPUT_TOKEN_COUNT_FAILED','INVALID_USAGE','PROVIDER_ENVELOPE_VIOLATION',
                     'RESPONSE_MODEL_MISMATCH','RESPONSE_PRICING_TIER_MISMATCH','UNEXPECTED_MODEL_TOOL'}
         reason=str(error) if str(error) in safe_codes else 'INFERENCE_FAILED'
+        if reason=='INFERENCE_FAILED':
+            from agents.accounting_events import record_failure
+            record_failure(inbox.path,'INFERENCE_FAILED',cycle_id,error,clock(),notify=not rehearsal)
         return finish({'status':'HOLD_OPERATIONAL','reason':reason,'error_type':type(error).__name__,
                        'decision':completed.get('portfolio'),'results':[]})
     completion_time=clock()
@@ -642,7 +677,14 @@ def main():
         # Do not echo provider exceptions, prompt contents or account payloads.
         result={'status':'FAILED','error_type':type(error).__name__,'remediation':'Inspect read-only auth, available cost budget and data freshness.'}
         if bridge:
-            bridge.close()
+            if not getattr(bridge,'accounting_close_failed',False):
+                try:
+                    bridge.close()
+                except Exception as close_error:
+                    bridge.accounting_close_failed=True
+                    from agents.accounting_events import record_failure
+                    record_failure(inbox.path,'COST_SETTLEMENT_FAILED',claim['cycle_id'] if claim else None,
+                                   close_error,datetime.now(timezone.utc))
             result.update(bridge.cost_report())
         if type(error) is ValueError and str(error).isupper() and len(str(error))<100:
             result['failure_code']=str(error)
@@ -651,7 +693,7 @@ def main():
             lifecycle.finish(claim['cycle_id'],'FAILED',result,datetime.now(timezone.utc))
         print(json.dumps(result));raise SystemExit(1)
     finally:
-        if bridge: bridge.close()
+        if bridge and not getattr(bridge,'accounting_close_failed',False): bridge.close()
         if reader: reader.close()
         lifecycle.close()
     print(json.dumps(result,indent=2))

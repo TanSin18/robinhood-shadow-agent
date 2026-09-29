@@ -67,6 +67,7 @@ class BoundedInference:
         self.last_result = None
         self.cost_context = None
         self.cost_attempts = {}
+        self.cost_history = []
 
     def set_cost_context(self, blocks, *, common_input=''):
         """Freeze actual stage blocks and shared content, separate from billing."""
@@ -80,10 +81,16 @@ class BoundedInference:
 
     def record_allocation(self, key, amount, basis, metadata):
         from agents.cost_allocation import allocate_cost
-        allocation = allocate_cost(amount, metadata['lane_tokens'], common_tokens=metadata['common_tokens'])
+        fallback=metadata['weight_basis']=='fallback_candidate_count'
+        allocation = allocate_cost(amount, metadata['candidate_counts'] if fallback else metadata['lane_tokens'],
+                                   common_tokens=0 if fallback else metadata['common_tokens'])
         row = {**metadata, 'attempt_id':key, 'cost_usd':str(amount), 'cost_basis':basis,
+               'token_unallocated_cost_usd':str(amount if fallback else D(0)),
+               'unallocated_is_nonadditive_annotation':True,
                'allocations':{k:str(v) for k,v in allocation.items()}}
-        self.store.append_json('local_traces', {'event':'attempt_cost_allocation', **row})
+        event={'event':'attempt_cost_allocation', **row}
+        self.store.append_json('local_traces', event)
+        self.cost_history.append(event)
         self.cost_attempts[key] = row
 
     def bound(self, role):
@@ -120,23 +127,28 @@ class BoundedInference:
             raise ValueError('INPUT_TOKEN_CAP')
         metadata = None
         if self.cost_context is not None:
-            lane_tokens = {}
-            for lane, blocks in self.cost_context.items():
-                encoded = json.dumps(blocks, sort_keys=True, default=str)
-                try:
-                    tokens = self.client.responses.input_tokens.count(model=model,input=encoded).input_tokens
-                except Exception:
-                    raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED') from None
-                if type(tokens) is not int or tokens <= 0:
-                    raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
-                lane_tokens[lane] = tokens
+            candidate_counts={}
+            for lane,blocks in self.cost_context.items():
+                ids={block.get('instrument') if isinstance(block,dict) else block for block in blocks}
+                if not ids or any(not isinstance(value,str) or not value for value in ids):
+                    raise ValueError('INVALID_COST_CONTEXT')
+                candidate_counts[lane]=len(ids)
+            lane_tokens,common_count,status,basis = {},None,'AVAILABLE','input_tokens_only'
             try:
-                common_count = self.client.responses.input_tokens.count(**{**request,'input':self.cost_common_input}).input_tokens
+                for lane, blocks in self.cost_context.items():
+                    encoded = json.dumps(blocks, sort_keys=True, default=str)
+                    tokens = self.client.responses.input_tokens.count(model=model,input=encoded).input_tokens
+                    if type(tokens) is not int or tokens <= 0:
+                        raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
+                    lane_tokens[lane] = tokens
+                common_count = self.client.responses.input_tokens.count(model=model,input=self.cost_common_input).input_tokens
+                if type(common_count) is not int or common_count < 0:
+                    raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
             except Exception:
-                raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED') from None
-            if type(common_count) is not int or common_count < 0:
-                raise ValueError('ALLOCATION_TOKEN_COUNT_FAILED')
-            metadata = {'role':role, 'model':model, 'weight_basis':'input_tokens_only',
+                lane_tokens,common_count,status,basis={},None,'UNAVAILABLE','fallback_candidate_count'
+            metadata = {'role':role, 'model':model, 'weight_basis':basis,
+                'allocation_status':status,'candidate_counts':candidate_counts,
+                'fallback_approval_date':'2026-09-29',
                 'weight_source':'actual_stage_structured_blocks_and_shared_content',
                 'token_counter':'provider_responses_input_tokens',
                 'tokenizer_revision':'not_exposed_by_provider',
@@ -144,6 +156,7 @@ class BoundedInference:
                 'request_input_tokens':count,
                 'common_token_policy':'equal_split_among_represented_lanes',
                 'partition_method':'independently_counted_components_not_provider_billing',
+                'schema_tool_envelope_in_allocation_weights':False,
                 'cycle_id':getattr(self,'cycle_id',None),
                 'packet_hash':hashlib.sha256(instructions.encode()).hexdigest(),
                 'candidate_dossier_hash':hashlib.sha256(json.dumps(self.cost_context,sort_keys=True).encode()).hexdigest()}

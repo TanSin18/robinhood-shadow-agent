@@ -256,13 +256,21 @@ def dashboard_snapshot(inbox, now=None):
         history.append({'kind':'notification','timestamp':notice['created_at'],'lane':'','status':notice['status'],'title':notice['title'],'summary':'Sent to macOS; this does not prove it was seen.' if notice['status']=='DELIVERED' else f'Notification {notice["status"].lower()}; attempts: {notice["attempts"]}.','details':details,'event_id':notice['event_id'],'resolution':'RESOLVED' if incident and incident['resolved_at'] else None})
     for cycle in cycles:
         payload = json.loads(cycle['payload'])
+        # Append-only accounting completion overlays only accounting fields;
+        # the authoritative decision and original receipt remain untouched.
+        for record in raw_runs:
+            accounting = json.loads(record['payload_json'])
+            if (payload.get('cycle_id') and accounting.get('cycle_id') == payload['cycle_id']
+                    and accounting.get('accounting_status') in ('SETTLED','COST_SETTLEMENT_FAILED')):
+                payload.update({k:accounting[k] for k in ('accounting_status','accounting_incident','allocation_warning_status') if k in accounting})
+                break
         status = cycle_status(cycle['status'], payload, cycle['day'], now)
         when = payload.get('timestamp') or datetime.combine(date.fromisoformat(cycle['day']), time(hour, minute), ET).isoformat()
         if cycle['day'] == today:
             today_status = status
         history.append({'kind': 'cycle', 'timestamp': when, 'lane': '', 'status': status, 'authoritative': True,
                         'title': 'Daily review' + (' · Mock / fixture data' if payload.get('data_mode') == 'fixture' else ''), 'summary': payload.get('reason') or (payload.get('decision') or {}).get('reason') or payload.get('remediation') or '',
-                        'details': {k: payload[k] for k in ('agents', 'completed_stages', 'strategy_assessment', 'decision', 'critic', 'results', 'missing_evidence', 'error_type', 'data_mode', 'api_cost_estimate_usd', 'quote_count', 'volatility_count', 'market_open', 'trigger', 'completed_at') if k in payload}})
+                        'details': {k: payload[k] for k in ('agents', 'completed_stages', 'strategy_assessment', 'decision', 'critic', 'results', 'missing_evidence', 'error_type', 'data_mode', 'api_cost_estimate_usd', 'quote_count', 'volatility_count', 'market_open', 'trigger', 'completed_at', 'accounting_status', 'accounting_incident', 'allocation_warning_status') if k in payload}})
     # Standalone/interactive failures are not necessarily in cycle_runs.
     for record in raw_runs:
         payload = json.loads(record['payload_json'])

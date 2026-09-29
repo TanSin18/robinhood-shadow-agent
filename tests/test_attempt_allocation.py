@@ -103,7 +103,7 @@ def test_settlement_uses_attempt_keys_not_order_and_is_idempotent(tmp_path):
         a.settle_attempts('run1',reservations,changed)
 
 
-@pytest.mark.parametrize('failed_stage',[None,0,1,2,'no_candidates'])
+@pytest.mark.parametrize('failed_stage',[None,0,1,2,'no_candidates','aux_count','settle_conflict','settle_invalid','settle_budget','close','bug'])
 def test_official_cycle_allocates_all_three_roles_to_a_only(tmp_path,failed_stage,monkeypatch):
     from test_rehearsal import source
     from agents.cycle_lifecycle import CycleLifecycle
@@ -121,6 +121,10 @@ def test_official_cycle_allocates_all_three_roles_to_a_only(tmp_path,failed_stag
     if failed_stage=='no_candidates':
         monkeypatch.setattr('agents.daily_cycle.agent_candidate_packet',lambda *args: [])
     class PipelineClient(Client):
+        def count(self,**request):
+            if failed_stage=='aux_count' and 'text' not in request:
+                raise RuntimeError('auxiliary count down')
+            return super().count(**request)
         def create(self,**request):
             if len(self.calls)==failed_stage:
                 raise RuntimeError('provider failure')
@@ -134,26 +138,69 @@ def test_official_cycle_allocates_all_three_roles_to_a_only(tmp_path,failed_stag
     life=CycleLifecycle(inbox.path)
     claim=life.acquire(NOW,scheduled=True)
     b=ScheduledInference(inbox.path,client=PipelineClient(),lifecycle=life,cycle_id=claim['cycle_id'])
+    if str(failed_stage).startswith('settle_'):
+        from agents.budget import BudgetUnavailable
+        def fail_settle(*args,**kwargs):
+            events=inbox.store.read_json('run_states')
+            assert any(r.get('cycle_id')==claim['cycle_id'] and r.get('accounting_status')=='PENDING' for r in events)
+            if failed_stage=='settle_budget': raise BudgetUnavailable('test')
+            raise ValueError('ALLOCATION_CONFLICT' if failed_stage=='settle_conflict' else 'INVALID_ATTEMPT_ALLOCATION')
+        monkeypatch.setattr('agents.budget.BudgetAllocator.settle_attempts',fail_settle)
+    if failed_stage=='close':
+        def fail_close():
+            assert any(r.get('cycle_id')==claim['cycle_id'] for r in inbox.store.read_json('run_states'))
+            raise RuntimeError('close failed')
+        monkeypatch.setattr(b,'close',fail_close)
+    if failed_stage=='bug':
+        def bug(*args,**kwargs): raise KeyError('PRIVATE_ACCOUNT_AND_TOKEN')
+        monkeypatch.setattr('agents.daily_cycle.Runner.run_sync',bug)
     try:
         result=run_cycle(inbox,config,b,NOW,reader=FixtureReader(config,NOW),clock=lambda:NOW,lifecycle=life,cycle_id=claim['cycle_id'])
-        assert result['status']==('COMPLETED' if failed_stage is None else 'HOLD_OPERATIONAL')
+        ordinary=failed_stage is None or failed_stage in ('aux_count','settle_conflict','settle_invalid','settle_budget','close')
+        assert result['status']==('COMPLETED' if ordinary else 'HOLD_OPERATIONAL')
         report=result['cost_allocation']
         assert report['lanes']['B']['agent_alone']=='0'
         assert report['lanes']['A']['deterministic_no_ai']=='0'
         assert D(report['lanes']['A']['agent_alone'])==D(result['api_cost_estimate_usd'])
         if failed_stage is None:
             assert D(report['total_unique_cost_usd'])==D('.0223001')
-        expected_attempts=3 if failed_stage is None else (0 if failed_stage=='no_candidates' else failed_stage+1)
+        expected_attempts=3 if ordinary else (0 if failed_stage in ('no_candidates','bug') else failed_stage+1)
         assert len(result['cost_allocation_attempts'])==expected_attempts
+        from agents.dashboard import dashboard_snapshot
+        snapshot=dashboard_snapshot(inbox,NOW)
+        history=next(r for r in snapshot['history'] if r.get('authoritative'))
+        assert history['details']['accounting_status']==result['accounting_status']
         if failed_stage=='no_candidates':
             assert result['reason']=='COST_NO_REPRESENTED_LANE'
             assert inbox.store.read_json('api_costs')==[]
         with inbox.connect() as db:
             rows=db.execute('SELECT amount,settled FROM ai_budget_reservations').fetchall()
-            assert all(row[1] for row in rows)
-            assert sum(D(row[0]) for row in rows)==D(report['total_unique_cost_usd'])
+            settlement_failed=str(failed_stage).startswith('settle_') or failed_stage=='close'
+            if settlement_failed:
+                assert not any(row[1] for row in rows)
+                assert result['accounting_status']=='COST_SETTLEMENT_FAILED'
+                assert db.execute("SELECT count(*) FROM safety_incidents WHERE code='COST_SETTLEMENT_FAILED'").fetchone()[0]==1
+                assert db.execute("SELECT count(*) FROM notification_deliveries d JOIN safety_incidents s ON d.event_id=s.id WHERE channel='pushover' AND s.code='COST_SETTLEMENT_FAILED'").fetchone()[0]==1
+            else:
+                assert all(row[1] for row in rows)
+                assert sum(D(row[0]) for row in rows)==D(report['total_unique_cost_usd'])
+            if failed_stage=='aux_count':
+                from agents.safety_events import safety_stopped
+                from agents.accounting_events import enqueue_allocation_warning
+                enqueue_allocation_warning(inbox.path,claim['cycle_id'],NOW)
+                assert not safety_stopped(inbox.path)
+                assert all(r['weight_basis']=='fallback_candidate_count' for r in result['cost_allocation_attempts'])
+                assert db.execute("SELECT count(*) FROM notification_deliveries WHERE channel='pushover' AND event_id LIKE 'allocation-unavailable:%'").fetchone()[0]==1
+            if failed_stage=='bug':
+                from agents.safety_events import safety_stopped
+                assert safety_stopped(inbox.path)
+                assert db.execute("SELECT count(*) FROM safety_incidents WHERE code='INFERENCE_FAILED'").fetchone()[0]==1
+                private_log=inbox.path.parent/'private-errors.jsonl'
+                assert 'PRIVATE_ACCOUNT_AND_TOKEN' not in private_log.read_text()
+                assert 'KeyError' in private_log.read_text()
+                assert private_log.stat().st_mode & 0o077==0
     finally:
-        b.close()
+        if failed_stage!='close': b.close()
         life.close()
 
 
