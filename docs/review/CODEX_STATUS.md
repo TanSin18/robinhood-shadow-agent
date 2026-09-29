@@ -3,6 +3,63 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 16:40 ET — Task 1 installed; tests pass; scheduled/drill proof pending
+
+Executed the operator-approved September 29 after-close release at 16:37–16:40
+ET. Read Claude's new 16:22 UI review first: its UI fixes remain development-only;
+none were included and 8765 was not restarted. Installed ONLY the 13 files in
+`task1-release-manifest.json`, from pinned source commit `6e2c220`.
+
+Preflight: original complete fingerprint matched, every candidate file matched
+its pinned hash, zero STARTED cycles, zero unresolved incidents, no stop marker.
+Daily/maintenance were unloaded before edits; verified backup before applying.
+Rollback archive: `/Users/tanmaysinnarkar/LocalProjects/task1-rollback.ZKzThs/before.tar`.
+Its directory is mode 0700, with manifest and sanitized service evidence; no DB,
+credentials or private settings copied. Written rollback remains in
+`docs/review/TASK1_RELEASE_2026-09-29.md`. No rollback was required.
+
+Installed verification command, run from primary:
+```
+.venv/bin/python -m scripts.verify_operations --run-tests --output-dir outputs/task1-release-2026-09-29 --test-report outputs/task1-release-2026-09-29/tests.xml --test-manifest outputs/task1-release-2026-09-29/test-run.json
+```
+**665 passed, 0 failed, 0 skipped; 61 warnings; 54.67 seconds.** Fewer than the
+branch's 670 because the five proxy-receipt tests/helper change were deliberately
+excluded, not skipped. Warnings are existing SDK asyncio/runpy warnings.
+Installed report/manifest and operational-readiness JSON/Markdown are local in
+`outputs/task1-release-2026-09-29/`; none is pushed as a runtime artifact.
+
+Verifier exit **2 / NOT READY**, with exactly the anticipated blockers:
+1. No matching-new-source authenticated scheduled full-cycle receipt yet.
+2. Sanitized completed revocation/reauthorization evidence missing or invalid.
+All 17 regression-evidence gates passed, including shared costs, real-order
+denial, budget/freshness, cash/holdings checks and lifecycle. Live authentication,
+capability/bounds and data gates remain unproven for this source until its real
+scheduled receipt exists. Old evidence was not relabeled or modified.
+
+Fingerprint before:
+`8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346`.
+Fingerprint after, unchanged by installed tests:
+`72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593`.
+Root preregistration remains **v1.4.2**, hash
+`39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075`.
+No config/model/cap changes, v1.5 activation, proxy changes, forced cycle or paid
+inference. No historical paper rows were rewritten by deployment.
+
+Reloaded only `com.openai.robinhood-daily` and `com.openai.robinhood-maintenance`.
+Both completed their after-close invocation with exit 0 and remain loaded;
+daily reports SKIPPED_SCHEDULE, not a new trading review. Dashboard PID **19580**
+unchanged. No second runner introduced. The one-time release automation was
+deleted after this attempt; it will not recur tomorrow.
+
+Wednesday 10:00 acceptance: SETTLED, exact provider-estimate cost conservation,
+unrepresented B cost zero, no incident. Code-only outcomes are valid but do not
+prove live shared-AI attribution. Wednesday after 16:30 drill remains a separate
+operator-assisted task; no proxy helper deployment authorized by tonight's work.
+Settlement/programming-error incidents deliberately pause paper activity for
+operator review; the auxiliary attribution fallback warning does not latch.
+Task 1 implementation is released, but operational evidence closure/Phase 0
+sign-off remains pending. Task 2, UI fixes and Phase 1 are not started here.
+
 ## 2026-09-29 15:46 ET — Conditional tonight release prepared; v1.4.2 compatible
 
 Read Claude's 15:38 review. Operator authorized Task 1 release tonight after

@@ -5,6 +5,34 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 16:22 ET — Agent Desk (8765) UI review against today's records
+
+How I checked: GET-only views of `/`, `/room` and `/portfolio` in the operator's Chrome, compared with the 2026-09-29 official cycle record. No POSTs, no `/legacy`. Target branch: `ui/agent-desk`. UI work is development-only; no dashboard restart until approved. **Don't touch 8765 during tonight's 16:35 release.**
+
+### P0: the headline contradicts the record
+The record shows Portfolio **proposed SOXX**, Critic **rejected SOXX** (`critic.rejected_instruments`), results `[{status: REJECTED, instrument: SOXX}]`, no card. The UI says:
+- Today and Room headline: "Review finished. **No trade proposed.**" This is false.
+- Maple card: "**Did not propose a trade.**" This is false.
+- Pickle card: "Checked the proposal for weak assumptions". Vague; it hides the veto.
+- The idea list says "SOXX Proposed" at the same time, so the page contradicts itself.
+
+Fix (a deterministic projection from existing structured fields only; nothing inferred):
+- Headline: "**Maple proposed SOXX. Pickle rejected it. No card for you today.**" Sub-line: the first sentence of `critic.counterargument`, labelled "Pickle's reason (original report)".
+- Maple: "Proposed SOXX (Lane A)". Pickle: status chip **Rejected** (amber, not green "Completed"), text "Rejected SOXX". Nugget: "No proposal reached safety checks" when nothing passed the critic, not "Completed". Outcome: "No card: stopped by Critic".
+- Idea chips: SOXX "Proposed → Rejected by Critic". META "Qualified signal, not picked" (not "Advanced", which is unclear).
+- Room: mark the stop point on the map (Pickle node ring amber + "stopped here"), and grey the nodes after it as "not reached". Dashed "expected workflow" labelling stays.
+- Regression test: fixture = today's record. Assert the headline contains the proposed instrument and "rejected", and never "No trade proposed", when `decision.picks` is non-empty.
+
+### P1
+1. **Pickle card:** "Missing information: None recorded" while the record has `missing_evidence` (5 items, cycle level). Show them under Research/cycle with their source label, not as "None".
+2. **Pickle card "Original report":** show `counterargument` text expanded by default for a rejection. It's the most useful sentence on the page.
+3. **Today: add a trading-day clock strip** (the operator asked for the ET timeline). One line: 08:30 pre-open · 09:30 open · **10:00 meeting** · approvals until 15:30 · 15:50 sweep · 16:00 close · 16:30 summary. A marker shows "now" in America/New_York, with EDT/EST shown automatically. Early-close days shift. Mockup: board `Clock` in the Agent Desk canvas (added by Claude).
+4. **"Preview only. Approvals and controls are disabled here"** on 8765 reads like the system is broken. Replace with "Approve cards in **Approvals** →" (link to the existing live approvals page).
+5. **Portfolio** is only an explainer. Until the ledger exists, add one honest line: "Paper book not built yet (ledger arrives in Task 3). Lane A: $500 cash, no holdings. Lane B: $500 cash, no holdings". Show that only if the existing `paper_accounts` state supports it; otherwise "unknown".
+
+### P2
+- Seat roster: when Task 4 lands, the 13-seat roster (Pepper, Mochi, Pixel, Doodle, Zippy, Olive + existing) follows `agents/desk/roster.py`. Faces are in `design/agent-desk/avatars/` on `claude/agent-desk-final-plan`. Pip = Research.
+
 ## 2026-09-29 15:38 ET — Review of 6e2c220: Task 1 ready for operator release review
 
 Independent run (clean Linux): 663 passed, 6 failed, 1 skipped. The 6 are the same environment-bound OAuth/uid tests; everything new passes.
