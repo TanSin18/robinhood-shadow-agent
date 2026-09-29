@@ -57,6 +57,46 @@ became dataless. Download requests were issued. Recheck all required files befor
 claiming scheduled readiness. Plan a separately approved primary-runtime move
 out of synchronized Documents after the gate; this export does not perform it.
 
+## Isolated rehearsal branch update — 2026-09-28
+
+LATEST: operator approved a diagnostic-only cap waiver and current models.
+Run `01362a8c955e4af8bfaa5ac7555ef611` completed live collection, Research,
+Portfolio, Critic and final quote refresh in 60.15 seconds. Estimated
+API-equivalent cost $0.0481896. Market closed; risk issuance not exercised;
+news disabled. No cards/fills/official-record changes. The run is explicitly
+noncompliant diagnostic evidence, not the installed scheduled proof. The
+one-invocation CLI flag is rejected for official runs; no permanent policy
+change. Fresh suite: 594 passed, same 7 baseline failures, 31 warnings;
+focused rehearsal suite: 12 passed. Installed runtime fingerprint unchanged.
+Earlier blocked-attempt notes below are historical, not the latest outcome.
+
+`codex/live-readonly-rehearsal` adds an operator-invoked diagnostic, not a service.
+Official input is read-only; private what-if storage rejects claims, cards,
+fills, scoreboard and lessons writes. See [live rehearsal report](docs/live-rehearsal-report.md).
+
+Live collection and deterministic discovery ran. The rehearsal stopped before AI
+at `REHEARSAL_MODEL_CAP_NOT_CERTIFIED`; the existing transport cannot certify the
+registered what-if ceiling. It collected 537 quotes / 14 volatility series;
+13 quotes were fresh, 524 stale or future-dated; market session was closed.
+No model calls, cards or fills; official business records and installed source
+fingerprint unchanged. News remains disabled. This is not Phase 0 completion.
+
+Verification: `python -m pytest tests/test_rehearsal.py -q`: 10 passed.
+`python -m pytest -q --tb=no`: 592 passed, 7 pre-existing portability failures,
+28 warnings. Operator explicitly accepted documenting the baseline failures;
+they are listed with causes in the report. No private configuration copied.
+No deployment, merge, dashboard restart or preregistration change.
+Next: certify the bounded inference transport before another AI rehearsal;
+preserve the separate scheduled-proof requirement and Phase 1 boundary.
+
+Follow-up audit: installed Codex protocol schemas expose no explicit output-token
+cap, and runtime model aliases differ from the registered dated model IDs.
+The recommended next step is an operator-approved, isolated Responses API
+transport using the registered models and caps. Separate API credentials are
+not present in the current process environment. Do not read/copy Codex auth
+as an API credential, bypass budget guards, or modify the frozen deployment.
+See the report's follow-up section for evidence and the remaining access choice.
+
 ## Next permitted steps
 
 1. Confirm current local-file residency, authorization and installed service state.

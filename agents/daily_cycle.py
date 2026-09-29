@@ -291,18 +291,28 @@ def apply_decision(inbox, config, decision, critic, snapshot, now, cycle_id, *, 
         if contract:
             proposal=proposal.model_copy(update={'option_type':contract['type'],'strike':D(contract['strike_price']),'expiry':datetime.fromisoformat(contract['expiration_date']).date()})
         proposal=proposal.model_copy(update={'prompt_versions':{r:f'{r}_hardening_v2' for r in ('research','portfolio','critic')}})
-        result=inbox.issue(proposal,quote,vol[0],vol[1],now,cycle_id=cycle_id,lifecycle=lifecycle)
+        from agents.rehearsal import RehearsalInbox
+        issue=inbox.evaluate_proposal if isinstance(inbox,RehearsalInbox) else inbox.issue
+        result=issue(proposal,quote,vol[0],vol[1],now,cycle_id=cycle_id,lifecycle=lifecycle)
         results.append({'instrument':symbol,'status':result['status'],'card_id':result.get('id'),'reasons':result.get('reasons',[])})
     return results
 
 
-def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=None, reader=None, cycle_id=None, lifecycle=None):
+def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=None, reader=None, cycle_id=None, lifecycle=None, diagnostic_cap_waiver=False):
     from agents.budget import AIInvocationGate, BudgetAllocator, BudgetUnavailable
     from data.database_role import require_database_role
     from agents.codex_bridge import BudgetExceeded
     from agents.safety_events import safety_stopped
-    require_database_role(inbox.path,'fixture' if data_mode=='fixture' else 'live')
-    if data_mode!='fixture':
+    rehearsal=data_mode=='whatif'
+    if diagnostic_cap_waiver and not rehearsal:
+        raise ValueError('Cap waiver is diagnostic only')
+    if rehearsal:
+        from agents.rehearsal import RehearsalInbox
+        if not isinstance(inbox,RehearsalInbox) or lifecycle is not None:
+            raise ValueError('Isolated rehearsal context required')
+        inbox.assert_isolated()
+    require_database_role(inbox.path,'whatif' if rehearsal else ('fixture' if data_mode=='fixture' else 'live'))
+    if data_mode!='fixture' and not rehearsal:
         with inbox.connect() as db:
             if lifecycle is None or not lifecycle.owns(db,cycle_id): raise ValueError('Live cycle ownership is required')
         if reader is None: raise ValueError('Live cycle requires a deterministic reader')
@@ -330,6 +340,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     trace_event('cycle_started', trigger=getattr(lifecycle, 'trigger', 'fixture'))
 
     def check_owner():
+        if rehearsal: inbox.assert_isolated()
         if safety_stopped(inbox.path): raise ValueError('Safety stop is active')
         if lifecycle is not None:
             with inbox.connect() as db:
@@ -338,6 +349,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     def finish(result):
         result={**result,'cycle_id':cycle_id,'data_mode':data_mode,'timestamp':now.isoformat(),'agents':agents,'completed_stages':completed}
         result['trigger']=getattr(lifecycle,'trigger','fixture')
+        if rehearsal:
+            result.update(trigger='rehearsal',parent_official_run_id=inbox.parent_official_run_id)
+            result.update(diagnostic_noncompliant=bool(diagnostic_cap_waiver),cap_waiver=bool(diagnostic_cap_waiver))
+            result.pop('account_last4',None)
         result['api_cost_estimate_usd']=str(sum((D(c['cost_usd']) for c in inbox.store.read_json('api_costs')[cost_start:]),D(0)))
         if phase0_reservations:
             costs=inbox.store.read_json('api_costs')[cost_start:]
@@ -376,6 +391,12 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     trace_event('data_collected', read_tools=sorted({read['tool'] for read in reads}),
                 quote_count=len(snapshot['quotes']), volatility_count=len(snapshot['vols']),
                 history_counts={ticker: len(history) for ticker, history in snapshot['session_closes'].items()})
+    if rehearsal:
+        ages=[(observed_at-q.timestamp).total_seconds() for q in snapshot['quotes'].values()]
+        rehearsal_freshness={'fresh':sum(0<=age<=config.risk.max_quote_age_seconds for age in ages),
+                            'stale_or_future':sum(not 0<=age<=config.risk.max_quote_age_seconds for age in ages),
+                            'maximum_age_seconds':max(ages,default=None),
+                            'limit_seconds':config.risk.max_quote_age_seconds}
     check_owner()
     inbox.settle_expirations(snapshot['session_closes'],observed_at,cycle_id=cycle_id,lifecycle=lifecycle)
     market_open=MarketSchedule().should_run(observed_at,asset_class='stock',stage=1)
@@ -424,6 +445,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     else 'Deterministic discovery produced no stock candidate requiring qualitative AI review.')
             return finish({
                 'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),
+                **({'quote_freshness':rehearsal_freshness,'source_hash_count':len(source_hashes),
+                    'stages':{'collection':'completed','strategy':'completed','ai':'not_needed','risk':'not_needed_no_proposals'},
+                    'risk_proposals_evaluated':0} if rehearsal else {}),
                 'collector_evidence':getattr(reader,'evidence',None),
                 'transport_evidence':{'collector':getattr(reader,'evidence',None),'inference':[]},
                 'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),
@@ -436,12 +460,22 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 'corporate_action_exclusions':snapshot['exclusions'],
                 'source_hashes':source_hashes,'notification_policy':'log_only',
             })
+        if rehearsal and not diagnostic_cap_waiver:
+            # The current Phase 0 transport lacks hard output-token caps and
+            # reserves .06/.14 per call: it cannot certify the registered .20
+            # what-if ceiling. Do not spend first and discover the overrun later.
+            return finish({'status':'HOLD_OPERATIONAL',
+                'ai_gate':{'invoke':True,'reason':ai_gate.reason,'blocker':'REHEARSAL_MODEL_CAP_NOT_CERTIFIED'},
+                'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),
+                'market_open':market_open,'quote_freshness':rehearsal_freshness,
+                'stages':{'collection':'completed','strategy':'completed','ai':'budget_safety_blocked','risk':'not_run'},
+                'source_hash_count':len(source_hashes),'results':[]})
         active_lanes=sorted({candidate['lane'] for candidate in model_candidates}
                             | ({'B'} if any(ticker in snapshot['contracts'] for ticker in held) else set())
                             | ({'A'} if any(ticker not in snapshot['contracts'] for ticker in held) else set()))
         active_lanes=active_lanes or ['A']
         try:
-            for lane in active_lanes:
+            for lane in ([] if diagnostic_cap_waiver else active_lanes):
                 for stage,amount in budget_allocator.stage_reservations.items():
                     identifier=budget_allocator.reserve(observed_at,lane=lane,stage=stage,amount=amount)
                     phase0_reservations.append({'id':identifier,'lane':lane,'stage':stage})
@@ -502,7 +536,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
     result['transport_evidence']={'collector':getattr(reader,'evidence',None),'inference':getattr(bridge,'isolation_evidence',[])}
     # Persist observed benchmark prices, never manufacture an unchanged benchmark.
-    if snapshot['benchmark']:
+    if snapshot['benchmark'] and not rehearsal:
         inbox.store.append_json('daily_values',{'timestamp':now.isoformat(),'benchmark':'VTI','close':snapshot['benchmark'],'data_mode':data_mode})
     return finish(result)
 
