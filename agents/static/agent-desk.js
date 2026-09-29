@@ -1,4 +1,13 @@
 'use strict';
+document.querySelectorAll('.lane-atlas').forEach(atlas => {
+  const buttons = atlas.querySelectorAll('[data-lane-mode]');
+  function select(mode) {
+    buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.laneMode === mode)));
+    atlas.querySelectorAll('[data-lane-view]').forEach(panel => { panel.hidden = panel.dataset.laneView !== mode; });
+  }
+  buttons.forEach(button => button.addEventListener('click', () => select(button.dataset.laneMode)));
+  select('guide');
+});
 document.documentElement.classList.add('team-interactive');
 function updatePreviewExpiry() {
   document.querySelectorAll('[data-preview-expires]').forEach(card => {

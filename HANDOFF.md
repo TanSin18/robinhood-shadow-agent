@@ -1,5 +1,14 @@
 # Current handoff — September 28, 2026
 
+## Latest UI synchronization
+
+Latest lane diagrams and preview polish are preserved on `ui/agent-desk`.
+Fresh suite: 581 passed, 36 failed; preview tests 6 passed, polish tests 3 passed.
+See [UI synchronization status](docs/ui-sync-status.md) for every failing test.
+Do not merge or deploy this checkpoint as an acceptance-approved dashboard.
+Rehearsal source and its latest live results are on the separate
+`codex/live-readonly-rehearsal` branch. Main remains unchanged.
+
 ## Actual status
 
 Phase 0 safety/read-only integration is implemented; its installed scheduled

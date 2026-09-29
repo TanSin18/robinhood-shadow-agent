@@ -33,7 +33,7 @@ def shell(title, body, path='/', state=None):
     body_class = 'agent-desk team-preview' if state.get('preview') else 'agent-desk'
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} · Agent Desk</title><link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/agent-desk.css">
-{'<link rel="stylesheet" href="/assets/agent-scene.css">' if state.get('preview') else ''}
+{'<link rel="stylesheet" href="/assets/agent-scene.css"><link rel="stylesheet" href="/assets/agent-polish.css">' if state.get('preview') else ''}
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
 <header class="desk-header"><a class="desk-brand" href="/">↗ Agent Desk</a><nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
