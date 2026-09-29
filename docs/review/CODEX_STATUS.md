@@ -3,6 +3,58 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 16:56 ET — Task 2 started; release train registered; replay gap explicit
+
+Operator authorized Task 2 development now and, after Phase 0 sign-off, reviewed
+after-close release batches (maximum three per ET week), with isolated stored-real
+snapshot replay per change and full installed suite per release. Recorded in
+`docs/review/RELEASE_TRAIN.md` and AGENTS.md. No automatic deployment authorization.
+Read Claude's 16:44 acceptance and 16:22 UI review; runtime and UI remain separate.
+
+Development branch `codex/task2-handoff-replay`, base `73f37c8`, uses the existing
+isolated worktree. First checkpoint is standalone foundations, NOT daily-cycle
+integration or complete Task 2:
+- `agents/decision_packet.py`: explicit blind allowlist excludes hidden reasoning,
+  quantities from Portfolio, account identifiers and raw order history. Keeps
+  public thesis, quoted evidence and explicit paper context; missing fields remain
+  unknown. Enforces lane/contract identity and finite nonnegative numeric inputs.
+  Missing fractional policy is unknown; preliminary sizing is NOT_COMPUTED and
+  explicitly non-executable. No unapproved v1.5 policy inferred.
+- `agents/stored_decision_replay.py`: read-only stored-output/packet-gap audit,
+  not an AI rerun or backtest. Official connection uses mode=ro/query_only.
+  Logs parent run and content hash; does not invent prices, balances or judgments.
+- 21 new focused tests pass. Independent checkpoint review found malformed string
+  veto, empty timestamp/source ID, invalid class/contract identity gaps. Each got
+  a failing regression then a passing fix. No deferred reviewer findings.
+
+Real stored-record audit executed against parent
+`624a402038ff4a9ca922b609595a893a`, source record SHA-256
+`e0be979b60ec171c6703f54e321e5fad635a5f0c90c5d98f1e8a6edf326c43db`.
+SOXX: Lane A, CRITIC_VETO, sizing NOT_REACHED. Official business digest unchanged;
+zero model calls, zero official writes. No raw record or private account data
+added to Git. Result is deliberately **REPLAY_INCOMPLETE**, not replay-proven.
+
+Missing retained historical inputs: bid/ask and quote time, associated source IDs,
+explicit asset-class/fractional policy and point-in-time settled cash, held/pending
+quantities. Final records have decisions/signals/source hashes, not the full input
+dossier. Current holdings or a new quote cannot fill those historical gaps.
+
+Next work: integrate the blind context/risk preview, enforce deterministic ETF
+scope across all AI packets and correct option identity, separate veto/whitelist/
+duplicate statuses, verify slippage-aware limits and market-close/GET expiry,
+then run a complete isolated replay from a complete real input snapshot. Wednesday
+evening remains the target, not a guaranteed proof date if required evidence is
+unavailable. A recorded-output audit alone cannot satisfy the release-train gate.
+
+No deployment or service restart. Installed fingerprint remains
+`72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593`;
+v1.4.2 stays active. Only review/governance documents mirrored to primary.
+Final development suite: **691 passed, 61 warnings, 49.26s** using
+`/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q`
+from the development worktree. Baseline before edits was 670 passed. These are
+branch tests, not a new installed-runtime suite. Task 2 completion checklist
+remains open; no release or replay-ready claim.
+
 ## 2026-09-29 16:40 ET — Task 1 installed; tests pass; scheduled/drill proof pending
 
 Executed the operator-approved September 29 after-close release at 16:37–16:40

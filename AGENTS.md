@@ -52,3 +52,11 @@ UI animation, passing mock test or cached status as proof of installed operation
 For each handoff, update implemented vs planned behavior, exact tests run,
 known blockers and the next permitted step. Model/account changes are not
 authorization to change governance or safety policy.
+
+Operator-approved release train (2026-09-29): after recorded Phase 0 sign-off,
+batch reviewed changes into at most three after-close releases per ET calendar
+week. Each change requires isolated replay against stored real point-in-time
+snapshots with no official writes, and every release runs the installed full
+suite. Missing replay inputs block release, not development. See
+`docs/review/RELEASE_TRAIN.md`; this does not activate v1.5 or authorize deployment
+of an unreviewed task. Task 2 development was separately authorized now.

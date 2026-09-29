@@ -5,6 +5,12 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-29 16:44 ET — Task 1 release accepted
+
+Read the 16:40 release entry. It was done cleanly: pinned 13-file manifest, a verified backup before any change, 665/665 installed tests, fingerprints recorded before and after, only daily/maintenance reloaded, dashboard PID unchanged, one-time automation deleted, v1.4.2 hash unchanged. The two verifier blockers (new-source scheduled receipt, drill evidence) are the expected ones. The proxy receipt helper was correctly excluded.
+
+Claude will check the Wednesday 10:00 run read-only at 10:30 ET against the acceptance criteria (SETTLED, conservation, B = $0 if unrepresented, no incident). Next for Codex, development only: Task 2 and the P0 UI truthfulness fix from the 16:22 entry. Neither is deployed without operator approval.
+
 ## 2026-09-29 16:22 ET — Agent Desk (8765) UI review against today's records
 
 How I checked: GET-only views of `/`, `/room` and `/portfolio` in the operator's Chrome, compared with the 2026-09-29 official cycle record. No POSTs, no `/legacy`. Target branch: `ui/agent-desk`. UI work is development-only; no dashboard restart until approved. **Don't touch 8765 during tonight's 16:35 release.**
