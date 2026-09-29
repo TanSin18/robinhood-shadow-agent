@@ -4,7 +4,7 @@ registration:
   version: 1.5.0
   registered_on: '2026-09-29'
   effective_from: NOT_EFFECTIVE_PENDING_OPERATOR_APPROVAL
-  status: unapproved_review_draft
+  status: operator_approved_draft_not_active
   authority: operator_only
   purpose: >-
     Freeze the official shadow experiment before its first governed run so that
@@ -20,9 +20,9 @@ registration:
   change_history:
     - version: 1.5.0
       date: '2026-09-29'
-      reason: Draft portfolio-first accounting, explicit orchestration, cost attribution and bounded pulse; not approved or effective.
+      reason: Operator-approved draft portfolio-first accounting, explicit orchestration, cost attribution and bounded pulse; not effective.
       requested_by: operator
-      approval_status: pending_review
+      approval_status: operator_approved_draft_2026_09_29_not_active
     - version: 1.0.0
       date: '2026-09-28'
       reason: Initial preregistration for the gated Phase 0 through Phase 2 architecture.
@@ -427,7 +427,7 @@ hard_failures:
     - HORIZON_MISMATCH
     - EXIT_PLAN_CONSERVATISM
   hard_veto_operator_override_allowed: false
-  advisory_rebuttal_attempts: 1
+  advisory_rebuttal_attempts: 0
   unresolved_advisory_action: drop_action
 
 agent_contract:
@@ -582,7 +582,7 @@ agent_contract:
       entry_limit_formula: >-
         fresh_midpoint * (1 + maximum_limit_distance_fraction)
       entry_limit_midpoint_source: fresh_quote_when_trigger_fires_and_card_is_issued
-      expires_at_et: '15:30'
+      expires_at_et: min_1530_or_exchange_close_minus_30_minutes
       if_not_fired: no_entry
       code_only_intraday_checks: true
 
@@ -714,19 +714,19 @@ net_edge:
     bypass_only:
       - minimum_net_edge_usd
       - minimum_expected_net_return_fraction
+      - minimum_edge_to_friction_ratio
     still_required:
       - registered_strategy_eligibility_and_invalidation
       - quote_freshness
       - liquidity
-      - minimum_edge_to_friction_ratio
+      - registered_spread_and_slippage_limits
       - volatility_and_position_caps
       - settled_cash
       - holdings
       - all_breakers_and_global_kill_switch
       - all_other_deterministic_risk_rules
-    friction_ratio_numerator: registered_strategy_gross_edge_usd
-    friction_ratio_denominator: total_modeled_round_trip_friction_usd
-    missing_registered_strategy_gross_edge_action: block_entry
+    maximum_median_spread_fraction: 0.003
+    invented_strategy_gross_edge_allowed: false
     hypothetical_net_edge_uses_same_formula_and_hypothetical_p: true
   required_baseline_open_test_vector:
     arm: deterministic_no_ai
@@ -736,8 +736,7 @@ net_edge:
     loss_if_wrong_usd: '5.00'
     total_modeled_round_trip_friction_usd: '0.50'
     hypothetical_net_edge_usd_before_tax_and_api_cost: '-0.50'
-    registered_strategy_gross_edge_usd: '5.00'
-    edge_to_friction_ratio: '10.0'
+    median_spread_fraction: '0.001'
     settled_cash_usd: '500.00'
     conservative_entry_notional_plus_friction_usd: '50.50'
     liquidity_passes: true
@@ -746,7 +745,7 @@ net_edge:
     expected_result: OPEN_ALLOWED
     assertion: >-
       The position may open despite p = 0.5 and negative hypothetical net edge
-      because only probability-based net-edge gates are skipped; every listed
+      because probability-based net-edge and edge-ratio gates are skipped; every listed
       deterministic gate still passes.
   short_horizon:
     trading_days_below: 5
@@ -1413,7 +1412,9 @@ scoreboard:
 v1_5_review_proposal:
   base_version: 1.4.2
   base_sha256: 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075
-  operator_approved: false
+  operator_approved: true
+  operator_approval_date_et: '2026-09-29'
+  operator_approval_scope: six_decisions_in_claude_review_1210_et_draft_only
   activation_allowed: false
   reason: Portfolio-first ledger, explicit seats, accountable decisions and bounded code-only pulse.
   preserve_prior_rules_unless_explicitly_amended: true
@@ -1421,12 +1422,12 @@ v1_5_review_proposal:
     - performed_revocation_and_reauthorization_receipt_verification
     - shared_cost_allocation_repair
     - ledger_opening_method_operator_choice
-    - discretionary_action_limit_and_research_seat_mapping
-    - numeric_gross_edge_assumption_approval
     - measured_phase1_token_caps_and_reservations
-    - dated_operator_approval_and_future_effective_date
+    - task1_merged_and_deployed_after_operator_release_approval
+    - future_effective_date_after_commit
   decisions:
-    maximum_new_discretionary_open_or_add_selections_per_official_open: 1
+    maximum_new_discretionary_open_or_add_per_lane_per_official_open: 1
+    maximum_new_discretionary_open_or_add_total: 2
     required_close_and_reduce_actions_may_be_multiple: true
     holdings_review_before_new_entries: true
     hold_cash_is_per_lane: true
@@ -1438,17 +1439,11 @@ v1_5_review_proposal:
     preliminary_quantity_is_non_executable: true
     final_quantity_owner: deterministic_risk
     missing_fractional_permission_action: block_new_entry
-  registered_strategy_gross_edge:
-    units: fraction_of_entry_notional
-    momentum_rotation_126d_trend200_top1: 0.05
-    mean_reversion_drop3_above_ma200: 0.05
-    source: proposed_operator_policy_assumption_2026_09_29
-    empirical_return_claim: false
-    constituent_history_label: survivorship_biased_current_constituents
-    change_requires_registration_version_bump: true
-    unavailable_or_unapproved_strategy_edge_action: block_baseline_entry
-    baseline_probability_gate_bypass_only: true
-    baseline_invalidation_or_20_session_exit: true
+    paper_equity_fractional: true
+    minimum_notional_usd: 1.00
+    equity_quantity_decimal_places: 6
+    options_quantity: whole_contracts
+    required_close_reduce_count_limit: null
   token_cap_finalization:
     current_stage_envelopes_are_provisional: true
     evidence_source: isolated_phase1_dry_run_usage_by_stage
@@ -1463,25 +1458,12 @@ v1_5_review_proposal:
     report_hash_and_sample_counts_required: true
     no_measurements_means_activation_blocked: true
     if_recomputed_reservations_exceed_ceiling: revise_packet_and_repeat_review
-  advisory_rebuttal:
-    rounds: 1
-    portfolio_calls: 1
-    critic_resolution_calls: 1
-    schema_repair_attempts_per_call: 1
-    portfolio_input_cap_provisional: 12000
-    portfolio_output_cap_including_reasoning_provisional: 3000
-    critic_input_cap_provisional: 8000
-    critic_output_cap_including_reasoning_provisional: 2000
-    reasoning_effort: medium
-    one_attempt_pair_estimate_usd: 0.0725
-    reservation_including_both_schema_repairs_usd: 0.1450
-    main_and_rebuttal_all_repairs_estimate_usd: 0.3146
-    unfunded_action: drop_selection
-    unfunded_reason: ADVISORY_REBUTTAL_UNFUNDED
-    source_evidence_may_change: false
   allocation:
+    represented_lane_definition: at_least_one_lane_specific_candidate_block_in_frozen_packet
     lane_specific_token_weight_source: frozen_lane_dossier_input_tokens
-    common_prompt_tokens: split_only_across_represented_lanes
+    common_prompt_tokens: split_equally_only_across_represented_lanes
+    ai_arm_reporting: same_lane_cost_shared_not_two_charges
+    baseline_arm_api_cost: 0
     rounding_residual_lane: lexicographically_lowest_represented_lane
     preserve_subcent_precision: true
     unknown_provider_usage: retain_reserved_bound
@@ -1503,7 +1485,8 @@ v1_5_review_proposal:
     initial_rolls: forbidden
     missing_exercise_funding_or_mark: incident_no_fabricated_fill
   seats:
-    code: [orchestrator, ledger, scout, quant, risk, card, execution, auditor]
+    code: [orchestrator, ledger, quant, risk, card, execution, auditor]
+    data_tools_without_face: [scout]
     human: [operator]
     conditional_models: [research, pm, critic]
     inactive: [filings, explainer]
@@ -1512,10 +1495,19 @@ v1_5_review_proposal:
     recorded_edges_only: true
     required_missing_seat_action: hold_operational_and_write_receipt
   session:
+    timezone: America/New_York
+    storage_timezone: UTC
+    fixed_est_offset_allowed: false
+    mac_timezone_mismatch_health: warning
+    preopen_health_time_et: '08:30'
+    preopen_health: [auth_expiry, proxy, tripwire, settlement, corporate_actions, calendar]
+    market_open_time_regular_et: '09:30'
+    trade_at_open: false
     official_open_time_et: '10:00'
+    official_claim_window_end_et: '10:20'
     manual_official_rerun_allowed: false
     pulse_interval_seconds: 120
-    pulse_window: trading_session_from_1000_to_exchange_close
+    pulse_window: from_1002_to_exchange_close_minus_10_minutes
     pulse_reads: held_pending_and_armed_triggers_only
     pulse_models_allowed: false
     pulse_takes_official_claim: false
@@ -1523,13 +1515,23 @@ v1_5_review_proposal:
     pulse_network_inside_write_transaction: false
     tripwire_and_history_cadence: unchanged
     close_sweep_minutes_before_exchange_close: 10
+    entry_cutoff_rule: min_1530_et_or_exchange_close_minus_30_minutes
     cards_expire: actual_exchange_close
+    day_receipt_time_et: '16:30'
+    weekly_report: friday_1630_et
+    overnight_weekend_holiday: no_trading_maintenance_only
+    awake_power_window_et: '09:45-16:35'
+    preopen_0830_requires_awake_observed_or_missed_label: true
     fill_origins: [official_open, resting_limit_pulse, trigger_pulse, mechanical_rule, close_sweep]
     fill_requires_original_decision_run_id: true
     new_discretionary_pulse_trade: forbidden
     unmet_policy_mechanical_action: operator_card_not_silent_trade
     sleeping_mac_health: unknown_gap
   later_policy_requests_not_authorized:
+    advisory_rebuttal:
+      revisit_after_resolved_official_decisions: 30
+      automatic_activation: false
+      requires_new_operator_approval: true
     what_if_daily_budget_usd: 3.00
     what_if_weekly_budget_usd: 20.00
     proposed_maximum_tradable_symbols: 25

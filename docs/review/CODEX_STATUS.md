@@ -3,6 +3,48 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-29 12:18 ET — Operator-confirmed draft; Task 1 branch checkpoint
+
+- Direct operator confirmation received on 2026-09-29 for Claude's 12:10 ET
+  six decisions. Approval is for the v1.5 draft, NOT activation or deployment.
+  Draft/diff/review notes updated: fractional equities ($1 minimum, six decimals),
+  one new entry per lane, friction-only baseline admission (no invented gross
+  edge), no advisory rebuttal, Pip/Research roster, and exchange-aware ET clock.
+- Branch: `codex/shared-cost-v1-5`, based on `6571359`. Task 1 STARTED, not complete.
+  `agents/cost_allocation.py` implements candidate-token lane allocation, equal
+  common-token splitting, deterministic exact residual conservation and shared
+  AI-arm reporting. An unrepresented B receives zero even when B had reservations.
+  Baselines have zero API cost. Tests cover these and high-precision amounts.
+- Remaining Task 1: connect frozen packet token counts and attempt costs to
+  daily-cycle reservation settlement; integration/regression evidence; independent
+  review; separate release approval before any merge/deployment. The installed
+  accounting bug is NOT claimed fixed by this primitive-only checkpoint.
+- Baseline verification initially yielded 623 passed / 1 failed: a dashboard
+  test used the actual date, so today's missing-run row invalidated its empty
+  result assumption. Fixed with a scoped test clock fixture, not runtime settings.
+  Final full branch suite: **640 passed, 37 warnings**, 49.47 seconds.
+  Command from the development worktree:
+  `/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q`.
+  Warnings are SDK asyncio deprecation and rehearsal module runpy warning.
+- Review found and fixed a Decimal precision edge case with a regression and
+  an outdated draft approval label. YAML parses; stored diff exactly matches root
+  v1.4.2 versus draft. Root SHA-256 remains
+  `39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075`.
+- Wednesday **2026-09-30 after 16:30 ET / 20:30 UTC**: prepared sanitized
+  proxy-owner command and operator-driven checklist in
+  `docs/review/WEDNESDAY_DRILL_RECEIPT.md`. New `receipt` action has positive
+  status/timestamp allowlist tests and no Keychain/network/state-write access.
+  It is **not installed** in the private bundle; narrowly scoped helper deployment
+  needs separate approval before using it. This is not a completed drill receipt.
+- No runtime/model/budget/config/service/DB changes. Only review/planning docs
+  mirrored into primary. Primary source fingerprint verified unchanged:
+  `8810ff7eac502daaef3158ad45a34781b5120ccb493a0ddce564b769dbc3f346`.
+  No second runner, no broker calls, no new provider spend or notifications.
+- Publish this sanitized checkpoint on `codex/shared-cost-v1-5`; no merge into
+  main/UI and no changes to `claude/agent-desk-final-plan`. Activation blockers
+  remain: integrated cost fix released, real drill receipt, measured P95 caps,
+  future effective date after commit, plus separately reviewed ledger migration.
+
 ## 2026-09-29 11:45 ET — Shared review opened; planning only
 
 ### Gate 0 evidence

@@ -81,7 +81,22 @@ def _save(path, state):
 
 
 def receipt(state):
-    return {key: value for key, value in state.items() if key != 'token_fingerprint'}
+    statuses = {'AWAITING_REMOTE_REVOKE', 'REMOTE_REJECTION_VERIFIED',
+                'LOCAL_DELETION_IN_PROGRESS', 'AWAITING_REAUTHORIZATION', 'COMPLETED'}
+    if state.get('status') not in statuses:
+        raise ValueError('INVALID_DRILL_RECEIPT')
+    result = {'status': state['status']}
+    for key in ('begun_at', 'revoked_read_failed_at', 'local_credentials_removed_at',
+                'reauthorized_read_passed_at'):
+        if key in state:
+            try:
+                stamp = datetime.fromisoformat(state[key])
+                if stamp.tzinfo is None:
+                    raise ValueError()
+            except (ValueError, TypeError):
+                raise ValueError('INVALID_DRILL_RECEIPT') from None
+            result[key] = stamp.isoformat()
+    return result
 
 
 async def advance(action, path, storage, probe, now, *, bindings=None, clock=None):
@@ -155,11 +170,17 @@ def main():
     from broker_proxy.identity import require_proxy_identity
     from broker_proxy.oauth import KeychainOAuthStorage
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['begin','verify-revoked','remove-local-credentials','verify-reauthorized'])
+    parser.add_argument('action',choices=['begin','verify-revoked','remove-local-credentials','verify-reauthorized','receipt'])
     args=parser.parse_args()
     try:
         require_proxy_identity()
         root=Path(__file__).resolve().parents[1]
+        if args.action == 'receipt':
+            path=root.parent.parent/'state/revocation.json'
+            if path.is_symlink():
+                raise ValueError('UNSAFE_DRILL_STATE')
+            print(json.dumps(receipt(json.loads(path.read_text())),sort_keys=True))
+            return 0
         bindings={name:hashlib.sha256((root/name).read_bytes()).hexdigest()
                   for name in ('preregistration.yaml','config/broker-proxy.local.yaml')}
         result=asyncio.run(advance(args.action,root.parent.parent/'state/revocation.json',

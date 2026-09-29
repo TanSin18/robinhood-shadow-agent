@@ -526,7 +526,12 @@ def test_stale_or_missing_position_marks_are_not_current_equity(tmp_path):
     assert dashboard_snapshot(inbox, NOW)['lanes'][0]['tracks'][0]['value'] is None
 
 
-def test_filters_escape_evidence_and_report_route_cannot_read_files(tmp_path):
+def test_filters_escape_evidence_and_report_route_cannot_read_files(tmp_path, monkeypatch):
+    class FixedClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 28, 20, tzinfo=timezone.utc)
+    monkeypatch.setattr('agents.dashboard.datetime', FixedClock)
     inbox, _ = setup_runtime(tmp_path)
     put_cycle(inbox, '2026-09-28', 'COMPLETED',
               decision={'picks': [], 'reason': '<script>alert(1)</script>'})

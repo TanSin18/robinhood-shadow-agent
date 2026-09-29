@@ -12,7 +12,13 @@
 
 ## Global Constraints
 
-- Planning only today. No runtime, model, budget, config, DB or service changes.
+- Operator confirmed Claude's 12:10 ET six decisions on 2026-09-29 for the draft
+  only. Task 1 branch work is authorized; primary deployment is not. Fractional
+  paper equities: $1 minimum, 6 decimals; options whole contracts. One new entry
+  per lane (2 total), unlimited required reductions/closes. No advisory rebuttal;
+  reconsider only after 30 resolved official decisions and fresh approval.
+
+- Task 1 development and draft updates only. No installed runtime, model, budget, config, DB or service changes.
 - Read canonical `docs/review/CLAUDE_REVIEW.md` before each task. Prepend progress/questions to CODEX_STATUS after each checkpoint; inspect and push sanitized changes.
 - Exactly one scheduled runner. Stage 1 paper only; real writes default-denied.
 - Only Agentic account scope; no account identifiers in reports or UI.
@@ -51,8 +57,9 @@ modify `agents/bounded_inference.py`, `agents/budget.py`, `agents/daily_cycle.py
 review `agents/readiness.py` and `docs/review/CODEX_STATUS.md`.
 
 **Interface:** `allocate_cost(amount: Decimal, lane_tokens: dict[str, int]) -> dict[str, Decimal]`.
-Input token counts come from the frozen per-lane dossier blocks; common prompt
-tokens are shared among represented lanes, with rounding remainder to the
+Input token counts come from the frozen per-lane candidate blocks; a represented
+lane has at least one such block. Common prompt tokens are split equally among
+represented lanes, with rounding remainder to the
 lexicographically first lane. Save counts, tokenizer/model version, packet
 hashes and shared-token policy. These are allocation weights, not invented API
 billing usage; provider usage determines the total. Keep sub-cent precision.
@@ -174,8 +181,8 @@ registration hash and ledger snapshot reference, not secrets.
   only recorded hops; legacy six-stage projections remain dashed and static.
   Store character names only in UI mapping/assets. No fictional role log keys.
 - [ ] Keep Research as a registered stage within the conditional AI workflow;
-  the proposed 13-seat representation is a review question, not authority to
-  remove Research or its ranking experiment. Code Scout is never labelled LLM.
+  UI maps Pip to Research. Market data is a faceless code tool. Code Scout is
+  never labelled LLM; the primary ranking-value experiment stays intact.
 - [ ] Full golden replay, missing-seat and read-only UI tests; review/commit/push.
 
 ### Task 5: Arms, forecasts and holdings board
@@ -194,7 +201,7 @@ extend `eval/scoreboard.py` and UI Book view.
       assert result['hypothetical_probability'] == '0.5'
       assert result['entry_allowed'] is True
   ```
-  Fixture gross edge must be a registered strategy number; all friction/cash/
+  No registered gross-edge assumption is permitted. Registered spread/slippage/cash/
   liquidity/breaker gates remain mandatory, not bypassed with probability.
 - [ ] Implement all eight registered arms using the same snapshots, risk and
   timestamps; API cost only AI arms. Record random seed and baseline 20-session
