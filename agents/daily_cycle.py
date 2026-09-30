@@ -428,8 +428,31 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             with inbox.connect() as db:
                 if not lifecycle.owns(db,cycle_id): raise ValueError('Cycle ownership lost')
 
+    capsule_inputs={}
+    stage_requests={}
+
     def finish(result):
         result={**result,'cycle_id':cycle_id,'data_mode':data_mode,'timestamp':now.isoformat(),'agents':agents,'completed_stages':completed}
+        if not rehearsal:
+            try:
+                from agents import decision_capsule
+                from agents.v15_activation import registration_sha256
+                try:
+                    reg=registration_sha256(Path(__file__).resolve().parents[1]/'preregistration.yaml')
+                except OSError:
+                    reg=None
+                capsule=decision_capsule.build(cycle_id=cycle_id,data_mode=data_mode,
+                    observed_at=capsule_inputs.get('observed_at'),registration_sha256=reg,
+                    models={r:getattr(config,r+'_model_name',None) for r in ('research','portfolio','critic')},
+                    snapshot=capsule_inputs.get('snapshot'),strategy_assessment=capsule_inputs.get('strategy_assessment'),
+                    accounts=capsule_inputs.get('accounts'),stage_requests=stage_requests,stage_outputs=completed,
+                    result=result)
+                with inbox.connect() as capsule_db:
+                    result['capsule_hash']=decision_capsule.write(capsule_db,capsule)
+                result['capsule_status']='RECORDED'
+            except Exception as capsule_error:
+                result['capsule_status']='UNAVAILABLE'
+                result['capsule_error_type']=type(capsule_error).__name__
         result['trigger']=getattr(lifecycle,'trigger','fixture')
         if rehearsal:
             result.update(trigger='rehearsal',parent_official_run_id=inbox.parent_official_run_id)
@@ -494,6 +517,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
 
     def run(role, schema, request):
         check_owner()
+        stage_requests[role]=json.loads(json.dumps(request,default=str))
         model=getattr(config,role+'_model_name')
         name={'research':'Research Agent','portfolio':'Portfolio Agent','critic':'Critic'}[role]
         agents.append(name)
@@ -536,6 +560,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     strategy_assessment=evaluate_daily_signals(
         snapshot['session_closes'], ETF_UNIVERSE & config.risk.instrument_whitelist,
         observed_at.astimezone(ET).date())
+    capsule_inputs.update(observed_at=observed_at,snapshot=snapshot,strategy_assessment=strategy_assessment,
+                          accounts={f'{lane}:{track}':{k:v for k,v in inbox.state(lane,track).items()
+                                    if k in {'settled_cash','unsettled_cash','positions'}}
+                                    for lane in ('A','B') for track in ('agent_alone','with_approvals')})
     option_signals=rank_option_candidates(
         [candidate for candidate in choices if candidate.get('contract') and not candidate.get('quote_stale')],
         strategy_assessment['signals'])
