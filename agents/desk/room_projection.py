@@ -1,4 +1,8 @@
-"""Truthful, read-only projection of append-only cycle traces."""
+"""Truthful, read-only projection of append-only cycle traces (Agent Desk overlay copy).
+
+The dashboard overlay loads the frozen runtime's ``agents`` package first, so the
+desk keeps its own projection here instead of changing the runtime module.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -655,6 +659,27 @@ def project_decision_room(records, cards):
         proposal_recorded = bool(result_statuses & KNOWN_PROPOSAL_STATUSES)
         paper_action_recorded = bool(result_statuses & KNOWN_PAPER_ACTION_STATUSES)
         negative_result_only = bool(result_statuses) and result_statuses <= KNOWN_NEGATIVE_RESULT_STATUSES
+        # Recorded proposal that a later stage stopped: derive only from saved
+        # structured fields (decision.picks, critic.rejected_instruments, results).
+        picked = [str(p.get('instrument')) for p in (picks or [])
+                  if isinstance(p, dict) and isinstance(p.get('instrument'), str) and p.get('instrument')]
+        critic_payload = payload.get('critic') if isinstance(payload.get('critic'), dict) else {}
+        critic_rejected = critic_payload.get('rejected_instruments')
+        critic_rejected = {str(x) for x in critic_rejected} if isinstance(critic_rejected, list) else set()
+        rejected_results = {
+            str(item.get('instrument')) for item in payload_results
+            if isinstance(item, dict) and str(item.get('status', '')).upper() == 'REJECTED'
+            and isinstance(item.get('instrument'), str)
+        }
+        stopped_by_critic = [i for i in picked if i in critic_rejected and i in rejected_results]
+        critic_reason = critic_payload.get('counterargument') if isinstance(critic_payload.get('counterargument'), str) else None
+        decision_type = decision.get('type') if isinstance(decision.get('type'), str) else None
+        desk_results = [r for r in (payload.get('desk_results') or []) if isinstance(r, dict)]
+        desk_card_waiting = any(r.get('status') == 'PENDING' and r.get('arm') == 'with_approvals' for r in desk_results)
+        desk_filled = sorted({str(r.get('arm')) for r in desk_results if r.get('status') == 'filled'})
+        desk_instrument = next((str(r.get('instrument')) for r in desk_results if isinstance(r.get('instrument'), str)), None)
+        signal_instruments = [str(x) for x in decision.get('signal_instruments', []) if isinstance(x, str)] \
+            if isinstance(decision.get('signal_instruments'), list) else []
         if pending:
             outcome_label = 'Paper proposal waiting'
             action = f"Review {len(pending)} paper proposal" + ('s' if len(pending) != 1 else '')
@@ -666,6 +691,14 @@ def project_decision_room(records, cards):
             outcome_label, action = 'Risk blocked', 'Nothing needs your approval'
         elif unknown_result:
             outcome_label, action = 'Completion unconfirmed', 'Check run history'
+        elif terminal_state == 'COMPLETED' and decision_type in {'DESK_ENTRY', 'DESK_ENTRY_BLOCKED', 'HOLD_CAPABILITY_GAP'}:
+            outcome_label, action = {
+                'DESK_ENTRY': ('Desk rule entry', 'Check the desk-rule card' if desk_card_waiting else 'Nothing needs your approval'),
+                'DESK_ENTRY_BLOCKED': ('Desk rule blocked', 'Nothing needs your approval'),
+                'HOLD_CAPABILITY_GAP': ('Signal not yet actionable', 'Nothing needs your approval'),
+            }[decision_type]
+        elif terminal_state == 'COMPLETED' and stopped_by_critic and negative_result_only:
+            outcome_label, action = 'Proposal rejected by Critic', 'Nothing needs your approval'
         elif terminal_state == 'COMPLETED' and (
             (picks == [] and payload_results == []) or negative_result_only
         ):
@@ -688,10 +721,32 @@ def project_decision_room(records, cards):
             proposal_state = 'unknown'
         elif pending or proposal_recorded or paper_action_recorded:
             proposal_state = 'recorded'
+        elif stopped_by_critic and negative_result_only:
+            proposal_state = 'stopped'
         elif (picks == [] and payload_results == []) or negative_result_only:
             proposal_state = 'none'
         else:
             proposal_state = 'unknown'
+        if proposal_state == 'stopped':
+            for stage in stages:
+                if stage['key'] == 'portfolio':
+                    stage['status_label'] = 'Proposed'
+                elif stage['key'] == 'critic':
+                    stage.update(status='blocked', status_label='Rejected', tone='warn')
+                elif stage['key'] == 'risk':
+                    stage.update(status='not_applicable', status_label='Not reached', tone='neutral')
+                elif stage['key'] == 'final':
+                    stage['status_label'] = 'No card'
+        from . import run_log, run_checks
+        ai_gate = run_log.gate(ordered)
+        log = run_log.build_log(ordered)
+        if ai_gate and not ai_gate['open']:
+            called = {entry['actor'] for entry in log}
+            for stage in stages:
+                if stage['key'] in run_log.AI_STAGES and stage['key'] not in called:
+                    stage.update(status='skipped', status_label='Not called', tone='neutral',
+                                 summary='Not called: the AI gate stayed closed for this run'
+                                 + (f" ({ai_gate['reason']})." if ai_gate.get('reason') else '.'))
         completed_stages = sum(stage['status'] in {'completed', 'blocked'} for stage in stages)
         reviews.append(
             {
@@ -703,6 +758,23 @@ def project_decision_room(records, cards):
                 'lanes': normalize_candidate_decisions(ordered),
                 'selection_recorded': candidate_details_recorded,
                 'proposal_state': proposal_state,
+                'proposed_instruments': picked,
+                'stopped_by': 'critic' if (stopped_by_critic and proposal_state == 'stopped') else None,
+                'stopped_instruments': stopped_by_critic if proposal_state == 'stopped' else [],
+                'critic_reason': critic_reason if proposal_state == 'stopped' else None,
+                'decision_type': decision_type,
+                'desk': {'instrument': desk_instrument, 'filled_arms': desk_filled,
+                         'card_waiting': desk_card_waiting,
+                         'blocked_reasons': sorted({str(r.get('reason')) for r in desk_results
+                                                    if r.get('status') == 'BLOCKED' and r.get('reason')})},
+                'signal_instruments': signal_instruments,
+                'decision_reason': _text(decision.get('reason'), 400),
+                'ai_gate': ai_gate,
+                'log': log,
+                'stage_times': run_log.stage_times(ordered),
+                'strategy_blocked': run_log.strategy_blocked(ordered),
+                'checks': run_checks.build_checks(ordered),
+                'agent_usage': run_log.agent_usage(records, ordered),
                 'default_stage': next(
                     (
                         stage['key']
@@ -739,6 +811,9 @@ def project_decision_room(records, cards):
                 ],
             }
         )
+    from .run_log import flow
+    for review in reviews:
+        review['flow'] = flow(review, review['log'])
     return sorted(
         reviews,
         key=lambda review: _aware(review['timestamp'])

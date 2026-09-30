@@ -295,3 +295,43 @@ def flow(review, log):
                   'label': {'DESK_ENTRY': 'Desk rule (no AI)', 'DESK_ENTRY_BLOCKED': 'Desk rule blocked',
                             'HOLD_CAPABILITY_GAP': 'Signal, no ETF issuer'}.get(decision, 'No AI needed · hold')}
     return {'edges': edges, 'bypass': bypass, 'ai_skipped': ai_skipped}
+
+
+def agent_usage(records, ordered):
+    """Model, tools and tokens for each AI stage.
+
+    SDK spans and bounded-attempt events are not tagged with the cycle id, so they
+    are matched by recorded row order: rows strictly between this cycle's
+    stage_started and stage_completed for the same role (the runner is single).
+    """
+    def rid(e):
+        v = e.get('_row_id')
+        return v if isinstance(v, int) and not isinstance(v, bool) else None
+    out = {}
+    for role in AI_STAGES:
+        start = next((rid(e) for e in ordered if e.get('event') == 'stage_started' and e.get('role') == role and rid(e)), None)
+        end = next((rid(e) for e in ordered if e.get('event') == 'stage_completed' and e.get('role') == role and rid(e)), None)
+        if start is None or end is None or end <= start:
+            continue
+        window = [r for r in records if isinstance(r, dict) and rid(r) is not None and start < rid(r) < end]
+        usage = {'matched_by': 'recorded row order', 'attempts': 0, 'tools': None, 'handoffs': None}
+        for r in window:
+            if r.get('event') == 'bounded_attempt_started' and r.get('role') == role:
+                usage['attempts'] += 1
+                usage['model'] = _s(r.get('model'), 60)
+                usage['reserved_usd'] = _s(r.get('reserved_usd'), 20)
+            payload = r.get('payload') if isinstance(r.get('payload'), dict) else {}
+            data = payload.get('span_data') if isinstance(payload.get('span_data'), dict) else {}
+            if r.get('event') == 'span_start' and data.get('type') == 'agent':
+                usage['agent'] = _s(data.get('name'), 40)
+                usage['output_type'] = _s(data.get('output_type'), 40)
+                usage['tools'] = _strs(data.get('tools'), 20, 60) if isinstance(data.get('tools'), list) else None
+                usage['handoffs'] = _strs(data.get('handoffs'), 20, 60) if isinstance(data.get('handoffs'), list) else None
+            inner = data.get('data') if isinstance(data.get('data'), dict) else {}
+            if r.get('event') == 'span_end' and inner.get('sdk_span_type') == 'turn' and isinstance(inner.get('usage'), dict):
+                u = inner['usage']
+                usage['input_tokens'] = _count(u.get('input_tokens'))
+                usage['output_tokens'] = _count(u.get('output_tokens'))
+        if usage['attempts'] or usage.get('agent'):
+            out[role] = usage
+    return out

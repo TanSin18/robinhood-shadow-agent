@@ -1,4 +1,4 @@
-from agents.decision_room import project_decision_room
+from agents.desk.room_projection import project_decision_room
 from agents.desk.router import render
 
 T = '2026-09-29T14:00:{:02d}+00:00'

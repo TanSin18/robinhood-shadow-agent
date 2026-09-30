@@ -180,6 +180,36 @@ def table(head, rows):
             '</tr></thead><tbody>' + ''.join('<tr>' + ''.join(f'<td>{esc(c)}</td>' for c in row) + '</tr>' for row in rows) + '</tbody></table></div>')
 
 
+def tools_block(key, stage, review):
+    """What this step used: broker tools, code, or AI model — from recorded fields only."""
+    d = stage.get('details') if isinstance(stage.get('details'), dict) else {}
+    u = (review.get('agent_usage') or {}).get(key)
+    rows = []
+    if key == 'evidence':
+        rows = [('Kind', 'Code, no AI'), ('Broker tools called (read-only)', ', '.join(d.get('read_tools') or []) or 'Not recorded'),
+                ('Rules applied', 'research/strategy_signals.py · momentum rotation, mean reversion'),
+                ('Hands to', 'AI gate → Pip when a signal needs judgment; otherwise straight to the outcome')]
+    elif key in ('research', 'portfolio', 'critic'):
+        if u:
+            tools = u.get('tools')
+            rows = [('Kind', 'AI'), ('Model', u.get('model') or 'Not recorded'),
+                    ('Tools it could call', 'None — works only from the supplied record' if tools == [] else ', '.join(tools) if tools else 'Not recorded'),
+                    ('Handoffs it could make', 'None — the runner passes its output on' if u.get('handoffs') == [] else ', '.join(u.get('handoffs') or []) or 'Not recorded'),
+                    ('Output format', u.get('output_type') or 'Not recorded'),
+                    ('Tokens in → out', f"{u.get('input_tokens', '?')} → {u.get('output_tokens', '?')}"),
+                    ('Attempts · cost reserved', f"{u.get('attempts', 0)} · ${u.get('reserved_usd') or '?'}"),
+                    ('Matched by', 'recorded row order between this step’s start and finish')]
+        else:
+            rows = [('Kind', 'AI'), ('Model and tools', 'Not called in this run' if stage.get('status') == 'skipped' else 'Not recorded')]
+    elif key == 'risk':
+        rows = [('Kind', 'Deterministic rules, no AI'), ('Broker tools', 'Quote refresh only (read-only) before checking'),
+                ('Checks', 'size, cash, stale prices, loss and drawdown limits'), ('Real execution', d.get('real_execution') or 'blocked')]
+    elif key == 'final':
+        rows = [('Kind', 'Recorder, no AI'), ('Writes', 'Local run record and, if a trade passed, a paper approval card'),
+                ('Broker writes', 'None — real orders are blocked')]
+    return '<h4>Tools &amp; model</h4>' + facts(rows)
+
+
 def work(key, stage, review):
     d = stage.get('details') if isinstance(stage.get('details'), dict) else {}
     news = [r for r in d.get('news', []) if isinstance(r, dict) and isinstance(r.get('fact'), str)] if isinstance(d.get('news'), list) else []
@@ -299,7 +329,7 @@ def inspector(key, stage, review, flow, rid, log, selected):
             '<div class="tune-row"><div><strong>Research depth</strong><p class="muted">Current value not loaded. No setting is implied.</p></div><span class="slider-unavailable" role="img" aria-label="Slider unavailable; no current value loaded"></span></div>'
             '<div class="tune-row"><strong>Safety limits</strong><span>Locked</span></div><div class="tune-row"><strong>Real orders</strong><span>Blocked in Stage 1</span></div>')
     report = f'<details class="original-report" open><summary>Original report</summary><p class="report">{esc(stage.get("summary") or "No report was saved.")}</p></details>'
-    panes = {'work': work(key, stage, review), 'log': log_rows(mine), 'report': report, 'ask': ask, 'tune': tune}
+    panes = {'work': tools_block(key, stage, review) + work(key, stage, review), 'log': log_rows(mine), 'report': report, 'ask': ask, 'tune': tune}
     content = ''.join(f'<section role="tabpanel" id="{panel}-{t}" aria-labelledby="{panel}-{t}-tab" data-character-pane="{t}"{"" if t == "work" else " hidden"}>{panes[t]}</section>' for t, _ in tabs)
     chip = esc(stage.get('status_label') or 'Not recorded')
     span_html = f'<span class="span">{esc(span)}</span>' if span else ''

@@ -1,4 +1,4 @@
-from agents.run_checks import build_checks
+from agents.desk.run_checks import build_checks
 from agents.desk.router import render
 
 FEATS = {
@@ -61,3 +61,9 @@ def test_checks_page_renders_in_preview_and_is_deferred_in_operational_mode():
     assert 'Momentum rotation' in html and 'Trend check' in html and 'SECRET-AUTH-ID' not in html
     assert 'style=' not in html
     assert 'Not available yet' in render('/checks', {}, None, '')
+
+
+def test_sanitizer_keeps_token_counts_but_drops_token_values():
+    from agents.desk.preview import public
+    kept = public({'input_tokens': 5, 'output_tokens': 2, 'access_token': 'x', 'refresh_token': 'y', 'authorization_id': 'z'})
+    assert kept == {'input_tokens': 5, 'output_tokens': 2}

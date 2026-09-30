@@ -11,7 +11,7 @@ import sqlite3
 import time
 from urllib.parse import urlsplit
 
-from agents.decision_room import project_decision_room
+from .room_projection import project_decision_room
 from .components import ROUTES
 from .router import render
 
@@ -41,7 +41,7 @@ def open_readonly(path):
 
 def public(value):
     if isinstance(value,dict):
-        return {k:public(v) for k,v in value.items() if not any(s in k.lower() for s in ('account_id','account_number','last4','token','secret','credential'))}
+        return {k:public(v) for k,v in value.items() if not (any(s in k.lower() for s in ('account_id','account_number','last4','secret','credential','authorization_id')) or ('token' in k.lower() and not k.lower().endswith('_tokens')))}
     if isinstance(value,list): return [public(v) for v in value]
     return value
 

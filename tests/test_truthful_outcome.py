@@ -3,7 +3,7 @@
 The Agent Desk previously said "Review finished. No trade proposed." and
 "Did not propose a trade." Both contradict the saved record.
 """
-from agents.decision_room import project_decision_room
+from agents.desk.room_projection import project_decision_room
 from agents.desk.workspace import outcome, review_view
 
 

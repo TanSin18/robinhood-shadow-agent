@@ -168,6 +168,23 @@ def history(reviews):
             f'<tbody>{rows}</tbody></table></div></section>')
 
 
+def usage_table(review):
+    u = review.get('agent_usage') or {}
+    stages = {s.get('key'): s for s in review.get('stages', [])}
+    names = (('research', 'Pip · Research'), ('portfolio', 'Maple · Portfolio'), ('critic', 'Pickle · Critic'))
+    rows = ''
+    for key, label in names:
+        x = u.get(key)
+        if x:
+            tools = 'none' if x.get('tools') == [] else ', '.join(x.get('tools') or []) or 'not recorded'
+            rows += (f'<tr><td>{esc(label)}</td><td class="code">{esc(x.get("model") or "not recorded")}</td><td>{esc(tools)}</td>'
+                     f'<td class="num">{esc(x.get("input_tokens", "—"))}</td><td class="num">{esc(x.get("output_tokens", "—"))}</td><td class="num">${esc(x.get("reserved_usd") or "—")}</td></tr>')
+        else:
+            rows += f'<tr><td>{esc(label)}</td><td colspan="5" class="muted">{esc("Not called" if stages.get(key, {}).get("status") == "skipped" else "Not recorded")}</td></tr>'
+    return ('<div class="table-wrap"><table class="mini"><thead><tr><th>AI step</th><th>Model</th><th>Tools it could call</th><th>Tokens in</th><th>Tokens out</th><th>Cost reserved</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div><p class="muted small">Code steps (Scanners, AI gate, Nugget, Outcome) use no AI. Scanners call only read-only broker tools, listed under System checks.</p>')
+
+
 def run_section(review, index):
     c = review.get('checks') or {}
     missing = c.get('missing_evidence') or []
@@ -175,6 +192,7 @@ def run_section(review, index):
     return f'''<section class="scene-review checks-run" data-scene-review="{index}"{" hidden" if index else ""}>
 <header class="room-outcome"><div class="meta"><span>{esc(date_label(review.get("timestamp")))}</span><span>Decision date {esc(c.get("decision_date") or "not recorded")}</span><span>{esc(c.get("qualification") or "")}</span></div><h2>{esc(outcome(review))}</h2></header>
 <section class="room-card"><div class="card-head"><h3>System checks</h3><span class="muted small">Connection, registration, data, AI and outcome</span></div>{operational(c.get("operational", []))}</section>
+<section class="room-card"><div class="card-head"><h3>AI steps · model, tools and tokens</h3></div>{usage_table(review)}</section>
 <section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
 <section class="room-card"><div class="card-head"><h3>Scanners · strategy conditions</h3><span class="muted small">Every ticker × every condition</span></div>{strategy_tables(c.get("strategies", []))}</section>
 <section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Pip’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
