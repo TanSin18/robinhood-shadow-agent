@@ -87,6 +87,9 @@ class RehearsalInbox:
     def state(self, lane, track, db=None):
         return copy.deepcopy(self._states[(lane,track)])
 
+    def _has_track(self, lane, track):
+        return (lane,track) in self._states
+
     def _context(self, *args, **kwargs):
         from agents.inbox import PaperInbox
         return PaperInbox._context(self,*args,**kwargs)
@@ -104,7 +107,8 @@ class RehearsalInbox:
             state['missing_marks']=missing
 
     def settle_expirations(self, *args, **kwargs):
-        if any(self.state('B',t)['positions'] for t in ('agent_alone','with_approvals')):
+        from agents.inbox import PAPER_TRACKS
+        if any(self.state('B',t)['positions'] for t in PAPER_TRACKS if self._has_track('B',t)):
             raise RehearsalBlocked('OPTIONS_HOLDINGS_REHEARSAL_NOT_IMPLEMENTED')
 
     def issue(self, *args, **kwargs):
@@ -137,7 +141,8 @@ def prepare(official, output_dir, config):
         parent=next((r.get('cycle_id') for r in records if r.get('status')=='COMPLETED' and r.get('data_mode')=='live_readonly' and r.get('cycle_id')),None)
         if not parent: raise RehearsalBlocked('OFFICIAL_PARENT_REQUIRED')
         states={(lane,track):json.loads(payload) for lane,track,payload in source.execute('SELECT lane,track,payload FROM paper_accounts')}
-        if set(states) != {(l,t) for l in ('A','B') for t in ('agent_alone','with_approvals')}:
+        legacy={(l,t) for l in ('A','B') for t in ('agent_alone','with_approvals')}
+        if not legacy <= set(states) or set(states)-{(l,t) for l in ('A','B') for t in ('agent_alone','with_approvals','deterministic_no_ai')}:
             raise RehearsalBlocked('PAPER_SNAPSHOT_INCOMPLETE')
         # Health-only seeds preserve comparison against the last verified broker
         # snapshot and the shortest accepted order-history lookback. No orders

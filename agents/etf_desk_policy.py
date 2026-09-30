@@ -22,8 +22,12 @@ STRATEGIES = frozenset({'momentum_rotation_126d_trend200_top1',
 
 def production_enabled(registration_path, now):
     # No environment variable, dashboard switch or draft approval bypasses this.
-    # Activation must supply a separately reviewed, byte-pinned registration.
-    return False
+    # Active only with the byte-pinned, effective v1.5 registration installed.
+    from pathlib import Path
+    from agents.v15_activation import v15_active
+    root = Path(registration_path)
+    root = root.parent if root.name == 'preregistration.yaml' else root
+    return v15_active(root, now)
 
 
 def entry_deadline(evaluated_at):
@@ -112,5 +116,6 @@ def plan_entry(*, symbol, quote, reference_quote, evaluated_at, now,
         'quantity':str(quantity), 'reference_midpoint':str(reference), 'limit_price':str(limit),
         'modeled_fill_price':str(fill), 'expires_at':expires.isoformat(),
         'arms':list(ARMS), 'attribution':'desk_policy_not_ai',
+        'proposal':proposal.model_dump(mode='json'),
         'with_approvals_action':'PENDING_OPERATOR_YES', 'execution_authorized':False,
         'exit_plan':{'invalidation':signal['invalidation']}}

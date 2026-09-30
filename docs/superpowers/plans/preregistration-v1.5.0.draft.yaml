@@ -1440,6 +1440,19 @@ v1_5_review_proposal:
     with_approvals_requires_operator_yes: true
     approval_fill_quote: fresh_at_approval_plus_registered_slippage
     never_attribute_desk_policy_return_to_ai: true
+    approval_fill_window: until_trigger_expiry_then_APPROVED_NOT_FILLED
+    approval_fill_reads: get_equity_quotes_for_approved_card_symbols_only
+    liquidity_evidence:
+      operator_approved_on: '2026-09-30'
+      approval_source: operator_chat_2026-09-30_1128_ET_approve_liquidity
+      minimum_median_20d_dollar_volume_usd: 50000000
+      dollar_volume_source: median_of_last_20_completed_session_close_times_volume_from_approved_historicals
+      missing_volume_action: block_entry_LIQUIDITY_EVIDENCE_MISSING
+      maximum_median_spread_fraction: '0.003'
+      spread_source_when_20_recorded_sessions_exist: median_of_first_official_spread_observation_per_session
+      interim_spread_rule_until_20_recorded_sessions: max(live_spread_at_reference, live_spread_at_fill) <= 0.003
+      spread_recording: first_official_cycle_observation_per_symbol_per_session_append_only
+      invented_liquidity_values_allowed: false
   base_version: 1.4.2
   base_sha256: 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075
   operator_approved: true

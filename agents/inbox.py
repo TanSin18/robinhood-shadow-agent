@@ -20,6 +20,10 @@ from agents.safety_events import safety_stopped
 
 D = Decimal
 ET = ZoneInfo('America/New_York')
+# Paper tracks. deterministic_no_ai receives only registered desk-policy (code)
+# entries; it never receives AI picks.
+PAPER_TRACKS = ('agent_alone', 'with_approvals', 'deterministic_no_ai')
+DESK_AUTHOR = 'Desk rule (no AI)'
 
 
 class PaperInbox:
@@ -40,7 +44,7 @@ class PaperInbox:
                 cash = config.paper_lanes[key]
                 if cash <= 0:
                     raise ValueError('lane capital must be positive')
-                for track in ('agent_alone','with_approvals'):
+                for track in PAPER_TRACKS:
                     state = {'settled_cash':str(cash), 'unsettled_cash':'0', 'positions':{}, 'seen':[], 'fills':[], 'peak':str(cash), 'start':str(cash), 'weekly_start_value':str(cash), 'peak_breaker_latched':False, 'global_kill_switch':False, 'marks':{}}
                     db.execute('INSERT OR IGNORE INTO paper_accounts VALUES (?,?,?)', (lane,track,json.dumps(state)))
 
@@ -72,7 +76,7 @@ class PaperInbox:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             for lane in ('A','B'):
-                for track in ('agent_alone','with_approvals'):
+                for track in PAPER_TRACKS:
                     state=self.state(lane,track,db)
                     prior=D(state['settled_cash'])+D(state['unsettled_cash'])+sum(D(p['quantity'])*D(state['marks'].get(t,p['average_cost']))*p['multiplier'] for t,p in state['positions'].items())
                     if state.get('mark_day')!=today:
@@ -123,7 +127,7 @@ class PaperInbox:
             db.execute('BEGIN IMMEDIATE')
             if lifecycle is not None and not lifecycle.owns(db,cycle_id):
                 raise ValueError('Cycle ownership lost before settlement')
-            for track in ('agent_alone','with_approvals'):
+            for track in PAPER_TRACKS:
                 state=self.state('B',track,db)
                 for ticker,p in list(state['positions'].items()):
                     if not p.get('expiry') or p['expiry']>=today.isoformat():
@@ -147,10 +151,10 @@ class PaperInbox:
                 db.execute('UPDATE paper_accounts SET payload=? WHERE lane=? AND track=?',(json.dumps(state),'B',track))
         return events
 
-    def _execute(self, db, lane, track, proposal, quote, vol, vol_as_of, now):
+    def _execute(self, db, lane, track, proposal, quote, vol, vol_as_of, now, *, etf_entry_reference=None):
         state = self.state(lane,track,db)
         engine = RiskEngine(self.config.risk)
-        verdict = engine.evaluate(proposal,self._context(state,quote,vol,vol_as_of,now))
+        verdict = engine.evaluate(proposal,self._context(state,quote,vol,vol_as_of,now),etf_entry_reference=etf_entry_reference)
         if not verdict.allowed:
             return {'status':'RISK_BLOCKED','reasons':[r.value for r in verdict.reasons]}
         broker = PaperBroker(D(state['start']),now=lambda:now,track=f'{lane}:{track}')
@@ -211,6 +215,79 @@ class PaperInbox:
                     priority=0,url=self.config.notifications.dashboard_url('decisions'))
             return payload
 
+    def issue_desk_card(self, db, proposal, quote, vol, plan, now):
+        """v1.5 desk-policy approval card. Caller holds the transaction.
+
+        Fills only via fill_approved_desk_cards at a fresh approval-time quote,
+        never at this issue-time quote (registered: fresh approval-time pricing).
+        """
+        previous = db.execute('SELECT payload FROM approval_inbox WHERE id=?',(proposal.proposal_id,)).fetchone()
+        if previous:
+            prior = json.loads(previous[0])
+            if prior['proposal'] != proposal.model_dump(mode='json'):
+                raise ValueError('proposal ID reused with changed content')
+            return prior
+        amount = proposal.quantity*proposal.limit_price
+        body = (f'{DESK_AUTHOR}: buy {proposal.quantity} {proposal.ticker} (paper, Lane A) up to '
+                f'${proposal.limit_price:.4f} per share, about ${amount:.2f}. Why: {proposal.thesis} '
+                f'Good if: {proposal.good_if} Wrong if: {proposal.invalidation} '
+                f'If you say YES, it fills only at a fresh price at or under the limit before '
+                f'{datetime.fromisoformat(plan["expires_at"]).astimezone(ET).strftime("%-I:%M %p ET")}. '
+                f'Not an AI pick. Paper only.')
+        payload = {'id':proposal.proposal_id,'status':'PENDING','lane':'A','author':DESK_AUTHOR,
+                   'attribution':'desk_policy_not_ai','fill_policy':'fresh_quote_at_approval',
+                   'body':body,'trace_url':self.config.notifications.dashboard_url(f'trace/{proposal.proposal_id}', fragment=False),
+                   'proposal':proposal.model_dump(mode='json'),'quote':quote.model_dump(mode='json'),
+                   'reference_midpoint':plan['reference_midpoint'],'limit_price':plan['limit_price'],
+                   'vol':str(vol[0]) if vol[0] is not None else None,'vol_as_of':vol[1].isoformat() if vol[1] is not None else None,
+                   'issued':now.isoformat(),'expires':plan['expires_at'],
+                   'comparison':'Approval-time fresh quote within the registered limit.'}
+        db.execute('INSERT INTO approval_inbox VALUES (?,?,?,?,?)',(proposal.proposal_id,'PENDING',payload['issued'],payload['expires'],json.dumps(payload)))
+        from agents.notification_outbox import enqueue
+        enqueue(db,'card-'+proposal.proposal_id,'Desk rule card waiting',
+                f'Lane A: a desk-rule (no AI) paper buy of {proposal.ticker} needs YES or NO.',now,
+                priority=0,url=self.config.notifications.dashboard_url('decisions'))
+        return payload
+
+    def fill_approved_desk_cards(self, quotes, now):
+        results=[]
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            rows=db.execute("SELECT id,payload FROM approval_inbox WHERE status='APPROVED_AWAITING_FILL'").fetchall()
+            for row in rows:
+                card=json.loads(row['payload'])
+                proposal=TradeProposal.model_validate(card['proposal'])
+                expires=datetime.fromisoformat(card['expires'])
+                quote=quotes.get(proposal.ticker)
+                outcome=None
+                if now >= expires:
+                    outcome=('APPROVED_NOT_FILLED','approval_window_closed')
+                elif quote is None or quote.halted or not 0 <= (now-quote.timestamp).total_seconds() <= self.config.risk.max_quote_age_seconds:
+                    results.append({'card_id':card['id'],'status':'WAITING','reason':'NO_FRESH_QUOTE'}); continue
+                elif quote.ask*(1+D('0.001')) > proposal.limit_price:
+                    results.append({'card_id':card['id'],'status':'WAITING','reason':'ABOVE_LIMIT'}); continue
+                if outcome is None:
+                    fill=self._execute(db,'A','with_approvals',proposal,quote,D(card['vol']) if card['vol'] else None,
+                                       datetime.fromisoformat(card['vol_as_of']) if card['vol_as_of'] else None,now,
+                                       etf_entry_reference=D(card['reference_midpoint']))
+                    if fill.get('status')=='filled':
+                        card['approval_fill']={**fill,'origin':'approval_fresh_quote','attribution':'desk_policy_not_ai'}
+                        outcome=('YES',None)
+                    elif fill.get('status')=='UNFILLED':
+                        results.append({'card_id':card['id'],'status':'WAITING','reason':fill.get('reason')}); continue
+                    else:
+                        card['approval_fill']=fill
+                        outcome=('APPROVED_RISK_BLOCKED','risk_blocked')
+                status,reason=outcome
+                if reason:
+                    db.execute('INSERT INTO fills(created_at,payload_json) VALUES (?,?)',(now.isoformat(),json.dumps(
+                        {'client_order_id':proposal.client_order_id,'ticker':proposal.ticker,'status':'skipped','reason':reason,
+                         'track':'A:with_approvals','timestamp':now.isoformat()})))
+                card.update(status=status,filled_or_closed=now.isoformat())
+                db.execute('UPDATE approval_inbox SET status=?,payload=? WHERE id=?',(status,json.dumps(card),card['id']))
+                results.append({'card_id':card['id'],'status':status})
+        return results
+
     def cards(self):
         with self.connect() as db:
             return [json.loads(row[0]) for row in db.execute('SELECT payload FROM approval_inbox ORDER BY issued DESC')]
@@ -231,6 +308,13 @@ class PaperInbox:
             if now < issued or (decision=='EXPIRED' and now < expires):
                 raise ValueError('invalid decision time')
             status = 'EXPIRED' if now >= expires else decision
+            if status=='YES' and card.get('fill_policy')=='fresh_quote_at_approval':
+                # Desk-rule card: never fill at the stale issue-time quote.
+                card.update(status='APPROVED_AWAITING_FILL',decided=now.isoformat(),
+                            response_seconds=int((now-issued).total_seconds()))
+                db.execute('UPDATE approval_inbox SET status=?,payload=? WHERE id=?',('APPROVED_AWAITING_FILL',json.dumps(card),card_id))
+                db.execute('INSERT INTO cards(created_at,payload_json) VALUES (?,?)',(now.isoformat(),json.dumps({'card_id':card_id,'decision':'YES','response_seconds':card['response_seconds'],'fill_policy':'fresh_quote_at_approval'})))
+                return card
             if status=='YES':
                 # User-approved design: compare identical proposal-time quotes, explicitly labeled.
                 card['approval_fill'] = self._execute(db,card['lane'],'with_approvals',TradeProposal.model_validate(card['proposal']),Quote.model_validate(card['quote']),D(card['vol']) if card['vol'] is not None else None,datetime.fromisoformat(card['vol_as_of']) if card['vol_as_of'] else None,issued)

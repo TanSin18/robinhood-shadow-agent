@@ -203,6 +203,7 @@ def market_snapshot(reads, config, now, *, held_contracts=None, require_live_ide
     quotes,vols,contracts={}, {}, dict(held_contracts or {})
     exclusions=[]; corporate_action_audit=[]
     closes={}
+    dollar_volumes={}
     benchmark=None
     for r in reads:
         data=r.get('data',{})
@@ -216,6 +217,20 @@ def market_snapshot(reads, config, now, *, held_contracts=None, require_live_ide
                 bars=[b for b in item.get('bars',[]) or [] if b and datetime.fromisoformat(b['begins_at']).astimezone(ET).date()<now.astimezone(ET).date()]
                 vol=realized_volatility(bars)
                 closes[item['symbol']]={datetime.fromisoformat(b['begins_at']).astimezone(ET).date().isoformat():b['close_price'] for b in bars if not b.get('interpolated')}
+                # Registered liquidity evidence: median of the last 20 completed
+                # sessions' close*volume. Absent volume => evidence missing, never assumed.
+                dollar=[]
+                for b in bars[-20:]:
+                    try:
+                        value=D(str(b['close_price']))*D(str(b['volume']))
+                    except (KeyError,TypeError,ArithmeticError,ValueError):
+                        dollar=None;break
+                    if not value.is_finite() or value<0 or b.get('interpolated'):
+                        dollar=None;break
+                    dollar.append(value)
+                if dollar and len(dollar)==20:
+                    ordered=sorted(dollar)
+                    dollar_volumes[item['symbol']]=(ordered[9]+ordered[10])/2
                 if vol is not None:
                     vols[item['symbol']] = (vol,datetime.fromisoformat(max(b['begins_at'] for b in bars)))
         if r['tool'] in {'get_equity_quotes','get_option_quotes'}:
@@ -245,7 +260,7 @@ def market_snapshot(reads, config, now, *, held_contracts=None, require_live_ide
                     continue
                 stamp=q.get('updated_at') or min(q['venue_ask_time'],q['venue_bid_time'])
                 quotes[symbol]=Quote(ticker=symbol,bid=D(q['bid_price']),ask=D(q['ask_price']),timestamp=datetime.fromisoformat(stamp),halted=q.get('state','active')!='active' or q.get('has_traded',True) is False)
-    return {'quotes':quotes,'vols':vols,'contracts':contracts,'benchmark':benchmark,'session_closes':closes,'account_last4':config.risk.agentic_account_id[-4:],'corporate_action_audit':corporate_action_audit,'exclusions':exclusions}
+    return {'quotes':quotes,'vols':vols,'contracts':contracts,'benchmark':benchmark,'session_closes':closes,'account_last4':config.risk.agentic_account_id[-4:],'corporate_action_audit':corporate_action_audit,'exclusions':exclusions,'median_dollar_volume_20d':dollar_volumes}
 
 
 def apply_decision(inbox, config, decision, critic, snapshot, now, cycle_id, *, lifecycle=None, strategy_signals=None):
@@ -298,7 +313,37 @@ def apply_decision(inbox, config, decision, critic, snapshot, now, cycle_id, *, 
     return results
 
 
-def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=None, reader=None, cycle_id=None, lifecycle=None, diagnostic_cap_waiver=False):
+def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, now, cycle_id, *,
+                      lifecycle=None, enabled=False, approved_ai_stock_pick=False, entry_slot_used=False):
+    """v1.5 desk-policy ETF entry. Inert (returns None) unless explicitly enabled
+    by the byte-pinned v1.5 activation; never used for AI picks."""
+    if not enabled:
+        return None
+    from agents.etf_issuer import issue_desk_entry, median_recorded_spread
+    etfs=[sig for sym,sig in signal_map.items() if sym in ETF_UNIVERSE and sym in fresh_instruments
+          and sig.get('side')=='buy']
+    if not etfs:
+        return None
+    def strength(sig):
+        try: return D(str(sig.get('strength','0')))
+        except ArithmeticError: return D(0)
+    signal=sorted(etfs,key=lambda sig:(-strength(sig),str(sig['instrument'])))[0]
+    day=now.astimezone(ET).date().isoformat()
+    with inbox.connect() as db:
+        recorded=median_recorded_spread(db,str(signal['instrument']),day)
+    return issue_desk_entry(inbox,config,signal=signal,snapshot=snapshot,evaluated_at=now,now=now,
+                            cycle_id=cycle_id,lifecycle=lifecycle,approved_ai_stock_pick=approved_ai_stock_pick,
+                            entry_slot_used=entry_slot_used,recorded_spread=recorded)
+
+
+def record_daily_spreads(inbox, snapshot, now, cycle_id):
+    from agents.etf_issuer import record_spreads
+    with inbox.connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        return record_spreads(db,now.astimezone(ET).date().isoformat(),snapshot['quotes'],now,cycle_id)
+
+
+def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=None, reader=None, cycle_id=None, lifecycle=None, diagnostic_cap_waiver=False, desk_policy_enabled=False):
     from agents.budget import AIInvocationGate, BudgetAllocator, BudgetUnavailable
     from data.database_role import require_database_role
     from agents.codex_bridge import BudgetExceeded
@@ -492,6 +537,11 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     candidate_ids=list(ai_gate.candidate_ids),reserved_cost_usd='0')
         if not ai_gate.invoke:
             inbox.mark_accounts(snapshot['quotes'],observed_at,data_mode)
+            if not rehearsal and data_mode=='live_readonly':
+                record_daily_spreads(inbox,snapshot,observed_at,cycle_id)
+            desk_results=(desk_policy_entry(inbox,config,snapshot,signal_map,fresh_instruments,observed_at,cycle_id,
+                                            lifecycle=lifecycle,enabled=desk_policy_enabled and market_open)
+                          if not rehearsal else None)
             # Individual exclusions must not invalidate unrelated fresh candidates.
             # ETF-only signals cannot invoke AI, but this Phase 0 path also has
             # no deterministic entry issuer. Do not call that a successful hold.
@@ -511,6 +561,12 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 decision_type='HOLD_CASH'
                 reason_code='NO_QUALIFIED_SIGNAL'
                 reason='Deterministic discovery produced no qualified signal requiring qualitative AI review.'
+            if desk_results is not None:
+                issued=[r for r in desk_results if r.get('status') in {'filled','PENDING'}]
+                decision_type='DESK_ENTRY' if issued else 'DESK_ENTRY_BLOCKED'
+                reason_code='DESK_POLICY_ETF_ENTRY' if issued else 'DESK_POLICY_ETF_BLOCKED'
+                reason=('Desk rule (no AI): registered ETF entry issued to paper arms.' if issued else
+                        'Desk rule (no AI): registered ETF entry blocked by its own checks.')
             return finish({
                 'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),
                 'quote_freshness':rehearsal_freshness,
@@ -524,7 +580,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 'strategy_assessment':strategy_assessment,
                 'decision':{'type':decision_type,'picks':[],'reason':reason,
                             'reason_code':reason_code,'signal_instruments':signal_instruments},
-                'critic':None,'results':[],'reason':reason,'news_checked':False,'news':[],
+                'critic':None,'results':[],'desk_results':desk_results or [],'reason':reason,'news_checked':False,'news':[],
                 'missing_evidence':['News was not invoked because AI was not needed.'],
                 'ai_gate':{'invoke':False,'reason':ai_gate.reason,'cost_usd':'0'},
                 'corporate_action_exclusions':snapshot['exclusions'],
@@ -609,13 +665,21 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     market_open=MarketSchedule().should_run(completion_time,asset_class='stock',stage=1)
     inbox.mark_accounts(snapshot['quotes'],completion_time,data_mode)
     results=apply_decision(inbox,config,decision,critic,snapshot,completion_time,cycle_id,lifecycle=lifecycle,strategy_signals=signal_map) if market_open else []
+    if not rehearsal and data_mode=='live_readonly':
+        record_daily_spreads(inbox,snapshot,completion_time,cycle_id)
+    lane_a_used=any(r.get('status') in {'filled','PENDING'} and r.get('instrument') in snapshot['quotes']
+                    and r.get('instrument') not in snapshot['contracts'] for r in results)
+    desk_results=(desk_policy_entry(inbox,config,snapshot,signal_map,{s for s in fresh_instruments if s in snapshot['quotes']},
+                                    completion_time,cycle_id,lifecycle=lifecycle,enabled=desk_policy_enabled and market_open,
+                                    approved_ai_stock_pick=lane_a_used,entry_slot_used=lane_a_used)
+                  if not rehearsal else None)
     risk_rows=(candidate_decisions(choices,[],{'compared_symbols':[]},{'picks':[]},
                                    {'rejected_instruments':[]},[],results)
                if market_open else [])
     trace_event('risk_evaluated',status='completed' if market_open else 'not_run',
                 results=results,real_execution='blocked',candidate_decisions=risk_rows)
     inbox.mark_accounts(snapshot['quotes'],completion_time,data_mode)
-    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
+    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'desk_results':desk_results or [],'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
     result['transport_evidence']={'collector':getattr(reader,'evidence',None),'inference':getattr(bridge,'isolation_evidence',[])}
     # Persist observed benchmark prices, never manufacture an unchanged benchmark.
     if snapshot['benchmark'] and not rehearsal:
@@ -675,8 +739,22 @@ def main():
     try:
         if args.mode=='live':
             claim=lifecycle.acquire(now,scheduled=args.scheduled)
+            from agents.etf_desk_policy import production_enabled
+            desk_enabled=production_enabled(Path(__file__).resolve().parents[1],now)
             if claim is None:
-                print(json.dumps({'status':'SKIPPED_SCHEDULE'}));return
+                tick=[]
+                if desk_enabled and MarketSchedule().should_run(now,asset_class='etf',stage=1) \
+                        and any(c.get('status')=='APPROVED_AWAITING_FILL' for c in inbox.cards()):
+                    from agents.market_reader import LiveReader
+                    from agents.etf_issuer import approval_fill_tick
+                    tick_reader=LiveReader(inbox.path,config)
+                    try:
+                        tick=approval_fill_tick(inbox,tick_reader,now)
+                    finally:
+                        tick_reader.close()
+                elif desk_enabled and any(c.get('status')=='APPROVED_AWAITING_FILL' for c in inbox.cards()):
+                    tick=inbox.fill_approved_desk_cards({},now)  # closes cards whose window has passed
+                print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick}));return
             from agents.readiness import capture_runtime, source_fingerprint, record_background_receipt
             from agents.market_reader import LiveReader
             root=Path(__file__).resolve().parents[1]
@@ -685,7 +763,7 @@ def main():
             from agents.scheduled_inference import configured_scheduled_bridge
             bridge=configured_scheduled_bridge(inbox.path,config,lifecycle=lifecycle,cycle_id=claim['cycle_id'])
             reader=LiveReader(inbox.path,config)
-        result=run_fixture_cycle(inbox,config,datetime(2026,9,21,14,tzinfo=timezone.utc)) if args.mode=='fixture' else run_cycle(inbox,config,bridge,now,reader=reader,cycle_id=claim['cycle_id'],lifecycle=lifecycle)
+        result=run_fixture_cycle(inbox,config,datetime(2026,9,21,14,tzinfo=timezone.utc)) if args.mode=='fixture' else run_cycle(inbox,config,bridge,now,reader=reader,cycle_id=claim['cycle_id'],lifecycle=lifecycle,desk_policy_enabled=desk_enabled)
         if args.mode=='live':
             result['trigger']=claim['trigger']
             record_background_receipt(inbox.store,result,runtime,source_hash=source_hash,
