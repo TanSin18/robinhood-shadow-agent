@@ -437,6 +437,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         with inbox.connect() as db:
             if lifecycle is None or not lifecycle.owns(db,cycle_id): raise ValueError('Live cycle ownership is required')
         if reader is None: raise ValueError('Live cycle requires a deterministic reader')
+        if data_mode=='live_readonly' and desk_policy_enabled:
+            from agents.v16_policy import v16_active, rebase_lane_a, lane_a_capital
+            if v16_active(now=now):
+                rebase_lane_a(inbox,lane_a_capital(),now)   # once; archives build-phase Lane A state
     reader=reader or FixtureReader(config,now)
     trace=TraceManager(inbox.store,otlp_endpoint=config.observability.otlp_endpoint,viewer_base_url=config.observability.trace_viewer_base_url)
     trace.install_sdk_processor()
@@ -608,6 +612,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     option_signals=rank_option_candidates(
         [candidate for candidate in choices if candidate.get('contract') and not candidate.get('quote_stale')],
         strategy_assessment['signals'])
+    from agents.v16_policy import options_buys_paused
+    if options_buys_paused(now=observed_at):
+        option_signals=[]   # v1.6: options lane paused for new buys (screen still recorded)
     try:  # visibility only: same inputs and filter order as rank_option_candidates
         options_screened=option_screen([c for c in choices if c.get('contract')],strategy_assessment['signals'])
     except Exception as screen_error:
@@ -878,6 +885,22 @@ def main():
                         tick_reader.close()
                 elif desk_enabled and any(c.get('status')=='APPROVED_AWAITING_FILL' for c in inbox.cards()):
                     tick=inbox.fill_approved_desk_cards({},now)  # closes cards whose window has passed
+                protective=None
+                from agents.v16_policy import v16_active, in_window
+                from agents.v16_policy import checked_today
+                if desk_enabled and v16_active(now=now) and in_window(now) and not checked_today(inbox,now):
+                    from agents.market_reader import LiveReader
+                    from agents.v16_policy import protective_check, record_protective_failure
+                    try:
+                        check_reader=LiveReader(inbox.path,config)
+                        try:
+                            protective=protective_check(inbox,config,check_reader.gateway.call,now)
+                        finally:
+                            check_reader.close()
+                    except Exception as check_error:  # never a cycle failure; retried next tick inside the window
+                        protective=record_protective_failure(inbox,now,check_error)
+                if protective is not None:
+                    print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,'protective_check':protective},default=str));return
                 print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick}));return
             from agents.readiness import capture_runtime, source_fingerprint, record_background_receipt
             from agents.market_reader import LiveReader

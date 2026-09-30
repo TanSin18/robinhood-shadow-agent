@@ -1,0 +1,75 @@
+# v1.6.0 amendment layer: realistic paper capital, options pause, same-day protective exit,
+# statistical promotion gate. Active only when this file's SHA-256 matches APPROVED_V160_SHA256
+# in agents/v16_policy.py, the effective time has passed and the v1.5.0 amendment is active.
+# Paper only. Real orders stay blocked; nothing here unlocks live money.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.6.0
+  kind: scoped_amendment_layer
+  base_version: 1.5.2
+  requires_active: preregistration-amendment-v1.5.0.yaml
+  effective_from_et: '2026-10-01T09:30:00-04:00'
+  operator_signature:
+    status: SIGNED
+    signed_by: operator
+    signed_at_et: '2026-09-30T16:25:00-04:00'
+    signature_source: operator_answers_2026-09-30_capital_25000_effective_oct1_0930_hard_stop_8pct
+    intent_source: operator_chat_2026-09-30_1614_ET_implement_all_right_now
+  rationale: >-
+    Independent review (2026-09-30) found that a $500 paper book makes P&L uninformative
+    (0.04-share fills, spreads and API cost dominate, options can never fire), that exits
+    wait for the next 10:00 run, and that the 4-week / 30-decision promotion gate is not a
+    statistical test. This layer fixes the measurement, not the strategy.
+paper_capital:
+  lane_A_stocks_etfs_usd: '25000.00'
+  lane_B_options_usd: unchanged_500
+  rebase:
+    when: once_at_the_first_official_v1.6_cycle
+    build_phase_lane_A_state: archived_in_capital_rebases_never_deleted
+    pending_lane_A_cards: closed_as_EXPIRED_CAPITAL_REBASE
+    official_record_starts: clean_at_the_rebase
+  config_base_values: unchanged_500_readiness_pins_the_base_config
+  real_money: zero_real_orders_blocked
+options_lane:
+  new_option_buys: paused
+  deterministic_option_signals: not_issued_screen_still_recorded
+  held_contracts: unchanged_AI_exit_or_registered_expiry_settlement
+  resume_requires: a_later_signed_amendment
+protective_exit:
+  window_et: '15:50-15:58'
+  early_close_sessions: last_10_minutes_before_close_ending_2_minutes_before
+  frequency: once_per_session
+  runner: existing_scheduled_service_tick_never_a_second_runner
+  ownership: protective_checks_claim_per_session
+  applies_to: lane_A_ETF_and_stock_positions_in_all_three_paper_arms
+  evidence: fresh_quote_within_60_seconds_plus_completed_session_closes
+  trigger_any_of:
+    - fresh_bid_at_or_below_200_session_average_of_completed_closes
+    - etf_only_fresh_bid_vs_close_126_sessions_ago_not_positive
+    - fresh_bid_at_or_below_average_cost_times_one_minus_hard_stop
+  hard_stop_below_average_cost: '0.08'
+  missing_or_stale_evidence_action: hold_and_record
+  immediate_arms: [agent_alone, deterministic_no_ai]
+  approval_arm: with_approvals_SELL_card_expiring_at_the_close_skipped_if_a_sell_card_is_pending
+  record_every_check: true
+  failed_attempt: recorded_and_retried_next_tick_inside_the_window
+promotion_gate:
+  replaces: four_weeks_thirty_decisions_checklist_for_any_claim_of_edge
+  implementation: eval/promotion_stats.py
+  metric: annual_excess_log_growth_vs_vti_after_spread_ai_cost_and_estimated_short_term_tax
+  counts_only: official_live_readonly_runs_on_or_after_2026-10-01T09:30-04:00
+  minimum_sample: 200_filled_decisions_or_252_official_sessions
+  interval: 90_percent_stationary_block_bootstrap_21_sessions_2000_draws_lower_bound_above_zero
+  all_costs_included: true
+  metric_change: invalidates_the_evaluation
+  unlocks_live_money: false
+research_evidence:
+  backtest: research/backtest_etf_rule.py
+  history: research/history_backfill.py_read_only_research_store
+  role: informational_not_an_activation_condition
+unchanged:
+  - registered_entry_rules_and_universe_of_v1.5.0
+  - v1.5.1_etf_exit_and_v1.5.2_stock_backstop
+  - daily_api_budget_usd_0.40
+  - risk_fractions_and_breakers
+  - real_execution_blocked

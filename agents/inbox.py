@@ -182,6 +182,11 @@ class PaperInbox:
         if proposal.asset_class not in {'stock','etf','option'} or quote.ticker != proposal.ticker:
             raise ValueError('invalid paper lane or quote instrument')
         lane = 'B' if proposal.asset_class=='option' else 'A'
+        if lane=='B' and proposal.side=='buy':
+            from agents.v16_policy import options_buys_paused
+            if options_buys_paused(now=now):
+                # v1.6: options lane paused for new buys; held contracts keep their exits.
+                return {'status':'RISK_BLOCKED','reasons':['OPTIONS_LANE_PAUSED_V16']}
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             from data.database_role import database_role

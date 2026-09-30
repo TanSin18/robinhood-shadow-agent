@@ -38,7 +38,11 @@ def exit_reason(features: dict | None) -> str | None:
 
 REASON_TEXT = {'CLOSED_AT_OR_BELOW_200_DAY_AVERAGE': 'closed at or below its 200-session average',
                'MOMENTUM_126D_NOT_POSITIVE': 'lost positive 126-session momentum',
-               'HOLDING_PERIOD_20_SESSIONS_REACHED': 'reached its registered 20-session holding horizon'}
+               'HOLDING_PERIOD_20_SESSIONS_REACHED': 'reached its registered 20-session holding horizon',
+               # v1.6 protective exit (same-day, 15:50 ET)
+               'PROTECTIVE_STOP_BELOW_AVERAGE_COST': 'fell to the registered protective stop below its average cost',
+               'LIVE_PRICE_AT_OR_BELOW_200_DAY_AVERAGE': 'is trading at or below its 200-session average near the close',
+               'LIVE_MOMENTUM_126D_NOT_POSITIVE': 'shows non-positive 126-session momentum near the close'}
 HORIZON_SESSIONS = 20
 
 
