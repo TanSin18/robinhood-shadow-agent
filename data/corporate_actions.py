@@ -197,6 +197,10 @@ def normalize_live_quote(item: dict, *, known_at: datetime) -> NormalizationResu
         ask = Decimal(str(quote["ask_price"]))
     except (KeyError, InvalidOperation, ValueError):
         raise CorporateActionError("CORPORATE_ACTION_UNRESOLVED", "quote prices are invalid") from None
+    if not bid.is_finite() or not ask.is_finite() or bid <= 0 or ask <= 0 or bid > ask:
+        # A zero-bid option is not evidence of an unresolved split or rename.
+        # Keep it excluded without misdiagnosing every other usable security.
+        raise CorporateActionError("INVALID_QUOTE_PRICE", "positive finite uncrossed bid/ask required")
     base = {
         "permanent_security_id": security_id,
         "symbol": quote.get("symbol") or quote.get("instrument_id"),

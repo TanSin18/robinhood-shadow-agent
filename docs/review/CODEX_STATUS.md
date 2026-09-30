@@ -3,6 +3,84 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 10:19 ET — Market-hours investigation: misleading hold repaired on branch, not deployed
+
+Operator requested investigations, fixes and tests during market hours. Work
+remains isolated on `codex/task2-handoff-replay`; no installed code/config/model/
+budget/preregistration changes, no restart, no official rerun or result edit.
+
+### Root cause and scope
+
+- Scheduled 10:00:07–10:00:47 ET cycle completed, live read-only, accounting
+  SETTLED, estimated model cost $0. Parent cycle:
+  `37c7e7947a124a9c821570a55ecb00db`.
+- The stored strategy trace says SOXX advanced with a **one-second-old** quote.
+  The blanket “no fresh normalized evidence” message was false.
+- Three option quotes had zero bids. Normalization mislabeled them
+  CORPORATE_ACTION_UNRESOLVED; the exclusion recorder discarded their contract
+  identity, and any exclusion made the no-AI result claim universe-wide failure.
+- AI correctly skipped an ETF-only signal under active v1.4.2. Independently,
+  this runtime has **no code-only entry issuer for that signal**. We do not
+  force AI to analyze an ETF, issue an unreviewed baseline, or call this a
+  successful investment HOLD_CASH.
+- Changes: invalid/nonfinite/nonpositive/crossed prices stay excluded with
+  INVALID_QUOTE_PRICE; contract identity survives; unrelated exclusions no
+  longer poison fresh candidates; empty/stale candidate sets remain operational
+  holds; fresh deterministic signals report
+  DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED with signal IDs. Official no-AI
+  results now include measured quote freshness and observation time.
+- No historical decision or UI record was rewritten. Dashboard remains installed
+  code; corrected wording is not yet deployed. Legacy field
+  corporate_action_exclusions remains compatible but can contain quote-quality
+  exclusions; consumers should display the reason code, not infer an action.
+
+### Verification
+
+- Baseline development full suite: **691 passed**, 61 warnings, 51.90s.
+- Added 11 test cases, observed failing before fixes; targeted suite:
+  **41 passed**, 4 warnings. Updated the legacy ETF fixture assertion because
+  it contains a real deterministic signal: it must not label the absent issuer
+  as investment discipline.
+- Final development full suite: **702 passed**, 61 warnings, 49.71s.
+  Command (development worktree):
+  `/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q --tb=short`.
+- Replayed the **stored 10:00 option quote inputs only** through normalization:
+  547 accepted, 3 INVALID_QUOTE_PRICE, no corporate-action errors. This is a
+  bounded normalization replay, not a full decision-capsule replay.
+- Two live read-only isolated rehearsals, $0/model calls=0, cards=0, fills=0,
+  official business digest unchanged in both. First: 561 quotes, 544 fresh,
+  17 stale/future, 39.65s. Patched second: 561 quotes, 548 fresh, 13 stale/future,
+  36.64s; 14 volatility series; 60-second limit unchanged. Patched result
+  explicitly reports SOXX / DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED, SETTLED.
+- Local private evidence:
+  `/Users/tanmaysinnarkar/LocalProjects/robinhood-diagnostics/2026-09-30-market-evidence-1/`
+  and `2026-09-30-market-evidence-2/`. Not Git artifacts.
+- Installed full suite independently: **665 passed**, 61 warnings, 49.25s.
+  Installed verifier exit **2**, scheduled receipt gate now true; sole listed
+  blocker is missing/invalid completed sanitized revocation/reauthorization
+  evidence. Test+verifier artifacts:
+  `/Users/tanmaysinnarkar/LocalProjects/robinhood-diagnostics/2026-09-30-installed-verification/`.
+  Command: `.venv/bin/python -m scripts.verify_operations --run-tests`
+  with `--output-dir`, `--test-report` and `--test-manifest` pointed there.
+- Installed fingerprint remains
+  `72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593`;
+  active preregistration is v1.4.2. No services restarted.
+
+### Remaining blockers / next permitted work
+
+1. Complete the operator-assisted after-close revocation/reauthorization drill;
+   do not revoke access during the trading day. Phase 0 is not signed off.
+2. Reviewer checks this diagnosis/reporting fix before an approved after-close
+   release. No automatic deployment follows GitHub push.
+3. ETF deterministic issuance requires the approved code-entry/risk/ledger path;
+   do not activate it ad hoc to manufacture a fill. It remains a release gate,
+   not fixed by better wording. Task 2 capsule/packet and remaining approved
+   deliverables are still incomplete.
+4. News remains disabled; universe remains the reviewed 14-symbol scope.
+   Broader discovery, baselines and remaining agent features are not activated.
+5. Today's $0 code-only result does not prove paid shared-cost attribution,
+   current model execution, risk-to-fill behavior or live profitability.
+
 ## 2026-09-29 17:01 ET — Decision capsule added to Task 2 as P0
 
 Read Claude's 17:00 checkpoint and operator instruction to add its capsule.

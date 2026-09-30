@@ -233,7 +233,7 @@ def market_snapshot(reads, config, now, *, held_contracts=None, require_live_ide
                         corporate_action_audit.extend(normalized.audit)
                     except CorporateActionError as error:
                         raw_quote=item.get('quote') if isinstance(item,dict) else None
-                        exclusions.append({'instrument':raw_quote.get('symbol') if isinstance(raw_quote,dict) else None,'reason':error.code})
+                        exclusions.append({'instrument':(raw_quote.get('symbol') or raw_quote.get('instrument_id')) if isinstance(raw_quote,dict) else None,'reason':error.code})
                         continue
                 q=item.get('quote')
                 if not q:
@@ -444,12 +444,12 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     trace_event('data_collected', read_tools=sorted({read['tool'] for read in reads}),
                 quote_count=len(snapshot['quotes']), volatility_count=len(snapshot['vols']),
                 history_counts={ticker: len(history) for ticker, history in snapshot['session_closes'].items()})
-    if rehearsal:
-        ages=[(observed_at-q.timestamp).total_seconds() for q in snapshot['quotes'].values()]
-        rehearsal_freshness={'fresh':sum(0<=age<=config.risk.max_quote_age_seconds for age in ages),
-                            'stale_or_future':sum(not 0<=age<=config.risk.max_quote_age_seconds for age in ages),
-                            'maximum_age_seconds':max(ages,default=None),
-                            'limit_seconds':config.risk.max_quote_age_seconds}
+    ages=[(observed_at-q.timestamp).total_seconds() for q in snapshot['quotes'].values()]
+    rehearsal_freshness={'fresh':sum(0<=age<=config.risk.max_quote_age_seconds for age in ages),
+                        'stale_or_future':sum(not 0<=age<=config.risk.max_quote_age_seconds for age in ages),
+                        'maximum_age_seconds':max(ages,default=None),
+                        'limit_seconds':config.risk.max_quote_age_seconds,
+                        'observed_at':observed_at.isoformat()}
     check_owner()
     inbox.settle_expirations(snapshot['session_closes'],observed_at,cycle_id=cycle_id,lifecycle=lifecycle)
     market_open=MarketSchedule().should_run(observed_at,asset_class='stock',stage=1)
@@ -492,13 +492,26 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     candidate_ids=list(ai_gate.candidate_ids),reserved_cost_usd='0')
         if not ai_gate.invoke:
             inbox.mark_accounts(snapshot['quotes'],observed_at,data_mode)
-            stale_only=bool(choices) and not fresh_instruments
-            decision_type='HOLD_OPERATIONAL' if stale_only or snapshot['exclusions'] else 'HOLD_CASH'
-            reason=('No candidate has the required fresh, normalized evidence.' if decision_type=='HOLD_OPERATIONAL'
-                    else 'Deterministic discovery produced no stock candidate requiring qualitative AI review.')
+            # Individual exclusions must not invalidate unrelated fresh candidates.
+            # ETF-only signals cannot invoke AI, but this Phase 0 path also has
+            # no deterministic entry issuer. Do not call that a successful hold.
+            signal_instruments=sorted(signal_map)
+            if not fresh_instruments:
+                decision_type='HOLD_OPERATIONAL'
+                reason_code='NO_FRESH_ELIGIBLE_CANDIDATES'
+                reason='No usable candidate has both a fresh quote and required historical sizing data.'
+            elif signal_instruments:
+                decision_type='HOLD_OPERATIONAL'
+                reason_code='DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'
+                reason='Deterministic signals exist, but the code-only entry path is not implemented. ETF-only signals do not authorize AI review.'
+            else:
+                decision_type='HOLD_CASH'
+                reason_code='NO_QUALIFIED_SIGNAL'
+                reason='Deterministic discovery produced no qualified signal requiring qualitative AI review.'
             return finish({
                 'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),
-                **({'quote_freshness':rehearsal_freshness,'source_hash_count':len(source_hashes),
+                'quote_freshness':rehearsal_freshness,
+                **({'source_hash_count':len(source_hashes),
                     'stages':{'collection':'completed','strategy':'completed','ai':'not_needed','risk':'not_needed_no_proposals'},
                     'risk_proposals_evaluated':0} if rehearsal else {}),
                 'collector_evidence':getattr(reader,'evidence',None),
@@ -506,7 +519,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),
                 'volatility_count':len(snapshot['vols']),'market_open':market_open,
                 'strategy_assessment':strategy_assessment,
-                'decision':{'type':decision_type,'picks':[],'reason':reason},
+                'decision':{'type':decision_type,'picks':[],'reason':reason,
+                            'reason_code':reason_code,'signal_instruments':signal_instruments},
                 'critic':None,'results':[],'reason':reason,'news_checked':False,'news':[],
                 'missing_evidence':['News was not invoked because AI was not needed.'],
                 'ai_gate':{'invoke':False,'reason':ai_gate.reason,'cost_usd':'0'},

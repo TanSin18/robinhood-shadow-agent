@@ -112,6 +112,8 @@ def test_official_etf_only_cycle_is_code_only_and_records_zero_ai_cost(tmp_path)
         lifecycle.close()
 
     assert result['status'] == 'COMPLETED'
-    assert result['decision']['type'] == 'HOLD_CASH'
+    assert result['strategy_assessment']['signals']
+    assert result['decision']['type'] == 'HOLD_OPERATIONAL'
+    assert result['decision']['reason_code'] == 'DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'
     assert result['agents'] == []
     assert result['api_cost_estimate_usd'] == '0'
