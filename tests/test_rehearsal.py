@@ -178,3 +178,55 @@ def test_cap_waiver_cannot_be_used_for_official_run(tmp_path):
     official, config = source(tmp_path)
     with pytest.raises(ValueError, match='diagnostic'):
         run_cycle(official,config,None,NOW,diagnostic_cap_waiver=True)
+
+
+def test_v15_preview_issues_desk_entry_only_into_disposable_sandbox(tmp_path, monkeypatch):
+    from agents.rehearsal import prepare, official_digest, attach_desk_sandbox
+    from agents.daily_cycle import FixtureReader, run_cycle
+    import agents.etf_issuer as issuer
+    from test_desk_cycle_integration import SIGNAL
+    monkeypatch.setattr(issuer, 'LIQUIDITY_INTERIM_LIVE_SPREAD', True)
+    monkeypatch.setattr('agents.daily_cycle.evaluate_daily_signals', lambda *a: {'signals': [SIGNAL], 'strategies': {}})
+    official, config = source(tmp_path)
+    before = official_digest(official.path)
+    rehearsal = prepare(official.path, tmp_path / 'rehearsal', config)
+    desk = attach_desk_sandbox(rehearsal, config, tmp_path / 'rehearsal')
+
+    class Reader(FixtureReader):
+        def collect(self, now, held):
+            reads = super().collect(now, held)
+            for r in reads:
+                if r['tool'] == 'get_equity_historicals':
+                    for item in r['data']['results']:
+                        for b in item['bars']:
+                            b['volume'] = '2000000'
+            return reads
+
+    class NoModel:
+        def run(self, *args, **kwargs):
+            raise AssertionError('ETF desk path must not invoke AI')
+    result = run_cycle(rehearsal, config, NoModel(), NOW, data_mode='whatif', reader=Reader(config, NOW),
+                       clock=lambda: NOW, desk_policy_enabled=True)
+    assert result['decision']['type'] == 'DESK_ENTRY'
+    assert {r['arm']: r['status'] for r in result['desk_results']} == {
+        'agent_alone': 'filled', 'deterministic_no_ai': 'filled', 'with_approvals': 'PENDING'}
+    assert [c['status'] for c in desk.cards()] == ['PENDING']
+    assert official_digest(official.path) == before
+    with sqlite3.connect(rehearsal.path) as db:
+        assert db.execute('SELECT COUNT(*) FROM approval_inbox').fetchone()[0] == 0
+
+
+def test_rehearsal_without_sandbox_never_issues_desk_entries(tmp_path, monkeypatch):
+    from agents.rehearsal import prepare
+    from agents.daily_cycle import FixtureReader, run_cycle
+    from test_desk_cycle_integration import SIGNAL
+    monkeypatch.setattr('agents.daily_cycle.evaluate_daily_signals', lambda *a: {'signals': [SIGNAL], 'strategies': {}})
+    official, config = source(tmp_path)
+    rehearsal = prepare(official.path, tmp_path / 'rehearsal', config)
+
+    class NoModel:
+        def run(self, *args, **kwargs):
+            raise AssertionError('no model')
+    result = run_cycle(rehearsal, config, NoModel(), NOW, data_mode='whatif',
+                       reader=FixtureReader(config, NOW), clock=lambda: NOW, desk_policy_enabled=True)
+    assert result['desk_results'] == []

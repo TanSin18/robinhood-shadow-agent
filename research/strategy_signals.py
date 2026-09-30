@@ -188,3 +188,55 @@ def rank_option_candidates(
             used.add(item['underlying'])
     return chosen
 
+
+
+def option_screen(candidates: Sequence[Mapping[str, object]],
+                  underlying_signals: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    """Explain rank_option_candidates: how many contracts survive each filter.
+
+    Read-only summary for the run record. Filters are applied in the same order
+    as rank_option_candidates; the first failing filter is the one counted.
+    """
+    bullish = {str(signal['instrument']) for signal in underlying_signals if signal.get('side') == 'buy'}
+    stages = ['quote_fresh', 'underlying_has_buy_signal', 'is_call', 'valid_bid_ask',
+              'spread_within_15pct', 'at_least_one_contract_buyable', 'one_contract_affordable']
+    failed = {stage: 0 for stage in stages}
+    per_underlying: dict[str, dict[str, object]] = {}
+    total = passed = 0
+    for candidate in candidates:
+        contract = candidate.get('contract')
+        if not isinstance(contract, Mapping):
+            continue
+        total += 1
+        underlying = str(candidate.get('underlying', ''))
+        row = per_underlying.setdefault(underlying, {'contracts': 0, 'passed': 0, 'cheapest_call_cost': None,
+                                                     'available_risk_notional': None})
+        row['contracts'] += 1
+        try:
+            bid, ask = D(str(candidate['bid'])), D(str(candidate['ask']))
+            available = D(str(candidate.get('available_risk_notional', 0)))
+            units = D(str(candidate.get('max_buy_units', 0)))
+        except (KeyError, ArithmeticError, ValueError):
+            bid = ask = available = units = D(0)
+        row['available_risk_notional'] = str(available)
+        if contract.get('type') == 'call' and ask > 0:
+            cost = ask * 100
+            if row['cheapest_call_cost'] is None or cost < D(str(row['cheapest_call_cost'])):
+                row['cheapest_call_cost'] = str(cost)
+        mid = (bid + ask) / 2
+        spread = (ask - bid) / mid if mid > 0 else D('Infinity')
+        checks = [not candidate.get('quote_stale'), underlying in bullish, contract.get('type') == 'call',
+                  bid > 0 and ask > bid, spread <= MAX_OPTION_SPREAD_FRACTION, units >= 1, available >= ask * 100]
+        first = next((stages[i] for i, ok in enumerate(checks) if not ok), None)
+        if first:
+            failed[first] += 1
+        else:
+            passed += 1
+            row['passed'] += 1
+    remaining, funnel = total, []
+    for stage in stages:
+        remaining -= failed[stage]
+        funnel.append({'stage': stage, 'removed': failed[stage], 'remaining': remaining})
+    return {'contracts_seen': total, 'passed_all_filters': passed, 'funnel': funnel,
+            'bullish_underlyings': sorted(bullish),
+            'by_underlying': dict(sorted(per_underlying.items()))}

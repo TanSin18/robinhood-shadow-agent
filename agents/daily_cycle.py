@@ -23,7 +23,7 @@ from broker.models import Quote
 from config.loader import load_config
 from prompts.registry import PromptRegistry
 from risk.engine import RiskEngine
-from research.strategy_signals import ETF_UNIVERSE, evaluate_daily_signals, rank_option_candidates
+from research.strategy_signals import ETF_UNIVERSE, evaluate_daily_signals, option_screen, rank_option_candidates
 
 D = Decimal
 READS = ('get_accounts','get_portfolio','get_equity_quotes','get_equity_historicals','get_equity_positions','get_option_chains','get_option_instruments','get_option_quotes')
@@ -384,6 +384,11 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     from agents.codex_bridge import BudgetExceeded
     from agents.safety_events import safety_stopped
     rehearsal=data_mode=='whatif'
+    # Official runs issue desk entries into their own inbox. A what-if rehearsal
+    # may only do so into an explicitly attached, disposable desk sandbox.
+    desk_target=getattr(inbox,'desk_sandbox',None) if rehearsal else inbox
+    if desk_target is not None and rehearsal and Path(desk_target.path).resolve()==Path(getattr(inbox,'official_path',inbox.path)).resolve():
+        raise ValueError('Desk sandbox must not be the official database')
     from agents.bounded_inference import BoundedInference, validate_registered_models
     bounded_rehearsal = rehearsal and isinstance(bridge, BoundedInference)
     if isinstance(bridge, BoundedInference):
@@ -569,6 +574,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     option_signals=rank_option_candidates(
         [candidate for candidate in choices if candidate.get('contract') and not candidate.get('quote_stale')],
         strategy_assessment['signals'])
+    try:  # visibility only: same inputs and filter order as rank_option_candidates
+        options_screened=option_screen([c for c in choices if c.get('contract')],strategy_assessment['signals'])
+    except Exception as screen_error:
+        options_screened={'status':'UNAVAILABLE','error_type':type(screen_error).__name__}
     strategy_assessment['signals']=[
         signal for signal in strategy_assessment['signals']
         if str(signal.get('instrument')) in fresh_instruments
@@ -580,7 +589,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     strategy_blocked={name:details.get('blocked',{})
                       for name,details in strategy_assessment['strategies'].items()}
     trace_event('strategy_evaluated', signals=strategy_assessment['signals'],
-                blocked=strategy_blocked,candidate_decisions=signal_rows)
+                blocked=strategy_blocked,candidate_decisions=signal_rows,option_screen=options_screened)
     signal_map={str(signal['instrument']):signal for signal in strategy_assessment['signals']}
     held={ticker for lane in ('A','B') for track in ('agent_alone','with_approvals')
           for ticker in inbox.state(lane,track)['positions']}
@@ -602,9 +611,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             inbox.mark_accounts(snapshot['quotes'],observed_at,data_mode)
             if not rehearsal and data_mode=='live_readonly':
                 record_daily_spreads(inbox,snapshot,observed_at,cycle_id)
-            desk_results=(desk_policy_entry(inbox,config,snapshot,signal_map,fresh_instruments,observed_at,cycle_id,
+            desk_results=(desk_policy_entry(desk_target,config,snapshot,signal_map,fresh_instruments,observed_at,cycle_id,
                                             lifecycle=lifecycle,enabled=desk_policy_enabled and market_open)
-                          if not rehearsal else None)
+                          if desk_target is not None else None)
             # Individual exclusions must not invalidate unrelated fresh candidates.
             # ETF-only signals cannot invoke AI, but this Phase 0 path also has
             # no deterministic entry issuer. Do not call that a successful hold.
@@ -741,10 +750,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         record_daily_spreads(inbox,snapshot,completion_time,cycle_id)
     lane_a_used=any(r.get('status') in {'filled','PENDING'} and r.get('instrument') in snapshot['quotes']
                     and r.get('instrument') not in snapshot['contracts'] for r in results)
-    desk_results=(desk_policy_entry(inbox,config,snapshot,signal_map,{s for s in fresh_instruments if s in snapshot['quotes']},
+    desk_results=(desk_policy_entry(desk_target,config,snapshot,signal_map,{s for s in fresh_instruments if s in snapshot['quotes']},
                                     completion_time,cycle_id,lifecycle=lifecycle,enabled=desk_policy_enabled and market_open,
                                     approved_ai_stock_pick=lane_a_used,entry_slot_used=lane_a_used)
-                  if not rehearsal else None)
+                  if desk_target is not None else None)
     risk_rows=(candidate_decisions(choices,[],{'compared_symbols':[]},{'picks':[]},
                                    {'rejected_instruments':[]},[],results)
                if market_open else [])

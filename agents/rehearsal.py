@@ -185,6 +185,47 @@ def public_report(result):
     return report
 
 
+def _recorded_option_screen(path):
+    with connection(path) as db:
+        for (payload,) in db.execute("SELECT payload_json FROM local_traces ORDER BY id DESC"):
+            event=json.loads(payload)
+            if event.get('event')=='strategy_evaluated':
+                screen=event.get('option_screen') or {}
+                return {k:screen.get(k) for k in ('contracts_seen','passed_all_filters','funnel','bullish_underlyings')}
+    return None
+
+
+def attach_desk_sandbox(inbox, config, output_dir):
+    """Disposable desk database seeded with the in-memory paper state copy."""
+    from agents.inbox import PaperInbox, PAPER_TRACKS
+    desk=PaperInbox(Path(output_dir)/'desk.db',config)
+    if Path(desk.path).resolve()==Path(inbox.official_path).resolve():
+        raise RehearsalBlocked('OFFICIAL_DATABASE_FORBIDDEN')
+    with desk.connect() as db:
+        for (lane,track),state in inbox._states.items():
+            if track in PAPER_TRACKS:
+                db.execute('UPDATE paper_accounts SET payload=? WHERE lane=? AND track=?',(json.dumps(state),lane,track))
+    inbox.desk_sandbox=desk
+    return desk
+
+
+def approve_and_fill_desk_card(desk, reader):
+    """Rehearse the with-approvals arm: YES on the desk card, then fill on a fresh quote."""
+    import agents.etf_issuer as issuer
+    from agents.inbox import PAPER_TRACKS
+    fills=[]
+    cards=[c for c in desk.cards() if c['status']=='PENDING']
+    if cards:
+        decided=datetime.now(timezone.utc)
+        desk.decide(cards[0]['id'],'YES',decided)
+        refreshed=issuer.quotes_from_reads(reader.refresh(decided,[cards[0]['proposal']['ticker']],[]))
+        fills=desk.fill_approved_desk_cards(refreshed,datetime.now(timezone.utc))
+    return {'cards':[{k:c.get(k) for k in ('status','author','limit_price','expires')} for c in desk.cards()],
+            'approval_fill':fills,
+            'paper_arms_after':{t:{k:v for k,v in desk.state('A',t).items() if k in {'settled_cash','positions'}}
+                                for t in PAPER_TRACKS}}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--official-database',required=True)
@@ -193,6 +234,7 @@ def main():
     transport=parser.add_mutually_exclusive_group()
     transport.add_argument('--operator-diagnostic-cap-waiver',action='store_true',help='Explicit operator exception for this noncompliant diagnostic only')
     transport.add_argument('--registered-api',action='store_true',help='Registered models and token caps; requires separate API access and matching config')
+    parser.add_argument('--v15-preview',action='store_true',help='Run the full cycle with the v1.5 desk path on (as from 2026-10-01 09:30 ET), issuing desk entries only into a disposable desk.db in the output directory; approves and fills its card there')
     args=parser.parse_args()
     os.umask(0o077)
     from config.loader import load_config
@@ -231,8 +273,24 @@ def main():
                 print(json.dumps({'model_stage':'COMPLETED','model':model}),flush=True)
                 return response
             bridge.run=model_progress
-        result=run_cycle(inbox,config,bridge,started,data_mode='whatif',reader=reader,
-                         diagnostic_cap_waiver=args.operator_diagnostic_cap_waiver)
+        desk_report=None
+        if args.v15_preview:
+            desk=attach_desk_sandbox(inbox,config,Path(args.output_dir))
+            from agents.operator import MarketSchedule
+            import agents.etf_issuer as issuer
+            original=(MarketSchedule.classify,issuer.LIQUIDITY_INTERIM_LIVE_SPREAD)
+            # Rehearsal-only: treat "now" as the official 10:00-10:20 window.
+            MarketSchedule.classify=lambda self,moment: MarketSchedule.State.TRADING_WINDOW
+            issuer.LIQUIDITY_INTERIM_LIVE_SPREAD=True
+            try:
+                result=run_cycle(inbox,config,bridge,started,data_mode='whatif',reader=reader,
+                                 diagnostic_cap_waiver=args.operator_diagnostic_cap_waiver,desk_policy_enabled=True)
+                desk_report=approve_and_fill_desk_card(desk,reader)
+            finally:
+                MarketSchedule.classify,issuer.LIQUIDITY_INTERIM_LIVE_SPREAD=original
+        else:
+            result=run_cycle(inbox,config,bridge,started,data_mode='whatif',reader=reader,
+                             diagnostic_cap_waiver=args.operator_diagnostic_cap_waiver)
     except Exception as error:
         result={'status':'HOLD_OPERATIONAL','error_type':type(error).__name__,'data_mode':'whatif',
                 'parent_official_run_id':inbox.parent_official_run_id,
@@ -248,6 +306,12 @@ def main():
     result['elapsed_seconds']=round((datetime.now(timezone.utc)-started).total_seconds(),2)
     if not result['official_records_unchanged']: result['status']='ISOLATION_VERIFICATION_FAILED'
     report=public_report(result)
+    if args.v15_preview:
+        report.update(v15_preview=True,overrides=['official_window_treated_as_open_now','v15_desk_path_on_before_effective_time',
+                      'interim_live_spread_rule_on'],desk_sandbox=desk_report,
+                      decision={k:(result.get('decision') or {}).get(k) for k in ('type','reason')},
+                      desk_results=result.get('desk_results',[]),capsule_status=result.get('capsule_status'),
+                      option_screen=_recorded_option_screen(inbox.path))
     (inbox.path.parent/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
     return 0 if result['status']=='COMPLETED' and result['official_records_unchanged'] else 2
