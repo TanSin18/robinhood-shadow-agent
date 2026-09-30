@@ -72,7 +72,7 @@ def test_unrelated_bad_option_does_not_poison_fresh_universe(tmp_path, monkeypat
 
 def test_etf_signal_reports_unimplemented_execution_not_stale_data(tmp_path, monkeypatch):
     result = cycle(tmp_path, monkeypatch, signal=True, invalid_option=True)
-    assert result['decision']['type'] == 'HOLD_OPERATIONAL'
+    assert result['decision']['type'] == 'HOLD_CAPABILITY_GAP'
     assert result['decision']['reason_code'] == 'DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'
     assert result['decision']['signal_instruments'] == ['VTI']
     assert 'fresh' not in result['decision']['reason'].lower()

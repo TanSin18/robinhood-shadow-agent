@@ -26,6 +26,9 @@ from data.connections import connection
 SERVICE_LABEL = 'com.openai.robinhood-daily'
 REQUIRED_READS = {'get_accounts', 'get_portfolio', 'get_equity_quotes', 'get_equity_historicals'}
 EXPECTED_AGENTS = ['Research Agent', 'Portfolio Agent', 'Critic']
+# Fresh, valid signals the active registration cannot yet act on. Accepted as a
+# healthy scheduled cycle only when every other operational gate also passes.
+CAPABILITY_GAP_CODES = frozenset({'DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'})
 REQUIRED_TESTS = {
     'shared_attempt_costs': {('tests.test_attempt_allocation','test_official_cycle_allocates_all_three_roles_to_a_only'),
                             ('tests.test_attempt_allocation','test_settlement_uses_attempt_keys_not_order_and_is_idempotent'),
@@ -261,10 +264,17 @@ class OperationalProof(BaseModel):
                 hashes_ok=bool(hashes) and all(isinstance(value,str) and len(value)==64 for value in hashes.values())
                 gate=result.get('ai_gate') or {}
                 decision=result.get('decision')
+                freshness=result.get('quote_freshness') or {}
+                capability_gap=(isinstance(decision,dict)
+                    and decision.get('type')=='HOLD_CAPABILITY_GAP'
+                    and decision.get('reason_code') in CAPABILITY_GAP_CODES
+                    and isinstance(decision.get('signal_instruments'),list) and decision['signal_instruments']
+                    and type(freshness.get('fresh')) is int and freshness['fresh']>0
+                    and result.get('accounting_status') in {None,'SETTLED'})
                 code_only=(gate.get('invoke') is False and result.get('agents')==[]
                            and Decimal(str(result.get('api_cost_estimate_usd')))==0
                            and sessions==[] and isinstance(decision,dict)
-                           and decision.get('type')=='HOLD_CASH')
+                           and (decision.get('type')=='HOLD_CASH' or capability_gap))
                 ai_cycle=(result.get('agents')==EXPECTED_AGENTS and len(sessions)==3)
                 valid = (
                     receipt['source_hash'] == source_hash and receipt['config_hash'] == config.config_hash

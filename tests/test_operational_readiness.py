@@ -372,3 +372,36 @@ def test_skipped_schedule_does_not_probe_auth_or_claim_success(tmp_path, monkeyp
     daily_cycle.main()
     assert json.loads(capsys.readouterr().out)['status'] == 'SKIPPED_SCHEDULE'
     assert PaperInbox(db, load_config('config/settings.yaml')).store.read_json('run_states') == []
+
+
+def _with_decision(tmp_path, decision, freshness=None, accounting=None):
+    from agents.readiness import canonical_hash
+    proof, result, receipt, now = evidence(tmp_path)
+    result['decision'] = decision
+    if freshness is not None: result['quote_freshness'] = freshness
+    if accounting is not None: result['accounting_status'] = accounting
+    receipt['result_hash'] = canonical_hash(result)
+    with sqlite3.connect(proof.database) as db:
+        db.execute('UPDATE run_states SET payload_json=? WHERE id=1', (json.dumps(result),))
+    replace_receipt(proof, receipt)
+    return proof.assess(now)
+
+GAP = {'type': 'HOLD_CAPABILITY_GAP', 'picks': [], 'reason_code': 'DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED',
+       'signal_instruments': ['SOXX']}
+
+
+def test_capability_gap_with_all_operational_checks_counts_as_scheduled_cycle(tmp_path):
+    report = _with_decision(tmp_path, GAP, freshness={'fresh': 14, 'stale_or_future': 0}, accounting='SETTLED')
+    assert report['gates']['scheduled_full_cycle']
+
+
+@pytest.mark.parametrize('decision,freshness,accounting', [
+    (GAP, {'fresh': 0, 'stale_or_future': 14}, 'SETTLED'),          # nothing fresh => operational
+    (GAP, None, 'SETTLED'),                                          # freshness evidence missing
+    (GAP, {'fresh': 14}, 'COST_SETTLEMENT_FAILED'),                  # accounting failure
+    ({**GAP, 'reason_code': 'SOMETHING_ELSE'}, {'fresh': 14}, 'SETTLED'),  # unregistered gap code
+    ({**GAP, 'signal_instruments': []}, {'fresh': 14}, 'SETTLED'),   # no signal => not a gap
+])
+def test_capability_gap_never_masks_operational_problems(tmp_path, decision, freshness, accounting):
+    report = _with_decision(tmp_path, decision, freshness=freshness, accounting=accounting)
+    assert not report['gates']['scheduled_full_cycle']

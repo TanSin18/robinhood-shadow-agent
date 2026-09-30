@@ -501,7 +501,10 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 reason_code='NO_FRESH_ELIGIBLE_CANDIDATES'
                 reason='No usable candidate has both a fresh quote and required historical sizing data.'
             elif signal_instruments:
-                decision_type='HOLD_OPERATIONAL'
+                # Operator-approved 2026-09-30: a fresh, valid signal the active
+                # registration cannot yet act on is a capability gap, not an
+                # operational failure and never investment discipline (HOLD_CASH).
+                decision_type='HOLD_CAPABILITY_GAP'
                 reason_code='DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'
                 reason='Deterministic signals exist, but the code-only entry path is not implemented. ETF-only signals do not authorize AI review.'
             else:
