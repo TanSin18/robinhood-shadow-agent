@@ -31,3 +31,5 @@
 - Decision room v2: trace-backed flow graph, agent inspector with connection mini-graph, whitelisted run log (`agents/run_log.py`), compact type (`agent-compact.css`). Preview sanitizer now also drops `*last4*` keys.
 - Desk tests pass; full suite shows only the 7 known environment failures (plus one timing-flaky preview socket test that passes on rerun).
 - Deploy needs a separate UI release and an inbox restart, with operator approval. Not scheduled before Thursday's 10:00 run.
+- 14:05 ET: `claude/ui-decision-room-v2` @ 440eaf4 adds `/checks` (Checks & charts) and `agents/run_checks.py`: system checks, strategy condition matrix recomputed from recorded features vs recorded outcome (mismatch flagged; 0 mismatches on the 5 saved runs), charts, run history. Still undeployed.
+- Operator alert raised: the Robinhood authorization in the collector evidence expires Thu 2026-10-01 at 13:00 ET (`WARNING_3_DAYS`). The operator must reauthorize.
