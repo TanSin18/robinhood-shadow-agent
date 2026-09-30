@@ -1,0 +1,119 @@
+{
+  "source_commit": "2ca5e4c63c533bb85ac75a35fb6f4040849e5a16",
+  "installed_base_commit": "6e2c220",
+  "before_source_fingerprint": "72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/daily_cycle.py": {
+      "before_sha256": "7cf856d341bd398aba2713b047d67120102f6a75b326c9e907900feb9b62306e",
+      "after_sha256": "360d6992dad00ff372a427039919165a6386c6cca3dea498903b8ab407b4fd83"
+    },
+    "agents/dashboard_view.py": {
+      "before_sha256": "814fcbadf2c6ebe51a2126e758d17eaf5f91541acf5efcd74a00cd4c169f27e0",
+      "after_sha256": "79da98b9f192b989f5fb422affae5bb2ebcb1447d7ebbd4e17a7a03455b60fbb"
+    },
+    "agents/decision_capsule.py": {
+      "before_sha256": null,
+      "after_sha256": "8eeca3d24bc5d8acde127b1d9a194f1f10e559b0c1fc945a6128005d08978459"
+    },
+    "agents/decision_packet.py": {
+      "before_sha256": null,
+      "after_sha256": "71e5162d7691b0e463d71530a80932f5e85f6e7c76a1a2f86c17fade50894cd7"
+    },
+    "agents/desk_rehearsal.py": {
+      "before_sha256": null,
+      "after_sha256": "9af705b592412574fb37377b31c048b17f7b5ea7d2770269680b9f769a1b2b1b"
+    },
+    "agents/etf_desk_policy.py": {
+      "before_sha256": null,
+      "after_sha256": "dcf72c73fd0d715642496b80f7ec40aad68a50f667529bcaa3c4a239cadc7f74"
+    },
+    "agents/etf_issuer.py": {
+      "before_sha256": null,
+      "after_sha256": "f72b9557c507e7c7021079493ed4bd366e69e79f1621af987a7a5c8a1ef2fe49"
+    },
+    "agents/inbox.py": {
+      "before_sha256": "8ff7eadc12fc0185552bae56aa4e90a17a477abdffa89cba9c62334b6633ef09",
+      "after_sha256": "704a8a623ae6e6ebbeae7c80606e55f1364cf9bccb3e0193fec5373bc040a811"
+    },
+    "agents/readiness.py": {
+      "before_sha256": "97402e6d4b1fd14e724131dc4d6c42098411afc9779be4b4cec1a7e63e69e2c2",
+      "after_sha256": "ef6ab9fd3268e83baae8bf190edba1c4c4d0ea2dc0c7e3ee47b099fd287212ab"
+    },
+    "agents/rehearsal.py": {
+      "before_sha256": "8e2bc52b2bf619bc3166f645a8e662b898f9130cfaf9074886e974d0cde93b61",
+      "after_sha256": "ba074e38e47ebd4df59b54515d7b594c9072f7580320cead3a2c3b7b3765f880"
+    },
+    "agents/stored_decision_replay.py": {
+      "before_sha256": null,
+      "after_sha256": "e08d7b76df31d174a5f7499f9ce6c6c2f157a1bef4a2a5012a975abebbf04190"
+    },
+    "agents/v15_activation.py": {
+      "before_sha256": null,
+      "after_sha256": "e512cd071b1beec1288e4af2d7202f4cd0b77edc6ec923680e6dc14a9ded39c9"
+    },
+    "data/corporate_actions.py": {
+      "before_sha256": "e4870688186f72960ec78bc36a3e1525fcdad9dc4a695969bc9af484e2ae29a0",
+      "after_sha256": "35358181c800e627e5c9bfca17cb1e56ef7af45f53a42c25b35b8405fc122d28"
+    },
+    "risk/engine.py": {
+      "before_sha256": "e4e2fa8e7bd82a64c6daee1a304eaced63bfe7ff501c9ff062ad4a2abb7508e7",
+      "after_sha256": "6f10a5d2a4c3f09ed4c98a622c70491eaf6c201fc4315c33125f01181e47c143"
+    },
+    "tests/test_blind_critic_request.py": {
+      "before_sha256": null,
+      "after_sha256": "2d1302bc9e25ddee58eb2ac695cdb739d157e102669e33954ff0137b99d85b36"
+    },
+    "tests/test_decision_capsule.py": {
+      "before_sha256": null,
+      "after_sha256": "4afacce52991f300dde4075ba349f64cb1c5b799e427954095b6852cbd4fd9fc"
+    },
+    "tests/test_decision_packet.py": {
+      "before_sha256": null,
+      "after_sha256": "cc8838c88c5d46201c503bf7983474b4d9c3459467857b7518a93fe27a101e36"
+    },
+    "tests/test_desk_cycle_integration.py": {
+      "before_sha256": null,
+      "after_sha256": "00ee60c860645137fc3ea30e0589e39b4254938cbcf89295d878e35fdbe78b07"
+    },
+    "tests/test_desk_rehearsal.py": {
+      "before_sha256": null,
+      "after_sha256": "3c2cd4c01561dccda5ae0345c04901733eb30810a320f53ca2ed61e5f1a0a910"
+    },
+    "tests/test_etf_desk_policy.py": {
+      "before_sha256": null,
+      "after_sha256": "f7d4e2bf81ba481231010018c98cab1ea77f26c27ee3522c19477b793afab35c"
+    },
+    "tests/test_etf_issuer.py": {
+      "before_sha256": null,
+      "after_sha256": "ebfcbb90d0af715cd156d6f9645a90ba58226722c3cfae80da08a93f6f2f93cc"
+    },
+    "tests/test_evidence_hold_diagnostics.py": {
+      "before_sha256": null,
+      "after_sha256": "e43f369dd18c7126db96ca2492876f31cdf619a83a212885032ab143f37701d2"
+    },
+    "tests/test_operational_readiness.py": {
+      "before_sha256": "b42d769ae5450e129d5c1db4005c9271d73f947aa9bcb1db726421705073248d",
+      "after_sha256": "bd7932488f318b2d964fdc027a04a3c5794b920d51b154302d1ebff64504f3e7"
+    },
+    "tests/test_phase0_budget.py": {
+      "before_sha256": "cc8070089e9cd9de17c4bfacc76f8a2b991e96f9f687f27114797ae92e583c6f",
+      "after_sha256": "cfed19090a3963851371a11d49e8a43497d079ddb0c3e18f292feae8dd8033d6"
+    },
+    "tests/test_release_install.py": {
+      "before_sha256": null,
+      "after_sha256": "acc8c478f5c5ce36d2a32615000b22a6f1e2036e3681399eb39d2a6254e68f03"
+    },
+    "tests/test_stored_decision_replay.py": {
+      "before_sha256": null,
+      "after_sha256": "a3f98cd68e47945989da878d44fdb8eef574c6773258fe1e8ccf98e30d864792"
+    }
+  },
+  "root_files": {
+    "preregistration-amendment-v1.5.0.yaml": {
+      "from": "preregistration-amendment-v1.5.0.yaml",
+      "after_sha256": "09a229c9666f16d5e792d7727d24c0d19f3c1dcd08c279d2486d8bf5dd6210f0"
+    }
+  }
+}
