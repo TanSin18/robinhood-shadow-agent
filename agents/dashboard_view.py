@@ -265,6 +265,8 @@ def selection_board_view(review_index, lanes, proposal_state, selection_recorded
             if not state_rows:
                 if proposal_state == 'recorded':
                     message = 'Proposal recorded; lane details were not recorded for this historical review.'
+                elif proposal_state == 'stopped':
+                    message = 'Proposal stopped by the Critic; no card was issued.'
                 elif proposal_state == 'none':
                     message = 'No paper proposal from this review.'
                 else:

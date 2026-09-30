@@ -655,6 +655,20 @@ def project_decision_room(records, cards):
         proposal_recorded = bool(result_statuses & KNOWN_PROPOSAL_STATUSES)
         paper_action_recorded = bool(result_statuses & KNOWN_PAPER_ACTION_STATUSES)
         negative_result_only = bool(result_statuses) and result_statuses <= KNOWN_NEGATIVE_RESULT_STATUSES
+        # Recorded proposal that a later stage stopped: derive only from saved
+        # structured fields (decision.picks, critic.rejected_instruments, results).
+        picked = [str(p.get('instrument')) for p in (picks or [])
+                  if isinstance(p, dict) and isinstance(p.get('instrument'), str) and p.get('instrument')]
+        critic_payload = payload.get('critic') if isinstance(payload.get('critic'), dict) else {}
+        critic_rejected = critic_payload.get('rejected_instruments')
+        critic_rejected = {str(x) for x in critic_rejected} if isinstance(critic_rejected, list) else set()
+        rejected_results = {
+            str(item.get('instrument')) for item in payload_results
+            if isinstance(item, dict) and str(item.get('status', '')).upper() == 'REJECTED'
+            and isinstance(item.get('instrument'), str)
+        }
+        stopped_by_critic = [i for i in picked if i in critic_rejected and i in rejected_results]
+        critic_reason = critic_payload.get('counterargument') if isinstance(critic_payload.get('counterargument'), str) else None
         if pending:
             outcome_label = 'Paper proposal waiting'
             action = f"Review {len(pending)} paper proposal" + ('s' if len(pending) != 1 else '')
@@ -666,6 +680,8 @@ def project_decision_room(records, cards):
             outcome_label, action = 'Risk blocked', 'Nothing needs your approval'
         elif unknown_result:
             outcome_label, action = 'Completion unconfirmed', 'Check run history'
+        elif terminal_state == 'COMPLETED' and stopped_by_critic and negative_result_only:
+            outcome_label, action = 'Proposal rejected by Critic', 'Nothing needs your approval'
         elif terminal_state == 'COMPLETED' and (
             (picks == [] and payload_results == []) or negative_result_only
         ):
@@ -688,10 +704,22 @@ def project_decision_room(records, cards):
             proposal_state = 'unknown'
         elif pending or proposal_recorded or paper_action_recorded:
             proposal_state = 'recorded'
+        elif stopped_by_critic and negative_result_only:
+            proposal_state = 'stopped'
         elif (picks == [] and payload_results == []) or negative_result_only:
             proposal_state = 'none'
         else:
             proposal_state = 'unknown'
+        if proposal_state == 'stopped':
+            for stage in stages:
+                if stage['key'] == 'portfolio':
+                    stage['status_label'] = 'Proposed'
+                elif stage['key'] == 'critic':
+                    stage.update(status='blocked', status_label='Rejected', tone='warn')
+                elif stage['key'] == 'risk':
+                    stage.update(status='not_applicable', status_label='Not reached', tone='neutral')
+                elif stage['key'] == 'final':
+                    stage['status_label'] = 'No card'
         completed_stages = sum(stage['status'] in {'completed', 'blocked'} for stage in stages)
         reviews.append(
             {
@@ -703,6 +731,10 @@ def project_decision_room(records, cards):
                 'lanes': normalize_candidate_decisions(ordered),
                 'selection_recorded': candidate_details_recorded,
                 'proposal_state': proposal_state,
+                'proposed_instruments': picked,
+                'stopped_by': 'critic' if (stopped_by_critic and proposal_state == 'stopped') else None,
+                'stopped_instruments': stopped_by_critic if proposal_state == 'stopped' else [],
+                'critic_reason': critic_reason if proposal_state == 'stopped' else None,
                 'default_stage': next(
                     (
                         stage['key']
