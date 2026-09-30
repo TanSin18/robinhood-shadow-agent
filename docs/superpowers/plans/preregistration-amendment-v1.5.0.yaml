@@ -11,15 +11,19 @@ amendment:
   operator_signature:
     status: SIGNED
     signed_by: operator
-    signed_at_et: '2026-09-30T12:34:00-04:00'
+    signed_at_et: '2026-09-30T14:44:00-04:00'
     signature_source: operator_chat_2026-09-30_1234_ET_continue_and_i_approve_all
+    resigned_with_additions:
+    - section: reviewed_etf_list
+      source: operator_chat_2026-09-30_1444_ET_sector_etf_now_and_together
     required_before: '2026-10-01T09:30:00-04:00'
     prerequisites:
     - completed_revocation_and_reauthorization_drill_receipt
     - installed_full_suite_pass
     - pinned_release_manifest_and_rollback
   scope_statement: Activates only the rules below. Every v1.4.2 rule not named here is unchanged. Pulse,
-    ledger, seat modules, token-cap finalization and universe expansion are NOT activated by this amendment.
+    ledger, seat modules, token-cap finalization and the broad universe screen are NOT activated by this
+    amendment; only the nine named sector ETFs join the reviewed ETF list.
 etf_desk_policy:
   operator_approved_on: '2026-09-30'
   approval_source: CLAUDE_REVIEW_2026-09-30_1045_ET_and_operator_chat
@@ -79,6 +83,19 @@ etf_desk_policy:
       <= 0.003
     spread_recording: first_official_cycle_observation_per_symbol_per_session_append_only
     invented_liquidity_values_allowed: false
+reviewed_etf_list:
+  operator_approved_on: '2026-09-30'
+  approval_source: operator_chat_2026-09-30_1444_ET_sector_etf_now_and_together
+  base_etfs: [SPY, QQQ, VTI, SOXX, XLE, XLU, GLD, TLT]
+  added_sector_etfs: [XLC, XLY, XLP, XLF, XLV, XLI, XLB, XLRE, XLK]
+  stocks_unchanged: [AAPL, MSFT, NVDA, AMZN, GOOGL, META]
+  discovery_bound: 23
+  whitelist_owner: operator_local_config
+  unregistered_symbol_action: refuse_collection
+  before_activation: sector_etfs_excluded_from_features_signals_candidates_options_and_refresh
+  strategy_rules_unchanged: true
+  applies_to_strategies: [momentum_rotation_126d_trend200_top1, mean_reversion_drop3_above_ma200, etf_desk_policy]
+  liquidity_rules_apply: minimum_median_20d_dollar_volume_usd_50000000_and_spread_0.003
 decisions:
   maximum_new_discretionary_open_or_add_per_lane_per_official_open: 1
   maximum_new_discretionary_open_or_add_total: 2
@@ -106,6 +123,6 @@ not_activated_by_this_amendment:
 - ledger
 - seats
 - token_cap_finalization
-- universe_expansion
+- universe_expansion_broad_screen
 - advisory_rebuttal
 - what_if_budget_increase

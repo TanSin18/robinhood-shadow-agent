@@ -23,7 +23,7 @@ from broker.models import Quote
 from config.loader import load_config
 from prompts.registry import PromptRegistry
 from risk.engine import RiskEngine
-from research.strategy_signals import ETF_UNIVERSE, evaluate_daily_signals, option_screen, rank_option_candidates
+from research.strategy_signals import ETF_UNIVERSE, SECTOR_ETFS_V15, active_etf_universe, evaluate_daily_signals, option_screen, rank_option_candidates
 
 D = Decimal
 READS = ('get_accounts','get_portfolio','get_equity_quotes','get_equity_historicals','get_equity_positions','get_option_chains','get_option_instruments','get_option_quotes')
@@ -346,6 +346,22 @@ def blind_critic_request(research, decision, snapshot, inbox, market_open, eligi
             'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':signals,'lane_guide':LANE_GUIDE}
 
 
+def registered_only(snapshot, excluded):
+    """Drop symbols that are only registered by an amendment that is not active.
+
+    The operator's whitelist may already list them (reads are harmless); no
+    feature, signal, candidate, option or refresh may use them until activation."""
+    drop=set(excluded)
+    contracts={k:c for k,c in snapshot['contracts'].items() if c.get('chain_symbol') not in drop}
+    keep=lambda sym: sym not in drop and (sym not in snapshot['contracts'] or sym in contracts)
+    return {**snapshot,
+            'quotes':{k:v for k,v in snapshot['quotes'].items() if keep(k)},
+            'vols':{k:v for k,v in snapshot['vols'].items() if k not in drop},
+            'contracts':contracts,
+            'session_closes':{k:v for k,v in snapshot['session_closes'].items() if k not in drop},
+            'median_dollar_volume_20d':{k:v for k,v in snapshot.get('median_dollar_volume_20d',{}).items() if k not in drop}}
+
+
 def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, now, cycle_id, *,
                       lifecycle=None, enabled=False, approved_ai_stock_pick=False, entry_slot_used=False):
     """v1.5 desk-policy ETF entry. Inert (returns None) unless explicitly enabled
@@ -550,6 +566,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                    if read.get('source_id') and read.get('content_hash')}
     observed_at=clock()
     snapshot=market_snapshot(reads,config,observed_at,held_contracts=held_contracts,require_live_identity=data_mode!='fixture')
+    if not desk_policy_enabled:
+        snapshot=registered_only(snapshot,SECTOR_ETFS_V15)
     trace_event('data_collected', read_tools=sorted({read['tool'] for read in reads}),
                 quote_count=len(snapshot['quotes']), volatility_count=len(snapshot['vols']),
                 history_counts={ticker: len(history) for ticker, history in snapshot['session_closes'].items()})
@@ -565,7 +583,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     choices=candidates(snapshot,inbox,config,observed_at)
     fresh_instruments={str(choice['instrument']) for choice in choices if not choice.get('quote_stale')}
     strategy_assessment=evaluate_daily_signals(
-        snapshot['session_closes'], ETF_UNIVERSE & config.risk.instrument_whitelist,
+        snapshot['session_closes'], active_etf_universe(desk_policy_enabled) & config.risk.instrument_whitelist,
         observed_at.astimezone(ET).date())
     capsule_inputs.update(observed_at=observed_at,snapshot=snapshot,strategy_assessment=strategy_assessment,
                           accounts={f'{lane}:{track}':{k:v for k,v in inbox.state(lane,track).items()
@@ -733,6 +751,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
         # Discard original quotes entirely: a missing refresh is not permission to reuse them.
         context_reads=[r for r in reads if r['tool'] not in {'get_equity_quotes','get_option_quotes'}]
         fresh=market_snapshot(context_reads+refreshed,config,completion_time,held_contracts=snapshot['contracts'],require_live_identity=data_mode!='fixture')
+        if not desk_policy_enabled:
+            fresh=registered_only(fresh,SECTOR_ETFS_V15)
         snapshot['quotes']=fresh['quotes']
         missing=[s for s in wanted if s not in fresh['quotes'] or fresh['quotes'][s].halted or not 0<=(completion_time-fresh['quotes'][s].timestamp).total_seconds()<=config.risk.max_quote_age_seconds]
         refresh_rows=candidate_decisions(choices,[],{'compared_symbols':[]},{'picks':[]},

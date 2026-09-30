@@ -11,7 +11,17 @@ from decimal import Decimal
 from typing import Iterable, Mapping, Sequence
 
 D = Decimal
-ETF_UNIVERSE = frozenset({'SPY', 'QQQ', 'VTI', 'SOXX', 'XLE', 'XLU', 'GLD', 'TLT'})
+ETF_UNIVERSE_V142 = frozenset({'SPY', 'QQQ', 'VTI', 'SOXX', 'XLE', 'XLU', 'GLD', 'TLT'})
+# v1.5.0 amendment (signed 2026-09-30): the nine remaining SPDR sector funds join the
+# reviewed ETF list. They are only used when the v1.5 amendment is active.
+SECTOR_ETFS_V15 = frozenset({'XLC', 'XLY', 'XLP', 'XLF', 'XLV', 'XLI', 'XLB', 'XLRE', 'XLK'})
+ETF_UNIVERSE = ETF_UNIVERSE_V142 | SECTOR_ETFS_V15
+STOCKS_V142 = frozenset({'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META'})
+REGISTERED_DISCOVERY_UNIVERSE = ETF_UNIVERSE | STOCKS_V142
+
+
+def active_etf_universe(v15_active: bool) -> frozenset:
+    return ETF_UNIVERSE if v15_active else ETF_UNIVERSE_V142
 MOMENTUM_WARMUP = 253
 TREND_WINDOW = 200
 MEAN_REVERSION_DROP = D('0.03')

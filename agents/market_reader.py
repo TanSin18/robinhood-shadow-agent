@@ -32,7 +32,9 @@ class MarketReader:
         else:
             reads=list(account_reads)
         symbols=sorted(self.config.risk.instrument_whitelist)
-        if len(symbols)>14: raise BrokerError('Universe exceeds reviewed discovery bound')
+        from research.strategy_signals import REGISTERED_DISCOVERY_UNIVERSE
+        if len(symbols)>len(REGISTERED_DISCOVERY_UNIVERSE) or not set(symbols)<=REGISTERED_DISCOVERY_UNIVERSE:
+            raise BrokerError('Universe exceeds reviewed discovery bound')
         reads+=self.refresh(now,symbols,[])
         # The live provider rejects the 550-day multi-symbol payload; keep each
         # approved history request bounded to one symbol without shortening data.
