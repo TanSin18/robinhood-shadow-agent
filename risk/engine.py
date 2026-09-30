@@ -16,7 +16,8 @@ class RiskEngine:
             raise ValueError('positive finite realized volatility required')
         return account_value * min(self.config.max_position_fraction, self.config.target_position_fraction * self.config.target_volatility_fraction / realized_vol)
 
-    def evaluate(self, proposal: TradeProposal, context: RiskContext) -> RiskVerdict:
+    def evaluate(self, proposal: TradeProposal, context: RiskContext, *,
+                 etf_entry_reference: Decimal | None = None) -> RiskVerdict:
         reasons: list[RiskReason] = []
         actions: list[str] = []
         if proposal.asset_class != 'option' and proposal.multiplier != 1:
@@ -45,7 +46,13 @@ class RiskEngine:
         if quote_age < 0 or quote_age > self.config.max_quote_age_seconds:
             reasons.append(RiskReason.STALE_QUOTE)
         reference = context.ask if proposal.side == "buy" else context.bid
-        if reference <= 0 or (
+        if etf_entry_reference is not None:
+            # The inactive v1.5 desk planner supplies its immutable first-fresh
+            # midpoint. Do not chase a later ask or alter other risk checks.
+            if proposal.asset_class != 'etf' or proposal.side != 'buy':
+                reasons.append(RiskReason.LIMIT_TOO_FAR)
+            reference = etf_entry_reference
+        if not reference.is_finite() or reference <= 0 or (
             abs(proposal.limit_price - reference) / reference
             > self.config.max_limit_distance_fraction
         ):

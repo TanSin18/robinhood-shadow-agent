@@ -1410,6 +1410,36 @@ scoreboard:
 
 # PROPOSAL ONLY: not consumed by the installed validator or runtime.
 v1_5_review_proposal:
+  etf_desk_policy:
+    operator_approved_on: '2026-09-30'
+    approval_source: CLAUDE_REVIEW_2026-09-30_1045_ET_and_operator_chat
+    effective_not_before_et: '2026-10-01T00:00:00-04:00'
+    activation_required: true
+    decision_owner: deterministic_code
+    decision_attribution: desk_policy_not_ai
+    registered_strategy_gross_edge_required: false
+    probability_and_edge_ratio_gates_apply: false
+    retained_gates: [friction, liquidity, settled_cash, holdings, volatility, position_limits, breakers, global_kill_switch, freshness]
+    reference: first_fresh_midpoint_at_official_signal_evaluation_after_holdings_review
+    maximum_quote_age_seconds: 60
+    maximum_limit_distance_fraction: '0.005'
+    entry_limit_formula: reference_midpoint * (1 + maximum_limit_distance_fraction)
+    trigger_expiry_formula: min(15:30_ET, exchange_close_minus_30_minutes)
+    no_trigger_action: no_entry
+    model_timestamps_or_critic_pass_required: false
+    equity_fractional_allowed: true
+    minimum_notional_usd: '1.00'
+    equity_quantity_decimal_places: 6
+    option_quantity: whole_contracts
+    applies_to: [agent_alone, with_approvals, deterministic_no_ai]
+    public_approval_arm_alias: agent_with_approvals
+    excluded_arms: [seeded_random, vti, cash]
+    lane: A
+    maximum_entries_per_official_cycle: 1
+    slot_precedence: approved_ai_stock_pick_then_qualified_etf_signal
+    with_approvals_requires_operator_yes: true
+    approval_fill_quote: fresh_at_approval_plus_registered_slippage
+    never_attribute_desk_policy_return_to_ai: true
   base_version: 1.4.2
   base_sha256: 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075
   operator_approved: true

@@ -3,6 +3,62 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 11:03 ET — Approved ETF registration and inactive planning checkpoint
+
+Operator approved Claude's 10:45 ET ETF rules in chat on 2026-09-30.
+Added them to the separate v1.5 draft and regenerated its diff: friction-only
+(no probability/gross-edge ratio gate), first-fresh code reference, fixed 0.5%
+limit, min(15:30, close−30) expiry, $1/six-decimal fractional equity sizing,
+three desk-policy arms, and approved AI stock precedence. Active v1.4.2 remains
+byte-identical (SHA256 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075).
+This approval does not activate v1.5.
+
+### Implemented on codex/task2-handoff-replay only
+
+- Pure ETF entry planner in agents/etf_desk_policy.py. Validates scope, known
+  strategy, holdings-first, Lane A slot precedence, session/freshness, liquidity,
+  spread, fixed trigger ceiling, six-decimal sizing and the existing risk rules.
+- Plans are explicitly non-executable. No broker, database, card or model calls.
+  Three arm names describe assignment, not three completed fills. Caller must
+  use each arm's own cash/holdings and persist the first reference immutably.
+- Production guard is deliberately closed; no activation pin or live call site.
+- Independent review found a falling-price false block and unrestricted strategy
+  names. Reproduced failures first, then fixed them. The opt-in RiskEngine ETF
+  reference preserves the fixed first midpoint without changing default callers.
+  Removed an invented universal 20-session exit from the planner output; the
+  original strategy invalidation is retained, including mean-reversion's
+  ten-session recovery condition.
+
+### Verification
+
+Exact command (development worktree):
+`/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q --tb=short`
+
+**725 passed, 61 warnings, 47.45 seconds**. Focused planner/risk suite: 38 passed.
+Warnings are SDK asyncio deprecation and the existing rehearsal runpy warning.
+git diff --check passed. These are isolated tests, not installed-service proof
+or an ETF paper fill. No paid model calls or official writes were performed.
+
+### Remaining before this can enter tonight's batch
+
+1. Trusted deterministic-signal call-site integration and immutable reference
+   persistence; per-arm risk/sizing plus idempotent issuance and replay proof.
+2. deterministic_no_ai account/maintenance support: current PaperInbox initializes
+   only agent_alone and with_approvals. Do not reuse another arm's account.
+3. Fresh quote at operator YES plus registered slippage: current legacy approval
+   code executes the stored issued quote/time. Do not route this new policy
+   through that stale-approval path.
+4. Reviewed activation loader/pin and compiled effective v1.5 registration.
+   The proposal block is not consumed by the live validator.
+5. Complete Task 2/capsule and required review/release evidence. This is NOT a
+   completed ETF issuer, NOT Task 2 completion, and NOT batch-ready yet.
+
+Tonight remains one after-close batch after the drill and sign-off; unreviewed
+or incomplete items at 17:00 ET slip. No runtime, service, model, budget, proxy,
+official database or dashboard changes were made. Primary-folder changes are
+review documents only. No further policy approval is being requested here;
+the remaining work is within the existing approved implementation scope.
+
 ## 2026-09-30 10:40 ET — Operator batch approval read; ETF registration stop condition reached
 
 Read Claude's 10:26, 10:34 and 10:41 ET entries and the operator's dated
