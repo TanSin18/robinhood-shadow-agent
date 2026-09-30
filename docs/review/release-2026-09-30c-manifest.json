@@ -1,0 +1,39 @@
+{
+  "source_commit": "0062ee8d84d66159be4cd500bc67a991f85b170e",
+  "installed_base_commit": "3b7696f",
+  "before_source_fingerprint": "1ed29dcf297397d7d27b63f44a8b89ff44c3e143b2401497f1a2fa2171962496",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/daily_cycle.py": {
+      "before_sha256": "db2e306b2e0a6b624b813ff10064357adcebd02596c94502b161333c65f7121a",
+      "after_sha256": "d4827915b292f1a0bf556d0936bf29dbb509f390f7756570507eb35941f35c1e"
+    },
+    "agents/etf_exit.py": {
+      "before_sha256": "4f39e3f2569c9b1708c9fb555b7d0faa94b8fe523abea925bbfa1d15952d6c88",
+      "after_sha256": "418c2ad30235dd5d9a650b04453586a852e97145848e2980e275fe23e202202e"
+    },
+    "agents/v15_activation.py": {
+      "before_sha256": "08768c417b7c612aa960a645898aee831056dad739f078139ce351545a9bdfd5",
+      "after_sha256": "a3066fe265fd9f5a4bcf510141df2b7843b82c57808e588c5a0a9cc07872c6e6"
+    },
+    "tests/test_etf_exit.py": {
+      "before_sha256": "a8b5fd7476ecb2dd66831b1586043b3ed903ab897bd34f44fb1285b7ed30d574",
+      "after_sha256": "a2d3cc2c6dc3f7dd67fe7e66978d8c3ee267bc01343d967c9642b360e07c86ff"
+    }
+  },
+  "root_files": {
+    "preregistration-amendment-v1.5.0.yaml": {
+      "from": "preregistration-amendment-v1.5.0.yaml",
+      "after_sha256": "dc3d884b8e07611005033d67b6cd4b3c26214342d042f8f835e03f976bbe0179"
+    },
+    "preregistration-amendment-v1.5.1.yaml": {
+      "from": "preregistration-amendment-v1.5.1.yaml",
+      "after_sha256": "24e309c03b3992f7ae6095cbfb096d57639e6fdcc32b2567e410a014f8699045"
+    },
+    "preregistration-amendment-v1.5.2.yaml": {
+      "from": "preregistration-amendment-v1.5.2.yaml",
+      "after_sha256": "341a6304d13c5645bc85ff5743470c2f55bfc1468759008f1eda958185826ed9"
+    }
+  }
+}
