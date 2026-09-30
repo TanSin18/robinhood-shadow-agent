@@ -362,6 +362,16 @@ def registered_only(snapshot, excluded):
             'median_dollar_volume_20d':{k:v for k,v in snapshot.get('median_dollar_volume_20d',{}).items() if k not in drop}}
 
 
+def desk_policy_exits(target, config, strategy_assessment, snapshot, now, cycle_id, *, lifecycle=None, enabled=False):
+    """Registered exits for desk-rule ETF positions. Inert unless the exit rule is active."""
+    from agents.v15_activation import exit_rule_active
+    if target is None or not enabled or not exit_rule_active():
+        return []
+    from agents.etf_exit import issue_desk_exits
+    return issue_desk_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
+                            now=now,cycle_id=cycle_id,lifecycle=lifecycle)
+
+
 def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, now, cycle_id, *,
                       lifecycle=None, enabled=False, approved_ai_stock_pick=False, entry_slot_used=False):
     """v1.5 desk-policy ETF entry. Inert (returns None) unless explicitly enabled
@@ -620,8 +630,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             'asset_class':'etf' if str(signal['instrument']) in ETF_UNIVERSE else ('option' if str(signal['instrument']) in snapshot['contracts'] else 'stock'),
             'qualified':str(signal['instrument']) in fresh_instruments,
         } for signal in strategy_assessment['signals']]
+        # v1.5: ETF holdings are governed by the registered desk exit, never by AI.
         holding_rows=[{'position_id':ticker,'qualitative_review_required':True}
-                      for ticker in held]
+                      for ticker in held if not (desk_policy_enabled and ticker in ETF_UNIVERSE)]
         ai_gate=AIInvocationGate().evaluate(discovery,holding_rows)
         trace_event('ai_invocation_gate',invoke=ai_gate.invoke,reason=ai_gate.reason,
                     candidate_ids=list(ai_gate.candidate_ids),reserved_cost_usd='0')
@@ -632,6 +643,8 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             desk_results=(desk_policy_entry(desk_target,config,snapshot,signal_map,fresh_instruments,observed_at,cycle_id,
                                             lifecycle=lifecycle,enabled=desk_policy_enabled and market_open)
                           if desk_target is not None else None)
+            desk_exits=desk_policy_exits(desk_target,config,strategy_assessment,snapshot,observed_at,cycle_id,
+                                         lifecycle=lifecycle,enabled=desk_policy_enabled and market_open)
             # Individual exclusions must not invalidate unrelated fresh candidates.
             # ETF-only signals cannot invoke AI, but this Phase 0 path also has
             # no deterministic entry issuer. Do not call that a successful hold.
@@ -670,7 +683,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 'strategy_assessment':strategy_assessment,
                 'decision':{'type':decision_type,'picks':[],'reason':reason,
                             'reason_code':reason_code,'signal_instruments':signal_instruments},
-                'critic':None,'results':[],'desk_results':desk_results or [],'reason':reason,'news_checked':False,'news':[],
+                'critic':None,'results':[],'desk_results':desk_results or [],'desk_exits':desk_exits,'reason':reason,'news_checked':False,'news':[],
                 'missing_evidence':['News was not invoked because AI was not needed.'],
                 'ai_gate':{'invoke':False,'reason':ai_gate.reason,'cost_usd':'0'},
                 'corporate_action_exclusions':snapshot['exclusions'],
@@ -774,13 +787,15 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                                     completion_time,cycle_id,lifecycle=lifecycle,enabled=desk_policy_enabled and market_open,
                                     approved_ai_stock_pick=lane_a_used,entry_slot_used=lane_a_used)
                   if desk_target is not None else None)
+    desk_exits=desk_policy_exits(desk_target,config,strategy_assessment,snapshot,completion_time,cycle_id,
+                                 lifecycle=lifecycle,enabled=desk_policy_enabled and market_open)
     risk_rows=(candidate_decisions(choices,[],{'compared_symbols':[]},{'picks':[]},
                                    {'rejected_instruments':[]},[],results)
                if market_open else [])
     trace_event('risk_evaluated',status='completed' if market_open else 'not_run',
                 results=results,real_execution='blocked',candidate_decisions=risk_rows)
     inbox.mark_accounts(snapshot['quotes'],completion_time,data_mode)
-    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'desk_results':desk_results or [],'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
+    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'desk_results':desk_results or [],'desk_exits':desk_exits,'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
     result['transport_evidence']={'collector':getattr(reader,'evidence',None),'inference':getattr(bridge,'isolation_evidence',[])}
     # Persist observed benchmark prices, never manufacture an unchanged benchmark.
     if snapshot['benchmark'] and not rehearsal:
