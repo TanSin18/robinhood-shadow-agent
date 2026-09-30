@@ -815,7 +815,9 @@ def main():
             desk_enabled=production_enabled(Path(__file__).resolve().parents[1],now)
             if claim is None:
                 tick=[]
+                # Registered pulse cadence (120 s): the 60 s launchd tick reads quotes on even minutes only.
                 if desk_enabled and MarketSchedule().should_run(now,asset_class='etf',stage=1) \
+                        and now.astimezone(ET).minute % 2 == 0 \
                         and any(c.get('status')=='APPROVED_AWAITING_FILL' for c in inbox.cards()):
                     from agents.market_reader import LiveReader
                     from agents.etf_issuer import approval_fill_tick
