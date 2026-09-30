@@ -1,5 +1,5 @@
 {
-  "source_commit": "4be59c464e808bb91a04c415353265356367513d",
+  "source_commit": "4fc451b53040dde2436aaa0afcd21dba4e35bd91",
   "installed_base_commit": "6e2c220",
   "before_source_fingerprint": "72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593",
   "expected_after_source_fingerprint": null,
@@ -7,7 +7,7 @@
   "files": {
     "agents/daily_cycle.py": {
       "before_sha256": "7cf856d341bd398aba2713b047d67120102f6a75b326c9e907900feb9b62306e",
-      "after_sha256": "3940402e7ee42011e1e64554a880da3179eddbcd7549db5b7bbfcece902efe58"
+      "after_sha256": "87348cc1d73ccf3ffa38b4dcee39d963d2c917bdb34f52225e1b36fa32057a16"
     },
     "agents/dashboard_view.py": {
       "before_sha256": "814fcbadf2c6ebe51a2126e758d17eaf5f91541acf5efcd74a00cd4c169f27e0",
@@ -37,6 +37,10 @@
       "before_sha256": "8ff7eadc12fc0185552bae56aa4e90a17a477abdffa89cba9c62334b6633ef09",
       "after_sha256": "704a8a623ae6e6ebbeae7c80606e55f1364cf9bccb3e0193fec5373bc040a811"
     },
+    "agents/market_reader.py": {
+      "before_sha256": "60d3061b853654d8fd000272dcfa010fd24dbd751243207d1dc0ccc989ad79f4",
+      "after_sha256": "60c6b45b9a16099240810bab12bf5852f30c02e603fb6b164ed0baa22d7dca8a"
+    },
     "agents/readiness.py": {
       "before_sha256": "97402e6d4b1fd14e724131dc4d6c42098411afc9779be4b4cec1a7e63e69e2c2",
       "after_sha256": "ef6ab9fd3268e83baae8bf190edba1c4c4d0ea2dc0c7e3ee47b099fd287212ab"
@@ -51,7 +55,7 @@
     },
     "agents/v15_activation.py": {
       "before_sha256": null,
-      "after_sha256": "e512cd071b1beec1288e4af2d7202f4cd0b77edc6ec923680e6dc14a9ded39c9"
+      "after_sha256": "ca2a40986b49c7ba4118a75fe99a6cc1f98ffb27db33a24aa544d8e083cc2676"
     },
     "data/corporate_actions.py": {
       "before_sha256": "e4870688186f72960ec78bc36a3e1525fcdad9dc4a695969bc9af484e2ae29a0",
@@ -59,7 +63,7 @@
     },
     "research/strategy_signals.py": {
       "before_sha256": "040f08b3dfa270ed2da596e6a16c1129990ef6e7eff76a91885e0c624d8fca35",
-      "after_sha256": "f865fbce653d324368dfe9b1461f17d2ef495b5fd389887faf11561481f70bd7"
+      "after_sha256": "a494bcd143e9fb6c927394cc5b27d8da85107381385541dcecc21fb794cb9975"
     },
     "risk/engine.py": {
       "before_sha256": "e4e2fa8e7bd82a64c6daee1a304eaced63bfe7ff501c9ff062ad4a2abb7508e7",
@@ -125,6 +129,10 @@
       "before_sha256": null,
       "after_sha256": "acc8c478f5c5ce36d2a32615000b22a6f1e2036e3681399eb39d2a6254e68f03"
     },
+    "tests/test_sector_etfs.py": {
+      "before_sha256": null,
+      "after_sha256": "c03fa17708be8105f522f19ff791b8f8b2a4187e4486d590e21195910d7fe68b"
+    },
     "tests/test_stored_decision_replay.py": {
       "before_sha256": null,
       "after_sha256": "a3f98cd68e47945989da878d44fdb8eef574c6773258fe1e8ccf98e30d864792"
@@ -133,7 +141,7 @@
   "root_files": {
     "preregistration-amendment-v1.5.0.yaml": {
       "from": "preregistration-amendment-v1.5.0.yaml",
-      "after_sha256": "09a229c9666f16d5e792d7727d24c0d19f3c1dcd08c279d2486d8bf5dd6210f0"
+      "after_sha256": "dc3d884b8e07611005033d67b6cd4b3c26214342d042f8f835e03f976bbe0179"
     }
   }
 }
