@@ -45,3 +45,24 @@ def v15_active(root: Path, now: datetime, *, approved_sha256=None, effective_fro
         return (declared.get('operator_signature') or {}).get('status') == 'SIGNED'
     except (OSError, ValueError, AttributeError):
         return False
+
+
+# v1.5.1: registered exit for desk-rule ETF positions. Inert until the operator
+# signs the v1.5.1 amendment and a reviewed release pins its hash and time here.
+APPROVED_V151_SHA256: str | None = None
+V151_EFFECTIVE_FROM: datetime | None = None
+V151_AMENDMENT_NAME = 'preregistration-amendment-v1.5.1.yaml'
+
+
+def exit_rule_active(root: Path | None = None, now: datetime | None = None) -> bool:
+    if APPROVED_V151_SHA256 is None or V151_EFFECTIVE_FROM is None:
+        return False
+    from datetime import timezone
+    root = Path(root) if root else Path(__file__).resolve().parents[1]
+    now = now or datetime.now(timezone.utc)
+    path = root / V151_AMENDMENT_NAME
+    try:
+        return (now >= V151_EFFECTIVE_FROM and not path.is_symlink()
+                and registration_sha256(path) == APPROVED_V151_SHA256 and v15_active(root, now))
+    except OSError:
+        return False
