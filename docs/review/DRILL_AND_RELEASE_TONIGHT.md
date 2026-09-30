@@ -1,4 +1,7 @@
-# Tonight: drill → release → resume (operator steps)
+# Tonight: drill → resume (operator steps)
+
+> Update 15:10 ET: at the operator's request ("release now"), steps 7 and 7b were given as one command during market hours.
+> Behaviour changes only at 2026-10-01 09:30 ET. If they printed INSTALLED and `whitelist 23`, skip them tonight.
 
 Everything below is done by the operator on the Mac. Claude never sees passwords, codes or tokens.
 Do not paste passwords, MFA codes, tokens or account numbers into chat.
