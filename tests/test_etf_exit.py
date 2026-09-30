@@ -113,3 +113,35 @@ def test_exit_rule_activates_only_with_signed_pinned_file_after_effective_time(t
     assert act.exit_rule_active(tmp_path, datetime(2026, 10, 1, 13, 29, tzinfo=timezone.utc)) is False
     (tmp_path / act.V151_AMENDMENT_NAME).write_text('tampered')
     assert act.exit_rule_active(tmp_path, after) is False
+
+
+def seed_stock(inbox, track, entry_ts):
+    with inbox.connect() as db:
+        state = json.loads(db.execute('SELECT payload FROM paper_accounts WHERE lane=? AND track=?', ('A', track)).fetchone()[0])
+        state['positions']['META'] = {'ticker': 'META', 'asset_class': 'stock', 'quantity': '0.1', 'average_cost': '700',
+                                      'underlying_ticker': None, 'option_type': None, 'strike': None, 'expiry': None, 'multiplier': 1}
+        state['fills'].append({'ticker': 'META', 'side': 'buy', 'status': 'filled', 'timestamp': entry_ts})
+        db.execute('UPDATE paper_accounts SET payload=? WHERE lane=? AND track=?', (json.dumps(state), 'A', track))
+
+
+def test_stock_backstop_sells_on_ma200_break_or_20_session_horizon(tmp_path):
+    from agents.etf_exit import stock_backstop_exits, stock_reason
+    closes = {f'2026-09-{d:02d}': '700' for d in range(1, 29)}
+    assert stock_reason({'above_ma200': False}, closes, '2026-09-20') == 'CLOSED_AT_OR_BELOW_200_DAY_AVERAGE'
+    assert stock_reason({'above_ma200': True}, closes, '2026-09-20') is None
+    assert stock_reason({'above_ma200': True}, closes, '2026-09-01') == 'HOLDING_PERIOD_20_SESSIONS_REACHED'
+    inbox, config = setup_runtime(tmp_path)
+    seed_stock(inbox, 'agent_alone', '2026-09-20T14:00:00+00:00')
+    seed_stock(inbox, 'with_approvals', '2026-09-20T14:00:00+00:00')
+    q = Quote(ticker='META', bid=Decimal('650'), ask=Decimal('650.5'), timestamp=NOW)
+    out = stock_backstop_exits(inbox, config, strategy_assessment={'features': {'META': {'above_ma200': False}}},
+                               snapshot={'quotes': {'META': q}, 'vols': {'META': (Decimal('0.3'), NOW)}, 'session_closes': {'META': closes}},
+                               now=NOW, cycle_id='cyc-2')
+    by_arm = {r['arm']: r['status'] for r in out}
+    assert by_arm == {'agent_alone': 'filled', 'with_approvals': 'PENDING'}
+    assert 'META' not in inbox.state('A', 'agent_alone')['positions']
+
+
+def test_stock_backstop_is_inert_until_signed():
+    from agents import v15_activation
+    assert v15_activation.stock_backstop_active(now=NOW) is False  # before its effective time

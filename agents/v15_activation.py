@@ -66,3 +66,23 @@ def exit_rule_active(root: Path | None = None, now: datetime | None = None) -> b
                 and registration_sha256(path) == APPROVED_V151_SHA256 and v15_active(root, now))
     except OSError:
         return False
+
+
+# v1.5.2: backstop exit for AI-bought stocks (registered invalidation or 20-session horizon).
+APPROVED_V152_SHA256: str | None = '341a6304d13c5645bc85ff5743470c2f55bfc1468759008f1eda958185826ed9'  # operator-signed 2026-09-30 15:56 ET
+V152_EFFECTIVE_FROM: datetime | None = datetime.fromisoformat('2026-10-01T09:30:00-04:00')
+V152_AMENDMENT_NAME = 'preregistration-amendment-v1.5.2.yaml'
+
+
+def stock_backstop_active(root: Path | None = None, now: datetime | None = None) -> bool:
+    if APPROVED_V152_SHA256 is None or V152_EFFECTIVE_FROM is None:
+        return False
+    from datetime import timezone
+    root = Path(root) if root else Path(__file__).resolve().parents[1]
+    now = now or datetime.now(timezone.utc)
+    path = root / V152_AMENDMENT_NAME
+    try:
+        return (now >= V152_EFFECTIVE_FROM and not path.is_symlink()
+                and registration_sha256(path) == APPROVED_V152_SHA256 and v15_active(root, now))
+    except OSError:
+        return False

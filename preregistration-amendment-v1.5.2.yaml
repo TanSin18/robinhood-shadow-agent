@@ -1,0 +1,29 @@
+# v1.5.2 amendment layer: backstop exits for AI-bought stocks.
+# Active only when this file's SHA-256 matches APPROVED_V152_SHA256 in agents/v15_activation.py,
+# the effective time has passed and the v1.5.0 amendment is active.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.5.2
+  kind: scoped_amendment_layer
+  base_version: 1.5.1
+  requires_active: preregistration-amendment-v1.5.0.yaml
+  effective_from_et: '2026-10-01T09:30:00-04:00'
+  operator_signature:
+    status: SIGNED
+    signed_by: operator
+    signed_at_et: '2026-09-30T15:56:00-04:00'
+    signature_source: operator_chat_2026-09-30_1556_ET_make_sure_everything_is_completely_taken_care_of
+stock_backstop_exit:
+  applies_to_positions: lane_A_stock_positions_in_every_paper_arm
+  runs: after_the_AI_stages_of_the_same_official_cycle_so_AI_exits_come_first
+  decision_owner: deterministic_code
+  decision_attribution: registered_backstop_not_ai
+  trigger_any_of:
+    - close_at_or_below_200_session_average          # shared registered invalidation
+    - registered_horizon_of_20_completed_sessions_since_last_buy_fill   # TradeProposal.horizon_days
+  evidence: completed_session_features_and_session_closes_from_the_same_cycle
+  missing_or_stale_evidence_action: hold_and_report
+  quantity: full_position_including_fractional_shares
+  immediate_arms: [agent_alone, deterministic_no_ai]
+  approval_arm: with_approvals_SELL_card_skipped_if_a_sell_card_for_the_same_ticker_is_already_pending
+  options: unchanged_AI_exit_or_registered_expiry_settlement

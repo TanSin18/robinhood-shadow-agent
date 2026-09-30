@@ -364,12 +364,18 @@ def registered_only(snapshot, excluded):
 
 def desk_policy_exits(target, config, strategy_assessment, snapshot, now, cycle_id, *, lifecycle=None, enabled=False):
     """Registered exits for desk-rule ETF positions. Inert unless the exit rule is active."""
-    from agents.v15_activation import exit_rule_active
-    if target is None or not enabled or not exit_rule_active():
+    from agents.v15_activation import exit_rule_active, stock_backstop_active
+    if target is None or not enabled:
         return []
-    from agents.etf_exit import issue_desk_exits
-    return issue_desk_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
-                            now=now,cycle_id=cycle_id,lifecycle=lifecycle)
+    from agents.etf_exit import issue_desk_exits, stock_backstop_exits
+    out=[]
+    if exit_rule_active():
+        out+=issue_desk_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
+                              now=now,cycle_id=cycle_id,lifecycle=lifecycle)
+    if stock_backstop_active():
+        out+=stock_backstop_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
+                                  now=now,cycle_id=cycle_id,lifecycle=lifecycle)
+    return out
 
 
 def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, now, cycle_id, *,
