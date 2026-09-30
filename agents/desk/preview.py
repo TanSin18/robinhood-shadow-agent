@@ -45,6 +45,27 @@ def public(value):
     if isinstance(value,list): return [public(v) for v in value]
     return value
 
+def _research_files(path):
+    """Shadow research outputs kept beside the runtime (never the official database)."""
+    base=Path(path).resolve().parents[2]/'robinhood-diagnostics'
+    out={}
+    for key,rel in (('screen','universe/latest.json'),('backtest','backtest/report.json')):
+        try:
+            data=json.loads((base/rel).read_text())
+            out[key]=public(data) if isinstance(data,dict) else None
+        except (OSError,ValueError):
+            out[key]=None
+    return out
+
+
+def _promotion(path):
+    try:
+        from eval.promotion_stats import evaluate, load
+        return evaluate(load(path))
+    except Exception as error:  # module ships with the runtime release; absent is shown as absent
+        return {'unavailable':type(error).__name__}
+
+
 def snapshot(path,*,now=None):
     now=now or datetime.now(timezone.utc)
     if now.tzinfo is None: raise ValueError('Aware clock required')
@@ -108,14 +129,21 @@ def snapshot(path,*,now=None):
             'last_check':dict(tripwire_last) if tripwire_last else None}
     for row in paper_rows:
         state_=json.loads(row['payload'])
-        portfolio['paper'].append({'lane':row['lane'],'track':row['track'],'settled_cash':state_.get('settled_cash'),
+        portfolio['paper'].append({'lane':row['lane'],'track':row['track'],'start':state_.get('start'),'capital_version':state_.get('capital_version'),'settled_cash':state_.get('settled_cash'),
             'unsettled_cash':state_.get('unsettled_cash'),'positions':[{k:p.get(k) for k in ('ticker','asset_class','quantity','average_cost','option_type','strike','expiry','multiplier')}
                                                                         for p in (state_.get('positions') or {}).values()] if isinstance(state_.get('positions'),dict) else []})
+    research={'protective':[],'rebase':None}
     for row in values:
         v=json.loads(row['payload_json'])
-        if v.get('kind')=='paper_valuation':
+        if v.get('kind')=='paper_valuation' and 'comparison' not in v:
             portfolio['values'].append({k:v.get(k) for k in ('timestamp','lane','track','value','data_mode')})
-    return {'preview':True,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,
+        elif v.get('kind')=='protective_check':
+            research['protective'].append({k:v.get(k) for k in ('timestamp','status','fired','held','error_type')})
+        elif v.get('kind')=='capital_rebase' and research['rebase'] is None:
+            research['rebase']={k:v.get(k) for k in ('timestamp','capital','lane','version')}
+    research.update(_research_files(path))
+    research['promotion']=_promotion(path)
+    return {'preview':True,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
         'decision_room':rooms,'paused':(Path(path).parent/'STOP_TRADING').exists(),
         'accounts':[], 'reports':[], 'tripwire':[],
         'handoffs':[public(json.loads(r['payload_json'])) for r in handoff_rows]}

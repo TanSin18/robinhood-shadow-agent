@@ -240,6 +240,8 @@ def render(state):
     choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="room-head"><div><h1>Checks &amp; charts</h1><p>Every check each step ran, with the numbers behind it.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
+    from .research import render as measurement
+    html += measurement(state.get('research'))
     if not reviews:
         return html + '<p>No saved review yet.</p>'
-    return html + ''.join(run_section(r, i) for i, r in enumerate(reviews))
+    return html + '<h2 class="section-title">Per-run checks</h2>' + ''.join(run_section(r, i) for i, r in enumerate(reviews))

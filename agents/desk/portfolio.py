@@ -81,12 +81,13 @@ def paper_card(paper, values):
             value = D(recorded['value']) if recorded and D(recorded.get('value')) is not None else cash + cost
             basis = 'marked ' + when(recorded['timestamp']) if recorded else 'at cost'
             total += value
-            change = value - START
+            start = D(p.get('start')) or START
+            change = value - start
             rows += (f'<tr><td>{esc(ARMS.get(p["track"], p["track"]))}</td><td class="num">{money(cash)}</td><td class="num">{len(p["positions"])}</td>'
                      f'<td class="num">{money(value)}</td><td class="num {"pos" if change > 0 else "neg" if change < 0 else ""}">{"+" if change > 0 else ""}{money(change) if change else "$0.00"}</td>'
                      f'<td class="muted small">{esc(basis)}</td></tr>')
         html += (f'<h4>{esc(LANES[lane])}</h4><div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Cash</th><th>Positions</th>'
-                 f'<th>Value</th><th>vs $500 start</th><th>Valued</th></tr></thead><tbody>{rows}</tbody></table></div>')
+                 f'<th>Value</th><th>vs start</th><th>Valued</th></tr></thead><tbody>{rows}</tbody></table></div>')
     positions = [(p['lane'], p['track'], x) for p in paper for x in p['positions']]
     if positions:
         html += '<h4>Paper positions</h4><div class="table-wrap"><table class="mini"><thead><tr><th>Ticker</th><th>Account</th><th>Quantity</th><th>Average cost</th></tr></thead><tbody>'
@@ -95,15 +96,23 @@ def paper_card(paper, values):
     else:
         html += ('<p class="muted">No paper positions yet. Every run so far ended without an entry (holds and one Critic rejection). '
                  'From Thursday the desk rule can buy ETFs such as SOXX in these accounts.</p>')
-    return html + '<p class="muted small">Each account started with $500 per lane. Paper results are not investment returns.</p></section>'
+    starts = sorted({f'lane {p["lane"]} ${D(p.get("start")) or START:,.0f}' for p in paper})
+    return html + f'<p class="muted small">Starting capital: {esc(", ".join(starts))}. From Oct 1 (v1.6) lane A trades a $25,000 paper book so fills and costs are realistic. Paper results are not investment returns.</p></section>'
 
 
-def value_chart(values):
+OFFICIAL_FROM = '2026-10-01T13:30:00+00:00'
+
+
+def value_chart(values, starts=None):
+    starts = starts or {}
+    official = [v for v in values if str(v.get('timestamp')) >= OFFICIAL_FROM and v.get('data_mode') == 'live_readonly']
+    values = official or values
     series = {}
     for v in sorted(values, key=lambda x: str(x.get('timestamp'))):
         if D(v.get('value')) is None:
             continue
-        series.setdefault((v.get('lane'), v.get('track')), []).append((str(v['timestamp']), D(v['value'])))
+        base = starts.get((v.get('lane'), v.get('track'))) or START
+        series.setdefault((v.get('lane'), v.get('track')), []).append((str(v['timestamp']), START * D(v['value']) / base))
     if not series:
         return ''
     stamps = sorted({t for pts in series.values() for t, _ in pts})
@@ -119,13 +128,13 @@ def value_chart(values):
         d = ' '.join(f'{"M" if j == 0 else "L"}{x(t):.1f} {y(v):.1f}' for j, (t, v) in enumerate(pts))
         lines += f'<path class="pf-line s{i % 5}" d="{d}"><title>{esc(ARMS.get(track, track))} · lane {esc(lane)}</title></path>'
     axis = (f'<line class="axis-zero" x1="{L}" x2="{W - 12}" y1="{y(START):.1f}" y2="{y(START):.1f}"/>'
-            f'<text class="bar-label" x="{L - 6}" y="{y(START) + 4:.1f}" text-anchor="end">$500</text>'
+            f'<text class="bar-label" x="{L - 6}" y="{y(START) + 4:.1f}" text-anchor="end">start</text>'
             f'<text class="bar-value" x="{L}" y="{H - 6}">{esc(when(stamps[0]))}</text>'
             f'<text class="bar-value" x="{W - 12}" y="{H - 6}" text-anchor="end">{esc(when(stamps[-1]))}</text>')
     legend = ''.join(f'<li><i class="lg pf-line-key s{i % 5}"></i>{esc(ARMS.get(t, t))} · {esc(l)}</li>' for i, (l, t) in enumerate(sorted(series)))
     return (f'<section class="room-card"><div class="card-head"><h3>Paper value over time</h3><ul class="legend">{legend}</ul></div>'
             f'<svg class="pf-chart" viewBox="0 0 {W} {H}" role="img" aria-label="Paper account value over time">{axis}{lines}</svg>'
-            '<p class="muted small">One point per recorded valuation. Flat lines mean cash only (no positions).</p></section>')
+            '<p class="muted small">Scaled to each account’s own start, so lanes of different size compare fairly. Official runs only once they exist. Flat lines mean cash only.</p></section>')
 
 
 def render(state):
@@ -134,7 +143,7 @@ def render(state):
     pf = state.get('portfolio') or {}
     return ('<div class="room-head"><div><h1>Portfolio</h1><p>Your real Robinhood Agentic account next to the paper accounts the agents trade.</p></div></div>'
             f'<div class="pf-split">{real_card(pf.get("real"))}{paper_card(pf.get("paper", []), pf.get("values", []))}</div>'
-            + value_chart(pf.get('values', []))
+            + value_chart(pf.get('values', []), {(p['lane'], p['track']): D(p.get('start')) for p in pf.get('paper', []) if D(p.get('start'))})
             + _lanes(state))
 
 
