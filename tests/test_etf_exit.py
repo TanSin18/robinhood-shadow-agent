@@ -70,7 +70,7 @@ def test_no_exit_when_condition_not_met_or_quote_stale(tmp_path):
 def test_cycle_exit_hook_is_inert_until_v151_is_signed(monkeypatch):
     from agents.daily_cycle import desk_policy_exits
     from agents import v15_activation
-    assert v15_activation.exit_rule_active() is False
+    assert v15_activation.exit_rule_active(now=NOW) is False  # before its effective time
     assert desk_policy_exits(object(), None, {}, {}, NOW, 'c', enabled=True) == []
 
 
@@ -98,3 +98,18 @@ def test_etf_holding_does_not_wake_ai_under_v15(tmp_path, monkeypatch):
     finally:
         lifecycle.close()
     assert result['ai_gate']['invoke'] is False
+
+
+def test_exit_rule_activates_only_with_signed_pinned_file_after_effective_time(tmp_path):
+    import shutil
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from agents import v15_activation as act
+    repo = Path(act.__file__).resolve().parents[1]
+    for name in ('preregistration.yaml', act.AMENDMENT_NAME, act.V151_AMENDMENT_NAME):
+        shutil.copy(repo / name, tmp_path / name)
+    after = datetime(2026, 10, 1, 13, 31, tzinfo=timezone.utc)
+    assert act.exit_rule_active(tmp_path, after) is True
+    assert act.exit_rule_active(tmp_path, datetime(2026, 10, 1, 13, 29, tzinfo=timezone.utc)) is False
+    (tmp_path / act.V151_AMENDMENT_NAME).write_text('tampered')
+    assert act.exit_rule_active(tmp_path, after) is False

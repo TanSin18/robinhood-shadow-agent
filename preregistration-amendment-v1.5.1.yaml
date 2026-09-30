@@ -1,0 +1,34 @@
+# v1.5.1 amendment layer: registered exits for desk-rule ETF positions.
+# Active only when this file's SHA-256 matches APPROVED_V151_SHA256 in agents/v15_activation.py,
+# the effective time has passed and the v1.5.0 amendment is active.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.5.1
+  kind: scoped_amendment_layer
+  base_version: 1.5.0
+  requires_active: preregistration-amendment-v1.5.0.yaml
+  effective_from_et: '2026-10-01T09:30:00-04:00'
+  operator_signature:
+    status: SIGNED
+    signed_by: operator
+    signed_at_et: '2026-09-30T15:49:00-04:00'
+    signature_source: operator_chat_2026-09-30_1549_ET_ship_everything_in_action_by_tomorrow
+    intent_source: operator_chat_2026-09-30_1540_ET_agents_should_sell_when_conditions_are_right
+desk_etf_exit:
+  applies_to_positions: lane_A_ETF_positions_in_all_three_paper_arms
+  decision_owner: deterministic_code
+  decision_attribution: desk_policy_not_ai
+  evidence: completed_session_features_from_the_same_official_cycle
+  trigger_any_of:
+    - close_at_or_below_200_session_average        # registered invalidation text of the entry
+    - momentum_126d_not_positive
+  missing_or_stale_evidence_action: hold_and_report_EXIT_EVIDENCE_MISSING_or_FRESH_QUOTE_REQUIRED
+  quantity: full_position
+  immediate_arms: [agent_alone, deterministic_no_ai]
+  immediate_price: fresh_bid_within_60_seconds
+  approval_arm: with_approvals
+  approval_card: SELL_card_standard_proposal_time_fill_on_YES_NO_keeps_position
+  risk_engine_closing_rules_apply: true
+  ai_voting_on_etf_positions: forbidden
+  etf_holdings_trigger_ai_review: false
+  frequency: once_per_official_cycle_after_entries

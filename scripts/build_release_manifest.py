@@ -30,7 +30,7 @@ def main():
     p.add_argument('--head', default='HEAD')
     p.add_argument('--before-fingerprint', required=True)
     p.add_argument('--active-registration', default='39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075')
-    p.add_argument('--amendment')
+    p.add_argument('--amendment', action='append', default=[], help='root amendment file (repeatable)')
     p.add_argument('--out', required=True)
     a = p.parse_args()
     head = git('rev-parse', a.head).decode().strip()
@@ -48,9 +48,9 @@ def main():
                 'expected_after_source_fingerprint': None,
                 'active_preregistration_sha256': a.active_registration,
                 'files': files, 'root_files': {}}
-    if a.amendment:
-        manifest['root_files']['preregistration-amendment-v1.5.0.yaml'] = {
-            'from': a.amendment, 'after_sha256': hashlib.sha256(Path(a.amendment).read_bytes()).hexdigest()}
+    for amendment in a.amendment:
+        manifest['root_files'][Path(amendment).name] = {
+            'from': amendment, 'after_sha256': hashlib.sha256(Path(amendment).read_bytes()).hexdigest()}
     Path(a.out).write_text(json.dumps(manifest, indent=2) + '\n')
     print(json.dumps({'files': len(files), 'source_commit': head}))
 

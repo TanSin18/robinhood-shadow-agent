@@ -49,8 +49,8 @@ def v15_active(root: Path, now: datetime, *, approved_sha256=None, effective_fro
 
 # v1.5.1: registered exit for desk-rule ETF positions. Inert until the operator
 # signs the v1.5.1 amendment and a reviewed release pins its hash and time here.
-APPROVED_V151_SHA256: str | None = None
-V151_EFFECTIVE_FROM: datetime | None = None
+APPROVED_V151_SHA256: str | None = '24e309c03b3992f7ae6095cbfb096d57639e6fdcc32b2567e410a014f8699045'  # operator-signed 2026-09-30 15:49 ET
+V151_EFFECTIVE_FROM: datetime | None = datetime.fromisoformat('2026-10-01T09:30:00-04:00')
 V151_AMENDMENT_NAME = 'preregistration-amendment-v1.5.1.yaml'
 
 
