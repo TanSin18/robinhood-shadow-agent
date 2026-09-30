@@ -1,5 +1,5 @@
 {
-  "source_commit": "2ca5e4c63c533bb85ac75a35fb6f4040849e5a16",
+  "source_commit": "5a9f4f6060b91057ab1ccad0b8e74ac0efe93d29",
   "installed_base_commit": "6e2c220",
   "before_source_fingerprint": "72494d38475231b394a9e9b323659fed2ea421ab7d47e6630360d1e4dd233593",
   "expected_after_source_fingerprint": null,
@@ -60,6 +60,14 @@
     "risk/engine.py": {
       "before_sha256": "e4e2fa8e7bd82a64c6daee1a304eaced63bfe7ff501c9ff062ad4a2abb7508e7",
       "after_sha256": "6f10a5d2a4c3f09ed4c98a622c70491eaf6c201fc4315c33125f01181e47c143"
+    },
+    "scripts/build_release_manifest.py": {
+      "before_sha256": null,
+      "after_sha256": "5955582db5d62f9886ebcc8e105a74f00544b15c0c73aa4a8f8fec58c5f4a408"
+    },
+    "scripts/release_install.py": {
+      "before_sha256": null,
+      "after_sha256": "bfedcb6e1bd7b6ab9d22b7f1509f1d6e02ec6c3799f402f62c8d2981688d09c8"
     },
     "tests/test_blind_critic_request.py": {
       "before_sha256": null,
