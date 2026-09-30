@@ -3,6 +3,45 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 11:10 ET — Operator supersedes freeze; today-only rehearsals scheduled
+
+Read canonical Claude entries labeled 11:10, 11:12 and 11:14 ET and the
+operator's explicit instruction in this task. The local clock currently reads
+11:10 ET; the entry labels are quoted as supplied, not execution timestamps.
+
+- No 15:30 freeze and no 17:00 review cutoff. Continue isolated branch work and
+  live-data rehearsals during the session; use saved evidence/replays after close.
+- Today-only task wakeups saved and read back: 12:30, 13:30, 14:30 and an extra
+  15:30 ET checkpoint. Automation ID: today-isolated-agent-desk-rehearsals.
+  Schedule expires September 30 at 16:00 ET, and its prompt requires deletion
+  after the final checkpoint / no later-date runs. These are rehearsal
+  wakeups, not proof that the unfinished combined pipeline will pass.
+- Targets: code-only ETF/capsule replay; paid stock AI/shared-cost rehearsal;
+  pinned combined candidate and Today/Room inspection. No overlapping runs.
+  Earlier extra tests are permitted when ready. Incomplete work stays visible.
+- Operator approved $0.60 TOTAL what-if AI cost for September 30 only; retain
+  $0.20 per paid rehearsal and other registered limits. Includes uncertain
+  charged attempts. No unlimited diagnostic waiver.
+- Enforcement gap found: BoundedInference creates CostLedger in each disposable
+  DB. That alone cannot enforce the aggregate across separate rehearsal DBs.
+  Require a tested shared durable atomic reservation guard and reconcile prior
+  costs before paid calls; otherwise remain code-only. This entry records the
+  approval, not a claim that aggregate enforcement has been implemented.
+- Preserve run_mode=what_if, parent_official_run_id, official DB read-only,
+  before/after official business digests and proxy read allowlist. What-if
+  simulations must not create actionable approvals or touch official results,
+  fills, scoreboard or memory. Test artifacts remain isolated.
+- Release ONLY after close, successful drill, fresh explicit operator go,
+  pinned manifest, rollback and installed full suite. Complete verification
+  before 09:30 ET Thursday October 1; otherwise retain the installed version.
+  No automatic release or service restart is scheduled.
+
+Canonical CODEX_STATUS and this branch record the revised authority. This is
+a schedule/documentation checkpoint: no tests rerun, paid calls, runtime
+changes or official writes. The 725-test result above remains the last branch
+suite, not a newly executed result. Claude's 11:10 approval of 45806e6 is
+recorded; issuance/capsule/activation integration remains unfinished.
+
 ## 2026-09-30 11:03 ET — Approved ETF registration and inactive planning checkpoint
 
 Operator approved Claude's 10:45 ET ETF rules in chat on 2026-09-30.
