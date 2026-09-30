@@ -187,3 +187,13 @@ td.num,.history td .num{font-family:'Geist Mono',ui-monospace,monospace;font-siz
 .later-note{border-top:1px solid var(--border);padding-top:8px;margin-top:12px!important}
 .log-row.log-mine{background:#1b1a27;border-left-color:var(--sel)}
 .card-head a.small{font-size:12px;text-decoration:none}
+/* portfolio */
+.pf-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;align-items:start}
+.pf-big{font-size:28px;font-weight:600;letter-spacing:-.02em;margin:4px 0 8px!important;font-variant-numeric:tabular-nums}.pf-big span{font-size:13px;color:var(--text-3);font-weight:400;margin-left:8px}
+.pill-real,.pill-paper{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid}
+.pill-real{color:#a6ecd0;border-color:#2c5a4b}.pill-paper{color:#c6b7f3;border-color:#4d4466}
+.pf-real{border-top:3px solid #4fae8a}.pf-paper{border-top:3px solid #c6b7f3}
+.pf-chart{display:block;width:100%;height:auto}.pf-line{fill:none;stroke-width:2}
+.pf-line.s0,.pf-line-key.s0{stroke:#c6b7f3;border-color:#c6b7f3}.pf-line.s1,.pf-line-key.s1{stroke:#7fd6b0;border-color:#7fd6b0}
+.pf-line.s2,.pf-line-key.s2{stroke:#8fb8ff;border-color:#8fb8ff}.pf-line.s3,.pf-line-key.s3{stroke:#e3a948;border-color:#e3a948}.pf-line.s4,.pf-line-key.s4{stroke:#ff9d8a;border-color:#ff9d8a}
+@media(max-width:1000px){.pf-split{grid-template-columns:1fr}}

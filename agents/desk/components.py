@@ -9,9 +9,9 @@ ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & char
 
 # One navigation for the whole dashboard. Operational views (Approvals, History,
 # Results, Controls) are served by the unchanged operational page at /legacy.
-NAV = (('/', 'Today', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/room', 'Decision room', ''),
-       ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
-       ('/legacy#results', 'Results', 'results'), ('/legacy#controls', 'Controls', 'controls'))
+NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'),
+       ('/room', 'Decision room', ''), ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
+       ('/legacy#controls', 'Controls', 'controls'))
 
 
 def nav_links(path):

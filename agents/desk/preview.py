@@ -57,6 +57,14 @@ def snapshot(path,*,now=None):
         traces=rows('local_traces','id,created_at,payload_json','id')
         runs=rows('run_states','id,created_at,payload_json','id')
         handoff_rows=rows('handoffs','id,created_at,payload_json','id')
+        # Real Agentic account: the last VERIFIED tripwire snapshot (cash, position
+        # quantities, order states). Never account numbers; instrument ids are not shown.
+        broker_snapshot=(db.execute("SELECT created_at,payload_json FROM broker_state_snapshots WHERE status='VERIFIED' ORDER BY id DESC LIMIT 1").fetchone()
+                         if 'broker_state_snapshots' in tables else None)
+        tripwire_last=(db.execute('SELECT status,created_at FROM broker_tripwire_events ORDER BY id DESC LIMIT 1').fetchone()
+                       if 'broker_tripwire_events' in tables else None)
+        paper_rows=[dict(r) for r in db.execute('SELECT lane,track,payload FROM paper_accounts')] if 'paper_accounts' in tables else []
+        values=rows('daily_values','id,created_at,payload_json','id')
     projected=[]
     for row in cards:
         card=public(json.loads(row['payload']))
@@ -79,7 +87,23 @@ def snapshot(path,*,now=None):
         payload=public(json.loads(row['payload_json']))
         if payload.get('status') in {'COMPLETED','FAILED','HOLD_OPERATIONAL'}:
             history.append({'kind':'cycle','timestamp':row['created_at'],'summary':payload.get('reason') or payload.get('decision',{}).get('reason') or payload['status']})
-    return {'preview':True,'updated_at':now.isoformat(),'cards':projected,'history':history,
+    portfolio={'real':None,'paper':[],'values':[]}
+    if broker_snapshot:
+        snap=json.loads(broker_snapshot['payload_json'])
+        portfolio['real']={'as_of':broker_snapshot['created_at'],'cash':snap.get('cash'),
+            'positions':[{'quantity':p.get('quantity'),'direction':p.get('direction')} for p in snap.get('positions',[])],
+            'open_orders':{k:len(v) for k,v in (snap.get('orders') or {}).items()},
+            'last_check':dict(tripwire_last) if tripwire_last else None}
+    for row in paper_rows:
+        state_=json.loads(row['payload'])
+        portfolio['paper'].append({'lane':row['lane'],'track':row['track'],'settled_cash':state_.get('settled_cash'),
+            'unsettled_cash':state_.get('unsettled_cash'),'positions':[{k:p.get(k) for k in ('ticker','asset_class','quantity','average_cost','option_type','strike','expiry','multiplier')}
+                                                                        for p in (state_.get('positions') or {}).values()] if isinstance(state_.get('positions'),dict) else []})
+    for row in values:
+        v=json.loads(row['payload_json'])
+        if v.get('kind')=='paper_valuation':
+            portfolio['values'].append({k:v.get(k) for k in ('timestamp','lane','track','value','data_mode')})
+    return {'preview':True,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,
         'decision_room':rooms,'paused':(Path(path).parent/'STOP_TRADING').exists(),
         'accounts':[], 'reports':[], 'tripwire':[],
         'handoffs':[public(json.loads(r['payload_json'])) for r in handoff_rows]}
