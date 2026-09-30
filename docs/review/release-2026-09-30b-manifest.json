@@ -1,0 +1,47 @@
+{
+  "source_commit": "3b7696f1733329d03855bc1c36cf5841f01ebdd8",
+  "installed_base_commit": "4fc451b",
+  "before_source_fingerprint": "5a18df6e0e7c5622df8eb371b0ba8ff8bcea80a71df819a405340d6e64ab792b",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/daily_cycle.py": {
+      "before_sha256": "87348cc1d73ccf3ffa38b4dcee39d963d2c917bdb34f52225e1b36fa32057a16",
+      "after_sha256": "db2e306b2e0a6b624b813ff10064357adcebd02596c94502b161333c65f7121a"
+    },
+    "agents/etf_exit.py": {
+      "before_sha256": null,
+      "after_sha256": "4f39e3f2569c9b1708c9fb555b7d0faa94b8fe523abea925bbfa1d15952d6c88"
+    },
+    "agents/universe_screen.py": {
+      "before_sha256": null,
+      "after_sha256": "df309b74d1609fc1bf4135122418b317505470f2a3061c6518000f1a3a4d368c"
+    },
+    "agents/v15_activation.py": {
+      "before_sha256": "ca2a40986b49c7ba4118a75fe99a6cc1f98ffb27db33a24aa544d8e083cc2676",
+      "after_sha256": "08768c417b7c612aa960a645898aee831056dad739f078139ce351545a9bdfd5"
+    },
+    "scripts/build_release_manifest.py": {
+      "before_sha256": "5955582db5d62f9886ebcc8e105a74f00544b15c0c73aa4a8f8fec58c5f4a408",
+      "after_sha256": "6f206b7322822ee5654b6d19e1607b302f09efe15c3d8862f32aa9a6d4683546"
+    },
+    "tests/test_etf_exit.py": {
+      "before_sha256": null,
+      "after_sha256": "a8b5fd7476ecb2dd66831b1586043b3ed903ab897bd34f44fb1285b7ed30d574"
+    },
+    "tests/test_universe_screen.py": {
+      "before_sha256": null,
+      "after_sha256": "ff83f5cedca98b405c281e2100514ace28c29c32fa66545142c737976005fa68"
+    }
+  },
+  "root_files": {
+    "preregistration-amendment-v1.5.0.yaml": {
+      "from": "preregistration-amendment-v1.5.0.yaml",
+      "after_sha256": "dc3d884b8e07611005033d67b6cd4b3c26214342d042f8f835e03f976bbe0179"
+    },
+    "preregistration-amendment-v1.5.1.yaml": {
+      "from": "preregistration-amendment-v1.5.1.yaml",
+      "after_sha256": "24e309c03b3992f7ae6095cbfb096d57639e6fdcc32b2567e410a014f8699045"
+    }
+  }
+}
