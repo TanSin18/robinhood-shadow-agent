@@ -67,13 +67,20 @@ def service_definitions(root):
                     '--database',str(root/'data/agent.db'),*extra]
                 spec['StartCalendarInterval']=[{'Weekday':day,'Hour':10,'Minute':0} for day in range(1,6)]
         services[label]=spec
+    # Nightly S&P 500 shadow screen: read-only research job, never a trading runner.
+    screen_dir=root.parent/'robinhood-diagnostics/universe'
+    services['com.openai.robinhood-universe-screen']={**common,'Label':'com.openai.robinhood-universe-screen',
+        'ProgramArguments':[str(root/'.venv/bin/python'),'-m','agents.nightly_screen','--config',str(root/'config/settings.local.yaml'),
+                            '--database',str(root/'data/agent.db'),'--dir',str(screen_dir)],
+        'StandardOutPath':str(root/'logs/universe-screen.log'),'StandardErrorPath':str(root/'logs/universe-screen.error.log'),
+        'RunAtLoad':False,'StartCalendarInterval':[{'Weekday':d,'Hour':16,'Minute':50} for d in range(1,6)]}
     return services
 
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--install',action='store_true')
-    parser.add_argument('--service', action='append', choices=['daily','maintenance','read-proxy','inbox'])
+    parser.add_argument('--service', action='append', choices=['daily','maintenance','read-proxy','inbox','universe-screen'])
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     from config.loader import load_config

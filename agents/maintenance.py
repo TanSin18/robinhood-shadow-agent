@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from agents.codex_bridge import ET
-from agents.inbox import PaperInbox
+from agents.inbox import PAPER_TRACKS, PaperInbox
 from agents.operator import nyse_holidays
 from config.loader import load_config
 from eval.weekly import report_if_due
@@ -29,7 +29,10 @@ def run_once(inbox, now, reports, *, notifier=None, authorization_check=None):
     with inbox.connect() as db:
         db.execute('BEGIN IMMEDIATE')
         for lane in ('A','B'):
-            for track in ('agent_alone','with_approvals'):
+            # All three paper arms settle T+1 (deterministic_no_ai was previously skipped).
+            for track in PAPER_TRACKS:
+                if db.execute('SELECT 1 FROM paper_accounts WHERE lane=? AND track=?',(lane,track)).fetchone() is None:
+                    continue
                 state=inbox.state(lane,track,db)
                 remaining=[]
                 for settlement in state.get('settlements',[]):

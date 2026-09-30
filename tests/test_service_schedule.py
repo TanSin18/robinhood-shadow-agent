@@ -8,7 +8,10 @@ from test_inbox_lanes import setup_runtime
 def test_launchd_runs_local_python_readonly_once_and_inbox(tmp_path):
     from scripts.install_shadow_services import service_definitions
     services=service_definitions(Path.cwd())
-    assert set(services)=={'com.openai.robinhood-daily','com.openai.robinhood-inbox','com.openai.robinhood-maintenance','com.openai.robinhood-read-proxy'}
+    assert set(services)=={'com.openai.robinhood-daily','com.openai.robinhood-inbox','com.openai.robinhood-maintenance','com.openai.robinhood-read-proxy','com.openai.robinhood-universe-screen'}
+    screen=services['com.openai.robinhood-universe-screen']
+    assert 'agents.nightly_screen' in screen['ProgramArguments'] and 'StartInterval' not in screen
+    assert screen['StartCalendarInterval']==[{'Weekday':d,'Hour':16,'Minute':50} for d in range(1,6)]
     proxy=services['com.openai.robinhood-read-proxy']
     assert 'broker_proxy.server' in proxy['ProgramArguments']
     assert proxy['UserContext']=='robinhoodproxy'
