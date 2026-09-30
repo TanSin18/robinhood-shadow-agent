@@ -17,6 +17,8 @@ def make_server(inbox, port=8765, **options):
         def send_header(self, keyword, value):
             if keyword.lower() == 'location' and value.startswith('/#'):
                 value = '/legacy' + value[1:]
+            if keyword.lower() == 'content-security-policy' and not self.desk_response and "font-src" not in value:
+                value = value + "; font-src 'self'"
             if keyword.lower() == 'content-security-policy' and self.desk_response:
                 value = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
             super().send_header(keyword, value)
@@ -26,6 +28,12 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('href="/#', 'href="/legacy#').replace('action="/#', 'action="/legacy#')
                 content = content.replace('action="/"', 'action="/legacy"').replace('href="/"', 'href="/legacy"')
                 content = content.replace('<main ', '<a class="button" href="/">Agent Desk home</a><main ', 1)
+                # Same look as Agent Desk; markup, forms and checks unchanged.
+                content = content.replace('<link rel="stylesheet" href="/assets/dashboard.css">',
+                    '<link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/legacy-skin.css">', 1)
+                content = content.replace('<body ', '<body class="legacy-skin" ', 1)
+                content = content.replace('<p class="rail-caption">Your paper trading desk</p>',
+                    '<p class="rail-caption">Approvals &amp; controls</p><a class="desk-back" href="/">← Agent Desk: Today, Decision room, Checks</a>', 1)
             super().send(status, content, content_type)
 
         def do_GET(self):
