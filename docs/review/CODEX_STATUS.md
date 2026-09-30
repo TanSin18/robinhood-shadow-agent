@@ -3,6 +3,63 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 10:40 ET — Operator batch approval read; ETF registration stop condition reached
+
+Read Claude's 10:26, 10:34 and 10:41 ET entries and the operator's dated
+September 30 approval in this task. Approval covers capability-gap gate
+semantics (only when every operational check passed), ETF issuer within
+registered v1.4.2 scope, Task 2/capsule completion, preparation of Thursday
+v1.5 activation, and review/merge of claude/ui-truthful-outcome. One after-close
+batch after the drill; anything not reviewed by 17:00 ET slips. No market-hours
+installs/restarts and no implicit permission to fabricate missing policy.
+
+### Required stop: v1.4.2 is insufficient to issue deterministic ETF entries
+
+Audited the byte-pinned active registration, not just the prose that allows
+deterministic ETFs. These required fields/decisions are absent or incompatible:
+
+1. **Per-strategy gross edge:** net_edge.baseline_gate_policy requires
+   registered_strategy_gross_edge_usd as the friction-ratio numerator and
+   explicitly sets missing_registered_strategy_gross_edge_action=block_entry.
+   The only numeric value is 5.00 inside required_baseline_open_test_vector.
+   That is a synthetic acceptance example, not a registered estimate for
+   momentum_rotation_126d_trend200_top1 (or any other live strategy). No
+   strategy-specific value/provenance is registered. Do not copy it.
+2. **Deterministic selection/trigger reference:** the only trigger,
+   fresh_midpoint_not_worse_than_selection_v1, requires after_critic_pass and
+   first_fresh_midpoint_after_portfolio_timestamp. ETF-only operation forbids
+   those model stages. A code-selection timestamp/reference and non-AI eligibility
+   prerequisite must be explicitly registered; do not invent a Critic pass.
+3. **Fractional equity permission/precision/minimum:** active v1.4.2 does not
+   register paper fractional-equity permission, $1 minimum or six decimal
+   places. These appear in the separate v1.5 draft only. Existing implementation
+   behavior is not permission to import draft rules into v1.4.2.
+4. **Arm mapping:** v1.4.2 limits probability-gate bypass to deterministic_no_ai
+   and seeded_random. The proposed minimal issuer posts into agent_alone and
+   with_approvals. The registration does not assign that deterministic ETF route
+   those baseline exemptions; do not silently repurpose the existing paper arms.
+
+The v1.5 draft already proposes replacing the baseline gross-edge requirement
+with spread/slippage bounds, but that proposal is not active. Resolving these
+in the Thursday activation package is preferable to inventing v1.4.2 values.
+An explicit registered amendment is needed before ETF issuance implementation
+can claim compliance.
+
+### Work status / no hidden progress claims
+
+This checkpoint is a registration audit and approval record, not a completed
+implementation. Capability-gap gate, Task 2/capsule, v1.5 activation package
+and UI review/merge remain authorized and unfinished. The ETF task is stopped
+at the operator's requested missing-field gate; no guessed fields, issuer,
+registration activation or service changes were made. No tests were rerun
+for this documentation-only checkpoint; prior test counts remain historical.
+
+Verified remote UI tip: 614e3aa69e4f66dc9c0e66bb2f66efe8dfceb5d4.
+It has not been merged or deployed by this checkpoint. Installed v1.4.2 stays
+unchanged; no automatic job or release was created. Tonight's release remains
+conditional on drill evidence, reviewed complete items, installed suite,
+source fingerprint and rollback.
+
 ## 2026-09-30 10:23 ET — Readiness false-positive closed; independent review complete
 
 Follow-up to the investigation below. Independent review found no blockers in
