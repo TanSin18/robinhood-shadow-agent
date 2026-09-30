@@ -67,10 +67,10 @@ def promotion_card(gate):
     for arm, r in (gate.get('arms') or {}).items():
         ci = r.get('ci90')
         rows += (f'<tr><td>{esc(ARMS.get(arm, arm))}</td><td class="num">{esc(r.get("sessions"))}</td><td class="num">{esc(r.get("decisions"))}</td>'
-                 f'<td class="num">{_pct(r.get("annual_excess")) if r.get("annual_excess") is not None else "—"}</td>'
-                 f'<td class="num">{(_pct(ci[0]) + " to " + _pct(ci[1])) if ci else "—"}</td>'
+                 f'<td class="num">{_pct(r.get("annual_excess")) if r.get("annual_excess") is not None else "—"}'
+                 f'{("<br><span class=muted>" + _pct(ci[0]) + " to " + _pct(ci[1]) + "</span>") if ci else ""}</td>'
                  f'<td><span class="pill-{"real" if r.get("verdict") == "EDGE_SHOWN" else "paper"}">{esc(r.get("verdict", "").replace("_", " ").lower())}</span></td></tr>')
-    body = ('<div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Sessions</th><th>Decisions</th><th>Yearly excess vs VTI</th><th>90% range</th><th>Verdict</th></tr></thead>'
+    body = ('<div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Sessions</th><th>Decisions</th><th>Excess / yr vs VTI (90% range)</th><th>Verdict</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div>'
             f'<p class="muted small">{esc(gate.get("rule", ""))}. After spread, AI cost and an estimated 35% tax. Never unlocks real money.</p>')
     return _card('Scoreboard · statistical gate', 'Official runs only, from Oct 1 09:30 ET', body)
