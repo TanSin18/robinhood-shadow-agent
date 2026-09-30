@@ -1,0 +1,134 @@
+{
+    "status": "COMPLETED",
+    "rehearsal": "desk_policy_etf",
+    "collected_at": "2026-09-30T16:46:46.868730+00:00",
+    "overrides": [
+        "official_window_treated_as_open_now",
+        "interim_live_spread_rule_on"
+    ],
+    "quote_count": 561,
+    "fresh_quote_count": 539,
+    "etf_signals": [
+        {
+            "instrument": "SOXX",
+            "strategy": "momentum_rotation_126d_trend200_top1",
+            "strength": "0.831692436812033958488008005"
+        }
+    ],
+    "median_dollar_volume_20d": {
+        "AAPL": "12292934057.490000",
+        "AMZN": "8238178338.120000",
+        "GLD": "3448582514.205000",
+        "GOOGL": "7827750545.450000",
+        "META": "13473139458.870000",
+        "MSFT": "9530590616.275000",
+        "NVDA": "23078082212.645000",
+        "QQQ": "23089627782.980000",
+        "SOXX": "3483426968.010000",
+        "SPY": "33565135549.205000",
+        "TLT": "3075955734.020000",
+        "VTI": "1026842617.710000",
+        "XLE": "2231145227.520000",
+        "XLU": "979379746.285000"
+    },
+    "desk_results": [
+        {
+            "arm": "agent_alone",
+            "instrument": "SOXX",
+            "status": "filled",
+            "reasons": [],
+            "quantity": "0.044997",
+            "limit_price": "569.056125000",
+            "attribution": "desk_policy_not_ai"
+        },
+        {
+            "arm": "deterministic_no_ai",
+            "instrument": "SOXX",
+            "status": "filled",
+            "reasons": [],
+            "quantity": "0.044997",
+            "limit_price": "569.056125000",
+            "attribution": "desk_policy_not_ai"
+        },
+        {
+            "arm": "with_approvals",
+            "instrument": "SOXX",
+            "status": "PENDING",
+            "card_id": "rehearsal-164646-A-etf",
+            "quantity": "0.044997",
+            "limit_price": "569.056125000",
+            "expires_at": "2026-09-30T19:30:00+00:00",
+            "attribution": "desk_policy_not_ai"
+        }
+    ],
+    "approval_fill": [
+        {
+            "card_id": "rehearsal-164646-A-etf",
+            "status": "YES"
+        }
+    ],
+    "cards": [
+        {
+            "id": "rehearsal-164646-A-etf",
+            "status": "YES",
+            "author": "Desk rule (no AI)",
+            "limit_price": "569.056125000",
+            "expires": "2026-09-30T19:30:00+00:00"
+        }
+    ],
+    "paper_arms_after": {
+        "agent_alone": {
+            "settled_cash": "474.519998780000",
+            "positions": {
+                "SOXX": {
+                    "ticker": "SOXX",
+                    "asset_class": "etf",
+                    "quantity": "0.044997",
+                    "average_cost": "566.260000",
+                    "underlying_ticker": null,
+                    "option_type": null,
+                    "strike": null,
+                    "expiry": null,
+                    "multiplier": 1
+                }
+            }
+        },
+        "with_approvals": {
+            "settled_cash": "474.520448750000",
+            "positions": {
+                "SOXX": {
+                    "ticker": "SOXX",
+                    "asset_class": "etf",
+                    "quantity": "0.044997",
+                    "average_cost": "566.250000",
+                    "underlying_ticker": null,
+                    "option_type": null,
+                    "strike": null,
+                    "expiry": null,
+                    "multiplier": 1
+                }
+            }
+        },
+        "deterministic_no_ai": {
+            "settled_cash": "474.519998780000",
+            "positions": {
+                "SOXX": {
+                    "ticker": "SOXX",
+                    "asset_class": "etf",
+                    "quantity": "0.044997",
+                    "average_cost": "566.260000",
+                    "underlying_ticker": null,
+                    "option_type": null,
+                    "strike": null,
+                    "expiry": null,
+                    "multiplier": 1
+                }
+            }
+        }
+    },
+    "model_calls": 0,
+    "api_cost_usd": "0",
+    "real_orders": "blocked",
+    "official_parent": "37c7e7947a124a9c821570a55ecb00db",
+    "official_records_unchanged": true
+}
