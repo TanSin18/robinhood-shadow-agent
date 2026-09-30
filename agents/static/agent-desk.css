@@ -49,3 +49,22 @@
 .desk-stage summary,.desk-chip{color:var(--text-2)}.agent-desk select,.agent-desk input{background:var(--card-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;margin:0 8px}.desk-symbol{color:var(--cyan)}
 @media(max-width:1100px){.desk-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.desk-money{grid-template-columns:repeat(2,minmax(0,1fr))}.desk-header{padding:20px}}
 @media(max-width:719px){.agent-desk main{padding:24px 16px}.desk-header{padding:16px;align-items:stretch}.desk-header nav{display:grid;grid-template-columns:1fr;width:100%}.desk-today,.desk-money,.desk-stages{grid-template-columns:1fr}.desk-card{padding:22px}.agent-desk footer{padding:24px 16px}.desk-safety{white-space:normal}}
+/* Trading-day clock (Today). SVG geometry comes from attributes; colors here. */
+.day-clock{margin:20px 0 8px;padding:18px 22px;background:var(--card,#17181b);border:1px solid var(--border,#2a2c31);border-radius:14px}
+.day-clock h2{margin:0;font-size:17px}.day-clock p{margin:6px 0 0;color:var(--text-3,#a1a6b0);font-size:13px}
+.day-clock-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.day-clock-head span{font-family:ui-monospace,monospace;font-size:13px;color:var(--text-3,#a1a6b0)}
+.day-clock-svg{display:block;width:100%;height:auto;margin-top:8px;overflow:visible}
+.day-clock-svg .track{stroke:var(--border,#2a2c31);stroke-width:6;stroke-linecap:round}
+.day-clock-svg .open{stroke:var(--cyan,#3dc6ff);stroke-opacity:.5;stroke-width:6;stroke-linecap:round}
+.day-clock-svg .approvals{stroke:var(--violet,#b9a3ff);stroke-width:6;stroke-linecap:round}
+.day-clock-svg .tick{fill:var(--card,#17181b);stroke-width:3}.day-clock-svg .tick.minor{stroke:#7d828c}
+.day-clock-svg .tick.market{stroke:var(--cyan,#3dc6ff)}.day-clock-svg .tick.approval{stroke:var(--violet,#b9a3ff)}
+.day-clock-svg .tick.key{stroke:var(--violet,#b9a3ff);fill:var(--violet,#b9a3ff)}
+.day-clock-svg text{font-family:Geist,system-ui,sans-serif;fill:#c3c7cf}
+.day-clock-svg .t-time{font-family:ui-monospace,monospace;font-size:12px}
+.day-clock-svg .t-label{font-size:12.5px;fill:#a1a6b0}.day-clock-svg .t-label.key{fill:#f2f3f5;font-weight:700}
+.day-clock-svg .now{stroke:var(--amber,#f5b54a);stroke-width:2}
+.day-clock-svg .now-label{fill:var(--amber,#f5b54a);font-size:11px;font-weight:700}
+@media (max-width:640px){.day-clock-svg .t-label{display:none}}
+.day-clock-svg .stem{stroke:#3a3d44;stroke-width:1}

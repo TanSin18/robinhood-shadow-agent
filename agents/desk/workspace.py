@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from .components import esc
 from .team import TEAM
 from .approval_card import preview_card
+from .clock import render_clock
 
 ROLES = {
     'evidence': ('Find', 'Collect market data', 'Market data was collected.'),
@@ -152,6 +153,7 @@ def render(state):
     if reviews:
         html += '<label>Review <select id="team-review">'+''.join(f'<option value="{i}">{esc(date_label(r.get("timestamp")))}</option>' for i,r in enumerate(reviews))+'</select></label>'
     html += '<a class="team-refresh" href="/">Refresh records</a><a class="button" href="/room">Enter Decision room</a></div>'
+    html += render_clock(state.get('now'))
     if state.get('paused'): html += '<p class="team-pause">Paper activity is paused. You’re viewing saved work.</p>'
     if not reviews: html += '<section class="team-outcome"><h2>No saved review yet</h2><p>When a review is recorded, its team and outcome will appear here.</p></section>'
     html += ''.join(review_view(review, i) for i,review in enumerate(reviews))
@@ -160,4 +162,4 @@ def render(state):
     if cards:
         html += ''.join('<details><summary>'+esc(c.get('proposal', {}).get('ticker', 'Saved proposal'))+' · '+esc(c.get('status', 'Unknown'))+'</summary>'+preview_card(c)+'</details>' for c in cards[:30])
     else: html += '<p>No approval cards in the saved inbox.</p>'
-    return html+'<p class="team-caption">Preview only. Approvals and controls are disabled here.</p></section>'
+    return html+'<p class="team-caption">This page is view-only. <a href="/legacy#decisions">Approve or reject cards in Approvals →</a></p></section>'
