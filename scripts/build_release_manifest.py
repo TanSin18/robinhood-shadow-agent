@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 RUNTIME = ('agents', 'broker', 'broker_proxy', 'risk', 'research', 'data', 'eval', 'prompts', 'scripts', 'tests')
-EXCLUDE = {'scripts/release_install.py', 'scripts/build_release_manifest.py'}
+EXCLUDE = set()  # tests import these scripts; ship them so the installed suite is complete
 
 
 def git(*args):
