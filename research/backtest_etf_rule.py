@@ -15,8 +15,9 @@ Replicates the live v1.5 desk policy as closely as daily bars allow:
 * Settlement T+1, FIFO tax lots, 35% short-term / 15% long-term tax on net
   realized gains each calendar year with loss carry-forward, liquidation tax at
   the end for every strategy and benchmark.
-* Optional registered guards: no buys while drawdown from peak >= 10% or the
-  day's loss >= 3%; permanent buy lock once drawdown reaches 15%.
+* Registered breakers (as live): no buys on a day down >= 3% or a week down
+  >= 5%, and a permanent buy latch once drawdown from peak reaches 10% (the live
+  ``peak_breaker_latched`` has no automatic reset). Exits still run.
 
 Data: split-adjusted price-only daily bars (no dividends) from
 ``research.history_backfill``. Dividends are missing for the strategy and every
@@ -34,7 +35,7 @@ import math
 import random
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 
 ETF_UNIVERSE_V142 = ('GLD', 'QQQ', 'SOXX', 'SPY', 'TLT', 'VTI', 'XLE', 'XLU')
 SECTOR_ETFS_V15 = ('XLB', 'XLC', 'XLF', 'XLI', 'XLK', 'XLP', 'XLRE', 'XLV', 'XLY')
@@ -74,13 +75,21 @@ class Params:
 
 
 def load_bars(path):
+    """Load bars. Robinhood daily bars begin at 00:00 UTC, which an ET conversion labels as the
+    previous calendar day (sessions appear as Sun-Thu). Such files are shifted forward one day."""
     bars = defaultdict(dict)
     with open(path, newline='') as handle:
-        for row in csv.DictReader(handle):
-            close = float(row['close'])
-            opened = float(row['open']) if row.get('open') not in (None, '', 'None') else None
-            bars[row['symbol']][row['day']] = (opened, close)
-    return bars
+        rows = list(csv.DictReader(handle))
+    sundays = sum(1 for r in rows if date.fromisoformat(r['day']).weekday() == 6)
+    shift = sundays > len(rows) * 0.05
+    for row in rows:
+        close = float(row['close'])
+        opened = float(row['open']) if row.get('open') not in (None, '', 'None') else None
+        day = date.fromisoformat(row['day'])
+        if shift:
+            day += timedelta(days=1)
+        bars[row['symbol']][day.isoformat()] = (opened, close)
+    return bars, shift
 
 
 class Panel:
@@ -180,6 +189,25 @@ class Book:
         self.unsettled += proceeds
         return proceeds
 
+    def sell_qty(self, s, qty, price, mark, day):
+        """FIFO partial sale."""
+        remaining, lots = qty, self.lots.get(s, [])
+        while remaining > 1e-12 and lots:
+            lot = lots[0]
+            take = min(lot.qty, remaining)
+            gain = take * (price - lot.cost)
+            held = (date.fromisoformat(day) - date.fromisoformat(lot.day)).days
+            if held > 365:
+                self.realized_lt += gain
+            else:
+                self.realized_st += gain
+            self.unsettled += take * price
+            self.cost_paid += take * (mark - price)
+            lot.qty -= take
+            remaining -= take
+            if lot.qty <= 1e-12:
+                lots.pop(0)
+
     def year_end_tax(self, st, lt):
         net_st, net_lt = self.realized_st, self.realized_lt
         # Carry-forward loss offsets short-term first, then long-term.
@@ -213,6 +241,7 @@ def simulate(panel, p: Params, feats=None, start_index=None):
     start = start_index if start_index is not None else first_decision_index(panel, feats, p)
     book = Book(settled=p.capital)
     curve, trades, peak, locked, prev_equity = [], [], p.capital, False, p.capital
+    latched_on, week, week_start = None, None, p.capital
     invested_days = 0
     for i in range(start, len(days)):
         day = days[i]
@@ -244,9 +273,14 @@ def simulate(panel, p: Params, feats=None, start_index=None):
                                'reason': 'exit_rule' if broken else 'rotation'})
         drawdown = 1 - equity_open / peak if peak > 0 else 0
         day_loss = 1 - equity_open / prev_equity if prev_equity > 0 else 0
-        if p.guards and drawdown >= 0.15:
-            locked = True
-        blocked = p.guards and (locked or drawdown >= 0.10 or day_loss >= 0.03)
+        iso_week = date.fromisoformat(day).isocalendar()[:2]
+        if iso_week != week:
+            week, week_start = iso_week, prev_equity
+        weekly_loss = 1 - equity_open / week_start if week_start > 0 else 0
+        if p.guards and drawdown >= 0.10 and not locked:
+            # Live: peak_breaker_latched is set at a 10% drawdown and nothing clears it.
+            locked, latched_on = True, day
+        blocked = p.guards and (locked or day_loss >= 0.03 or weekly_loss >= 0.05)
         if picks and not blocked:
             if p.full_invest:
                 targets = [(s, None) for s in picks]
@@ -286,7 +320,7 @@ def simulate(panel, p: Params, feats=None, start_index=None):
     liq = book.liquidation_tax(final_prices, days[-1], p.st_tax, p.lt_tax)
     return {'curve': curve, 'trades': trades, 'tax_paid': book.tax_paid, 'liquidation_tax': liq,
             'cost_paid': book.cost_paid, 'invested_share': invested_days / max(1, len(curve)),
-            'locked': locked}
+            'locked': locked, 'latched_on': latched_on}
 
 
 def first_decision_index(panel, feats, p):
@@ -306,11 +340,13 @@ def buy_and_hold(panel, symbol, start, p: Params):
     held = (date.fromisoformat(days[-1]) - date.fromisoformat(days[start])).days
     liq = max(0.0, gain) * (p.lt_tax if held > 365 else p.st_tax)
     return {'curve': curve, 'trades': [{'day': days[start], 'side': 'buy', 'symbol': symbol}], 'tax_paid': 0.0,
-            'liquidation_tax': liq, 'cost_paid': qty * (fill - mark), 'invested_share': 1.0, 'locked': False}
+            'liquidation_tax': liq, 'cost_paid': qty * (fill - mark), 'invested_share': 1.0, 'locked': False,
+            'latched_on': None}
 
 
 def equal_weight(panel, symbols, start, p: Params):
-    """Monthly rebalanced equal weight across whichever symbols have bars (pre-tax, with costs)."""
+    """Monthly rebalance to equal weight across whichever symbols have bars; trades only the
+    differences (FIFO lots, same costs and tax as every other line)."""
     book = Book(settled=p.capital)
     curve = []
     days = panel.days
@@ -320,20 +356,27 @@ def equal_weight(panel, symbols, start, p: Params):
         live = [s for s in symbols if s in panel.close and panel.present[s][i] and panel.open[s][i]]
         if i == start or day[:7] != days[i - 1][:7]:
             prices = {s: panel.open[s][i] for s in live}
+            equity = book.settled + sum(book.qty(s) * prices.get(s, panel.close[s][i] or 0.0) for s in book.lots)
+            target = equity / max(1, len(live))
             for s in list(book.lots):
-                if book.lots[s] and s in prices:
-                    book.sell_all(s, prices[s] * (1 - HALF_SPREAD[s]), prices[s], day)
+                if s not in prices and book.lots[s]:
+                    continue
+                excess = book.qty(s) * prices[s] - target if s in prices else 0.0
+                if excess > 1e-9:
+                    book.sell_qty(s, excess / prices[s], prices[s] * (1 - HALF_SPREAD[s]), prices[s], day)
             book.settled += book.unsettled; book.unsettled = 0.0      # same-day proceeds for a rebalance
-            each = book.settled / max(1, len(live))
             for s in live:
+                short = target - book.qty(s) * prices[s]
                 fill = prices[s] * (1 + HALF_SPREAD[s]) * (1 + p.slippage)
-                book.buy(s, each / fill, fill, prices[s], day)
+                qty = min(short, book.settled) / fill
+                if qty * fill > 1e-9:
+                    book.buy(s, qty, fill, prices[s], day)
         if i + 1 == len(days) or days[i + 1][:4] != day[:4]:
             book.year_end_tax(p.st_tax, p.lt_tax)
         curve.append((day, book.value({s: panel.close[s][i] or 0.0 for s in panel.close})))
     liq = book.liquidation_tax({s: panel.close[s][-1] or 0.0 for s in panel.close}, days[-1], p.st_tax, p.lt_tax)
     return {'curve': curve, 'trades': [], 'tax_paid': book.tax_paid, 'liquidation_tax': liq,
-            'cost_paid': book.cost_paid, 'invested_share': 1.0, 'locked': False}
+            'cost_paid': book.cost_paid, 'invested_share': 1.0, 'locked': False, 'latched_on': None}
 
 
 def stats(result, capital):
@@ -364,6 +407,7 @@ def stats(result, capital):
         'cost_paid': round(result['cost_paid'], 2),
         'calendar_returns': {y: round(b / a - 1, 4) for y, (a, b) in sorted(by_year.items())},
         'buy_lock_triggered': result['locked'],
+        'drawdown_latch_on': result.get('latched_on'),
     }
 
 
@@ -413,7 +457,7 @@ def regime_table(results, keys):
 
 
 def run(bars_path, capital=500.0):
-    bars = load_bars(bars_path)
+    bars, shifted = load_bars(bars_path)
     panel = Panel(bars)
     base = Params(capital=capital)
     feats = panel.features(base.lookback, base.trend, base.warmup)
@@ -431,7 +475,7 @@ def run(bars_path, capital=500.0):
     }
     cash_curve = [(d, capital) for d in panel.days[start:]]
     results['cash'] = {'curve': cash_curve, 'trades': [], 'tax_paid': 0.0, 'liquidation_tax': 0.0,
-                       'cost_paid': 0.0, 'invested_share': 0.0, 'locked': False}
+                       'cost_paid': 0.0, 'invested_share': 0.0, 'locked': False, 'latched_on': None}
     summary = {k: stats(v, capital) for k, v in results.items() if k != 'cash'}
     summary['cash'] = {'cagr_after_all_tax': 0.0, 'note': 'Paper cash earns nothing; a T-bill would have earned ~1.5%/yr on average.'}
     sensitivity = {}
@@ -448,7 +492,8 @@ def run(bars_path, capital=500.0):
         'data': {'source': 'Robinhood read gateway via research.history_backfill (split-adjusted, price only, no dividends)',
                  'bars_sha256': hashlib.sha256(open(bars_path, 'rb').read()).hexdigest(),
                  'sessions': len(panel.days), 'first_session': panel.days[0], 'last_session': panel.days[-1],
-                 'opens_missing_used_close': panel.open_missing, 'coverage': coverage,
+                 'opens_missing_used_close': panel.open_missing,
+                 'session_labels_shifted_plus_one_day': shifted, 'coverage': coverage,
                  'survivorship': 'ETF list is today\'s reviewed list; funds that closed are absent.'},
         'assumptions': {'capital': capital, 'half_spread': {**{k: v for k, v in HALF_SPREAD.items()}, 'default': 0.0005},
                         'slippage_on_buys': base.slippage, 'execution': 'next session open after the signal close',
@@ -476,6 +521,11 @@ def verdict(report):
         f"Signal alone (100% in the top pick): {sig['cagr_after_all_tax']:.1%}/yr after tax, Sharpe {sig['sharpe_rf0']} vs VTI {vti['sharpe_rf0']}; "
         f"90% interval for annual excess over VTI (pre-tax): {ci[0]:+.1%} to {ci[1]:+.1%}.",
     ]
+    free = s['registered_rule_no_guards']
+    if rule.get('drawdown_latch_on'):
+        lines.append(f"The registered 10% drawdown breaker latched on {rule['drawdown_latch_on']} and never reset, so the book "
+                     f"stopped buying for good. Without breakers the same sizing made {free['cagr_after_all_tax']:.1%}/yr "
+                     f"(Sharpe {free['sharpe_rf0']}, max drawdown {free['max_drawdown']:.0%}): lower risk, lower return, no edge.")
     beats = rule['cagr_after_all_tax'] > vti['cagr_after_all_tax'] and ci[0] > 0
     lines.append('PASS: evidence of an edge over VTI after costs and tax.' if beats else
                  'NOT PROVEN: the rule does not clearly beat buy-and-hold VTI after costs and tax. '

@@ -106,3 +106,34 @@ def test_full_report_runs_on_synthetic_universe(tmp_path):
     assert report['summary']['registered_rule']['trades'] > 0
     assert set(report['excess_vs_vti']) >= {'registered_rule', 'signal_full_invest_top1'}
     assert report['verdict'] and '# ETF rule backtest' in to_markdown(report)
+
+
+def test_midnight_utc_labels_are_shifted_to_the_session(tmp_path):
+    from research.backtest_etf_rule import load_bars
+    path = tmp_path / 'b.csv'
+    path.write_text('symbol,day,open,close,volume\nSPY,2026-09-27,1,1,1\nSPY,2026-09-28,1,1,1\n')
+    bars, shifted = load_bars(str(path))
+    assert shifted and sorted(bars['SPY']) == ['2026-09-28', '2026-09-29']
+
+
+def test_equal_weight_trades_only_differences():
+    from research.backtest_etf_rule import equal_weight
+    days = _days(90)
+    flat = {s: [(d, 100.0) for d in days] for s in ('XLK', 'XLF', 'SPY')}
+    panel = Panel(_bars(flat))
+    res = equal_weight(panel, ('XLK', 'XLF'), 0, Params())
+    assert res['tax_paid'] == 0 and res['cost_paid'] < 1.0
+
+
+def test_drawdown_latch_is_permanent_like_live():
+    days = _days(700)
+    rng = random.Random(9)
+    price, path = 100.0, []
+    for i, d in enumerate(days):
+        drift = 0.002 if i < 420 else (-0.004 if i < 470 else 0.003)
+        price *= 1 + drift + rng.gauss(0, 0.004)
+        path.append((d, price))
+    panel = Panel(_bars({'SPY': path, 'VTI': path}))
+    res = simulate(panel, Params(universe=('SPY',), target_fraction=1.0, max_fraction=1.0), start_index=300)
+    assert res['latched_on'] is not None
+    assert not [t for t in res['trades'] if t['side'] == 'buy' and t['day'] > res['latched_on']]

@@ -1,0 +1,699 @@
+{
+ "what": "Backtest of the registered v1.5 desk ETF rule vs VTI, SPY, equal-weight SPDR sectors and cash",
+ "data": {
+  "source": "Robinhood read gateway via research.history_backfill (split-adjusted, price only, no dividends)",
+  "bars_sha256": "57f6fab28109eafb8f4525f253a07c5cf2453ecc2d27c4d81a638e5cbadbcdcc",
+  "sessions": 5468,
+  "first_session": "2005-01-03",
+  "last_session": "2026-09-29",
+  "opens_missing_used_close": 0,
+  "session_labels_shifted_plus_one_day": true,
+  "coverage": {
+   "GLD": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "QQQ": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "SOXX": {
+    "first_day": "2010-10-15",
+    "sessions": 4011
+   },
+   "SPY": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "TLT": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "VTI": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLB": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLC": {
+    "first_day": "2018-06-19",
+    "sessions": 2081
+   },
+   "XLE": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLF": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLI": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLK": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLP": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLRE": {
+    "first_day": "2015-10-08",
+    "sessions": 2759
+   },
+   "XLU": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLV": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   },
+   "XLY": {
+    "first_day": "2005-01-03",
+    "sessions": 5468
+   }
+  },
+  "survivorship": "ETF list is today's reviewed list; funds that closed are absent."
+ },
+ "assumptions": {
+  "capital": 500.0,
+  "half_spread": {
+   "SPY": 0.0001,
+   "QQQ": 0.0001,
+   "VTI": 0.0002,
+   "GLD": 0.0002,
+   "TLT": 0.0002,
+   "XLB": 0.0005,
+   "XLE": 0.0005,
+   "XLP": 0.0005,
+   "XLU": 0.0005,
+   "XLK": 0.0005,
+   "XLY": 0.0005,
+   "XLF": 0.0005,
+   "XLI": 0.0005,
+   "XLV": 0.0005,
+   "SOXX": 0.0005,
+   "XLRE": 0.0005,
+   "XLC": 0.0005,
+   "default": 0.0005
+  },
+  "slippage_on_buys": 0.001,
+  "execution": "next session open after the signal close",
+  "tax": {
+   "short_term": 0.35,
+   "long_term": 0.15
+  },
+  "ai_cost": "not included; the ETF rule uses no AI. $0.40/day would be ~$100/yr, i.e. 20%/yr of a $500 book."
+ },
+ "summary": {
+  "registered_rule": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 541.79,
+   "end_value_after_tax": 541.79,
+   "cagr_pre_liquidation": 0.0039,
+   "cagr_after_all_tax": 0.0039,
+   "ann_vol": 0.0366,
+   "sharpe_rf0": 0.123,
+   "max_drawdown": 0.1053,
+   "trades": 140,
+   "invested_share_of_days": 0.285,
+   "tax_paid": 13.28,
+   "liquidation_tax": 0.0,
+   "cost_paid": 4.2,
+   "calendar_returns": {
+    "2006": 0.0129,
+    "2007": 0.0452,
+    "2008": 0.0045,
+    "2009": 0.0257,
+    "2010": -0.0188,
+    "2011": 0.0118,
+    "2012": 0.0,
+    "2013": 0.0,
+    "2014": 0.0,
+    "2015": 0.0,
+    "2016": 0.0,
+    "2017": 0.0,
+    "2018": 0.0,
+    "2019": 0.0,
+    "2020": 0.0,
+    "2021": 0.0,
+    "2022": 0.0,
+    "2023": 0.0,
+    "2024": 0.0,
+    "2025": 0.0,
+    "2026": 0.0
+   },
+   "buy_lock_triggered": true,
+   "drawdown_latch_on": "2010-07-12"
+  },
+  "registered_rule_no_guards": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 1237.66,
+   "end_value_after_tax": 1206.65,
+   "cagr_pre_liquidation": 0.0447,
+   "cagr_after_all_tax": 0.0434,
+   "ann_vol": 0.0904,
+   "sharpe_rf0": 0.529,
+   "max_drawdown": 0.1505,
+   "trades": 656,
+   "invested_share_of_days": 0.991,
+   "tax_paid": 122.73,
+   "liquidation_tax": 31.01,
+   "cost_paid": 24.44,
+   "calendar_returns": {
+    "2006": 0.0129,
+    "2007": 0.0452,
+    "2008": 0.0045,
+    "2009": 0.0257,
+    "2010": 0.0046,
+    "2011": 0.0166,
+    "2012": -0.0385,
+    "2013": 0.265,
+    "2014": 0.0247,
+    "2015": -0.0804,
+    "2016": 0.0482,
+    "2017": 0.1067,
+    "2018": -0.0196,
+    "2019": 0.0947,
+    "2020": 0.032,
+    "2021": 0.1271,
+    "2022": -0.0957,
+    "2023": 0.0727,
+    "2024": 0.1816,
+    "2025": 0.0439,
+    "2026": 0.1183
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "registered_rule_v142_8etfs": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 531.3,
+   "end_value_after_tax": 531.3,
+   "cagr_pre_liquidation": 0.0029,
+   "cagr_after_all_tax": 0.0029,
+   "ann_vol": 0.0339,
+   "sharpe_rf0": 0.103,
+   "max_drawdown": 0.1185,
+   "trades": 188,
+   "invested_share_of_days": 0.333,
+   "tax_paid": 21.5,
+   "liquidation_tax": 0.0,
+   "cost_paid": 4.64,
+   "calendar_returns": {
+    "2006": 0.0123,
+    "2007": 0.0737,
+    "2008": -0.0104,
+    "2009": -0.0039,
+    "2010": 0.0198,
+    "2011": 0.0313,
+    "2012": -0.0576,
+    "2013": 0.0,
+    "2014": 0.0,
+    "2015": 0.0,
+    "2016": 0.0,
+    "2017": 0.0,
+    "2018": 0.0,
+    "2019": 0.0,
+    "2020": 0.0,
+    "2021": 0.0,
+    "2022": 0.0,
+    "2023": 0.0,
+    "2024": 0.0,
+    "2025": 0.0,
+    "2026": 0.0
+   },
+   "buy_lock_triggered": true,
+   "drawdown_latch_on": "2012-10-23"
+  },
+  "signal_full_invest_top1": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 757.36,
+   "end_value_after_tax": 714.68,
+   "cagr_pre_liquidation": 0.0202,
+   "cagr_after_all_tax": 0.0174,
+   "ann_vol": 0.2317,
+   "sharpe_rf0": 0.202,
+   "max_drawdown": 0.6161,
+   "trades": 955,
+   "invested_share_of_days": 0.902,
+   "tax_paid": 72.91,
+   "liquidation_tax": 42.68,
+   "cost_paid": 421.31,
+   "calendar_returns": {
+    "2006": 0.0594,
+    "2007": 0.0002,
+    "2008": 0.1138,
+    "2009": -0.0085,
+    "2010": -0.0648,
+    "2011": 0.0947,
+    "2012": -0.2668,
+    "2013": 0.1938,
+    "2014": -0.0452,
+    "2015": -0.1306,
+    "2016": 0.1922,
+    "2017": 0.2113,
+    "2018": -0.1603,
+    "2019": -0.2587,
+    "2020": -0.0842,
+    "2021": 0.0683,
+    "2022": 0.0399,
+    "2023": -0.0711,
+    "2024": 0.1087,
+    "2025": 0.253,
+    "2026": 0.4639
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "signal_full_invest_top3": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 1025.6,
+   "end_value_after_tax": 973.93,
+   "cagr_pre_liquidation": 0.0353,
+   "cagr_after_all_tax": 0.0327,
+   "ann_vol": 0.1764,
+   "sharpe_rf0": 0.284,
+   "max_drawdown": 0.4019,
+   "trades": 2242,
+   "invested_share_of_days": 0.989,
+   "tax_paid": 92.29,
+   "liquidation_tax": 51.67,
+   "cost_paid": 317.3,
+   "calendar_returns": {
+    "2006": -0.0563,
+    "2007": 0.0843,
+    "2008": -0.0178,
+    "2009": 0.0477,
+    "2010": 0.0232,
+    "2011": 0.0714,
+    "2012": -0.185,
+    "2013": 0.2511,
+    "2014": 0.0043,
+    "2015": -0.091,
+    "2016": 0.0703,
+    "2017": 0.1095,
+    "2018": -0.0841,
+    "2019": -0.0696,
+    "2020": -0.0759,
+    "2021": 0.1763,
+    "2022": -0.1336,
+    "2023": 0.1248,
+    "2024": 0.1113,
+    "2025": 0.1383,
+    "2026": 0.3988
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "vti_buy_hold": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 2990.82,
+   "end_value_after_tax": 2617.2,
+   "cagr_pre_liquidation": 0.0901,
+   "cagr_after_all_tax": 0.0831,
+   "ann_vol": 0.1979,
+   "sharpe_rf0": 0.535,
+   "max_drawdown": 0.5665,
+   "trades": 1,
+   "invested_share_of_days": 1.0,
+   "tax_paid": 0.0,
+   "liquidation_tax": 373.62,
+   "cost_paid": 0.6,
+   "calendar_returns": {
+    "2006": 0.1122,
+    "2007": 0.0352,
+    "2008": -0.3835,
+    "2009": 0.2599,
+    "2010": 0.1517,
+    "2011": -0.0096,
+    "2012": 0.1397,
+    "2013": 0.309,
+    "2014": 0.1051,
+    "2015": -0.016,
+    "2016": 0.1057,
+    "2017": 0.1902,
+    "2018": -0.0701,
+    "2019": 0.282,
+    "2020": 0.1896,
+    "2021": 0.2404,
+    "2022": -0.2081,
+    "2023": 0.2408,
+    "2024": 0.2217,
+    "2025": 0.1569,
+    "2026": 0.1193
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "spy_buy_hold": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 3008.67,
+   "end_value_after_tax": 2632.37,
+   "cagr_pre_liquidation": 0.0904,
+   "cagr_after_all_tax": 0.0834,
+   "ann_vol": 0.1932,
+   "sharpe_rf0": 0.545,
+   "max_drawdown": 0.5647,
+   "trades": 1,
+   "invested_share_of_days": 1.0,
+   "tax_paid": 0.0,
+   "liquidation_tax": 376.3,
+   "cost_paid": 0.55,
+   "calendar_returns": {
+    "2006": 0.1125,
+    "2007": 0.0324,
+    "2008": -0.3828,
+    "2009": 0.2349,
+    "2010": 0.1284,
+    "2011": -0.002,
+    "2012": 0.1347,
+    "2013": 0.2969,
+    "2014": 0.1129,
+    "2015": -0.0081,
+    "2016": 0.0964,
+    "2017": 0.1938,
+    "2018": -0.0635,
+    "2019": 0.2879,
+    "2020": 0.1616,
+    "2021": 0.2704,
+    "2022": -0.1948,
+    "2023": 0.2429,
+    "2024": 0.233,
+    "2025": 0.1635,
+    "2026": 0.1207
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "equal_weight_spdr_sectors": {
+   "start": "2006-01-04",
+   "end": "2026-09-29",
+   "years": 20.73,
+   "end_value": 1997.85,
+   "end_value_after_tax": 1922.09,
+   "cagr_pre_liquidation": 0.0691,
+   "cagr_after_all_tax": 0.0671,
+   "ann_vol": 0.1834,
+   "sharpe_rf0": 0.457,
+   "max_drawdown": 0.5518,
+   "trades": 0,
+   "invested_share_of_days": 1.0,
+   "tax_paid": 180.96,
+   "liquidation_tax": 75.76,
+   "cost_paid": 7.03,
+   "calendar_returns": {
+    "2006": 0.1167,
+    "2007": 0.0708,
+    "2008": -0.3726,
+    "2009": 0.251,
+    "2010": 0.1356,
+    "2011": 0.0083,
+    "2012": 0.1209,
+    "2013": 0.2812,
+    "2014": 0.1085,
+    "2015": -0.0455,
+    "2016": 0.0959,
+    "2017": 0.1494,
+    "2018": -0.1025,
+    "2019": 0.2411,
+    "2020": 0.0695,
+    "2021": 0.2632,
+    "2022": -0.1396,
+    "2023": 0.1327,
+    "2024": 0.1294,
+    "2025": 0.0988,
+    "2026": 0.0659
+   },
+   "buy_lock_triggered": false,
+   "drawdown_latch_on": null
+  },
+  "cash": {
+   "cagr_after_all_tax": 0.0,
+   "note": "Paper cash earns nothing; a T-bill would have earned ~1.5%/yr on average."
+  }
+ },
+ "excess_vs_vti": {
+  "registered_rule": {
+   "annual_excess_log_growth": -0.0824,
+   "ci90": [
+    -0.1422,
+    -0.0222
+   ],
+   "share_of_draws_above_zero": 0.013,
+   "block_days": 21,
+   "draws": 2000,
+   "note": "pre-tax daily equity, so tax timing is excluded"
+  },
+  "signal_full_invest_top1": {
+   "annual_excess_log_growth": -0.0665,
+   "ci90": [
+    -0.1483,
+    0.0137
+   ],
+   "share_of_draws_above_zero": 0.09,
+   "block_days": 21,
+   "draws": 2000,
+   "note": "pre-tax daily equity, so tax timing is excluded"
+  },
+  "signal_full_invest_top3": {
+   "annual_excess_log_growth": -0.0518,
+   "ci90": [
+    -0.1091,
+    0.0052
+   ],
+   "share_of_draws_above_zero": 0.066,
+   "block_days": 21,
+   "draws": 2000,
+   "note": "pre-tax daily equity, so tax timing is excluded"
+  },
+  "equal_weight_spdr_sectors": {
+   "annual_excess_log_growth": -0.0194,
+   "ci90": [
+    -0.0334,
+    -0.0042
+   ],
+   "share_of_draws_above_zero": 0.018,
+   "block_days": 21,
+   "draws": 2000,
+   "note": "pre-tax daily equity, so tax timing is excluded"
+  }
+ },
+ "regimes": {
+  "GFC 2008-09 \u2192 2009-03": {
+   "registered_rule": -0.0056,
+   "signal_full_invest_top1": -0.0988,
+   "vti_buy_hold": -0.4763,
+   "equal_weight_spdr_sectors": -0.4773
+  },
+  "Q4 2018 selloff": {
+   "registered_rule": 0.0,
+   "signal_full_invest_top1": -0.1594,
+   "vti_buy_hold": -0.2014,
+   "equal_weight_spdr_sectors": -0.1765
+  },
+  "COVID crash 2020": {
+   "registered_rule": 0.0,
+   "signal_full_invest_top1": -0.2013,
+   "vti_buy_hold": -0.35,
+   "equal_weight_spdr_sectors": -0.3661
+  },
+  "COVID rebound 2020": {
+   "registered_rule": 0.0,
+   "signal_full_invest_top1": 0.1355,
+   "vti_buy_hold": 0.5885,
+   "equal_weight_spdr_sectors": 0.4844
+  },
+  "Rate shock 2022": {
+   "registered_rule": 0.0,
+   "signal_full_invest_top1": 0.0197,
+   "vti_buy_hold": -0.2131,
+   "equal_weight_spdr_sectors": -0.1424
+  },
+  "Mega-cap grind 2023-25": {
+   "registered_rule": 0.0,
+   "signal_full_invest_top1": 0.3375,
+   "vti_buy_hold": 0.7608,
+   "equal_weight_spdr_sectors": 0.4102
+  }
+ },
+ "sensitivity_full_invest": {
+  "mom63_ma100": {
+   "cagr_after_all_tax": 0.0018,
+   "sharpe_rf0": 0.116,
+   "max_drawdown": 0.6376,
+   "trades": 1183
+  },
+  "mom63_ma150": {
+   "cagr_after_all_tax": 0.0118,
+   "sharpe_rf0": 0.161,
+   "max_drawdown": 0.57,
+   "trades": 1183
+  },
+  "mom63_ma200": {
+   "cagr_after_all_tax": 0.0132,
+   "sharpe_rf0": 0.168,
+   "max_drawdown": 0.529,
+   "trades": 1177
+  },
+  "mom126_ma100": {
+   "cagr_after_all_tax": -0.0063,
+   "sharpe_rf0": 0.083,
+   "max_drawdown": 0.7061,
+   "trades": 1069
+  },
+  "mom126_ma150": {
+   "cagr_after_all_tax": 0.0146,
+   "sharpe_rf0": 0.185,
+   "max_drawdown": 0.6428,
+   "trades": 965
+  },
+  "mom126_ma200": {
+   "cagr_after_all_tax": 0.0174,
+   "sharpe_rf0": 0.202,
+   "max_drawdown": 0.6161,
+   "trades": 955
+  },
+  "mom252_ma100": {
+   "cagr_after_all_tax": 0.0416,
+   "sharpe_rf0": 0.295,
+   "max_drawdown": 0.5266,
+   "trades": 903
+  },
+  "mom252_ma150": {
+   "cagr_after_all_tax": 0.0826,
+   "sharpe_rf0": 0.494,
+   "max_drawdown": 0.4797,
+   "trades": 797
+  },
+  "mom252_ma200": {
+   "cagr_after_all_tax": 0.081,
+   "sharpe_rf0": 0.482,
+   "max_drawdown": 0.4689,
+   "trades": 721
+  }
+ },
+ "recent_trades_registered": [
+  {
+   "day": "2010-06-07",
+   "side": "sell",
+   "symbol": "GLD",
+   "qty": 0.517733,
+   "price": 118.73,
+   "reason": "exit_rule"
+  },
+  {
+   "day": "2010-06-07",
+   "side": "sell",
+   "symbol": "XLI",
+   "qty": 2.802299,
+   "price": 28.4,
+   "reason": "exit_rule"
+  },
+  {
+   "day": "2010-06-10",
+   "side": "buy",
+   "symbol": "GLD",
+   "qty": 0.508686,
+   "price": 119.36,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-06-17",
+   "side": "buy",
+   "symbol": "GLD",
+   "qty": 0.014641,
+   "price": 121.6398,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-06-18",
+   "side": "buy",
+   "symbol": "GLD",
+   "qty": 0.035976,
+   "price": 123.04,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-06-22",
+   "side": "buy",
+   "symbol": "GLD",
+   "qty": 0.027486,
+   "price": 121.16,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-06-30",
+   "side": "sell",
+   "symbol": "XLY",
+   "qty": 8.458555,
+   "price": 14.725,
+   "reason": "exit_rule"
+  },
+  {
+   "day": "2010-06-30",
+   "side": "buy",
+   "symbol": "TLT",
+   "qty": 0.6525,
+   "price": 101.41,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-07-01",
+   "side": "buy",
+   "symbol": "TLT",
+   "qty": 0.022381,
+   "price": 101.5039,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-07-06",
+   "side": "buy",
+   "symbol": "TLT",
+   "qty": 0.15298,
+   "price": 100.83,
+   "reason": "entry"
+  },
+  {
+   "day": "2010-11-10",
+   "side": "sell",
+   "symbol": "TLT",
+   "qty": 0.827861,
+   "price": 96.35,
+   "reason": "exit_rule"
+  },
+  {
+   "day": "2011-12-15",
+   "side": "sell",
+   "symbol": "GLD",
+   "qty": 0.586789,
+   "price": 154.74,
+   "reason": "exit_rule"
+  }
+ ],
+ "verdict": [
+  "Registered rule (as sized live): 0.4%/yr after tax vs VTI 8.3%/yr; max drawdown 11% vs 57%; invested on 28% of days.",
+  "Signal alone (100% in the top pick): 1.7%/yr after tax, Sharpe 0.202 vs VTI 0.535; 90% interval for annual excess over VTI (pre-tax): -14.8% to +1.4%.",
+  "The registered 10% drawdown breaker latched on 2010-07-12 and never reset, so the book stopped buying for good. Without breakers the same sizing made 4.3%/yr (Sharpe 0.529, max drawdown 15%): lower risk, lower return, no edge.",
+  "NOT PROVEN: the rule does not clearly beat buy-and-hold VTI after costs and tax. Do not add AI, options or capital on the strength of this rule."
+ ]
+}
