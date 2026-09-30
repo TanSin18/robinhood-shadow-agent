@@ -88,10 +88,11 @@ def test_early_close_expiry_and_exact_boundary():
     assert entry_deadline(at)==datetime(2026,11,27,17,30,tzinfo=timezone.utc)
 
 
-def test_activation_guard_is_closed_and_draft_is_never_live():
+def test_activation_guard_draft_is_never_live_and_root_only_after_effective_time():
     from agents.etf_desk_policy import production_enabled
     assert not production_enabled('docs/superpowers/plans/preregistration-v1.5.0.draft.yaml',NOW)
-    assert not production_enabled('preregistration.yaml',NOW)
+    assert not production_enabled('preregistration.yaml',datetime(2026,9,30,20,tzinfo=timezone.utc))
+    assert production_enabled('preregistration.yaml',NOW)  # signed, pinned amendment; Thu 10:00 ET
 
 
 def test_risk_kill_switch_is_not_bypassed():

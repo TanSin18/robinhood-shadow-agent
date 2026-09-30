@@ -15,8 +15,8 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-APPROVED_V15_SHA256: str | None = None
-EFFECTIVE_FROM: datetime | None = None
+APPROVED_V15_SHA256: str | None = '09a229c9666f16d5e792d7727d24c0d19f3c1dcd08c279d2486d8bf5dd6210f0'  # operator-signed 2026-09-30 12:34 ET
+EFFECTIVE_FROM: datetime | None = datetime.fromisoformat('2026-10-01T09:30:00-04:00')
 AMENDMENT_NAME = 'preregistration-amendment-v1.5.0.yaml'
 
 

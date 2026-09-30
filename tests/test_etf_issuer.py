@@ -148,3 +148,12 @@ def test_activation_is_byte_pinned_signed_amendment_over_unchanged_base(tmp_path
     digest = amendment('SIGNED', registration_sha256(base))
     base.write_text('registration: {version: 1.4.2} # edited\n')                     # base changed
     assert not v15_active(tmp_path, NOW, approved_sha256=digest, effective_from=NOW)
+
+
+def test_repository_amendment_is_signed_pinned_and_effective_thursday():
+    from pathlib import Path
+    from agents.v15_activation import v15_active
+    root = Path(__file__).resolve().parents[1]
+    thursday = datetime(2026, 10, 1, 14, 0, tzinfo=timezone.utc)
+    assert v15_active(root, thursday)
+    assert not v15_active(root, datetime(2026, 10, 1, 13, 29, tzinfo=timezone.utc))   # before 09:30 ET
