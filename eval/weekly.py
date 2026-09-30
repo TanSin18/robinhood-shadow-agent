@@ -58,11 +58,19 @@ def report_if_due(inbox, now, directory):
                     start=Decimal(inbox.state(lane,track)['start'])
                     gross=Decimal(value)-start
                     lines.append(f'| {lane} / {track} | ${Decimal(value):.2f} | ${gross:.2f} | ${all_cost/2:.6f} | ${gross-all_cost/2:.2f} |')
-        lines += ['', 'VTI benchmark: unavailable until two comparable observed prices exist. Cash benchmark: $500 per lane, $0 AI costs; no assumed interest.', '', 'Equity uses observed bid marks (spread already included); no second spread subtraction. Missing marks remain unavailable. Taxes, fees not modeled by this runtime, dividends, and approval execution latency are excluded; these are paper estimates, not investment returns.']
+        lines += ['', 'VTI benchmark: unavailable until two comparable observed prices exist. Cash benchmark: each lane\'s starting cash, $0 AI costs; no assumed interest.', '', 'Equity uses observed bid marks (spread already included); no second spread subtraction. Missing marks remain unavailable. Taxes, fees not modeled by this runtime, dividends, and approval execution latency are excluded; these are paper estimates, not investment returns.']
         benchmark=[v for v in inbox.store.read_json('daily_values') if v.get('benchmark')=='VTI' and v.get('data_mode')=='live_readonly' and eastern_day(v['timestamp'])<=key]
         if len(benchmark)>=2 and benchmark[0]['close'].get('date')!=benchmark[-1]['close'].get('date'):
             first,last=Decimal(benchmark[0]['close']['price']),Decimal(benchmark[-1]['close']['price'])
-            lines += ['', f'Observed VTI price-only benchmark since first observation: ${500*last/first:.2f} per $500, $0 AI costs. Not dividend-adjusted.']
+            base=Decimal(inbox.state('A','agent_alone')['start'])
+            lines += ['', f'Observed VTI price-only benchmark since first observation: ${base*last/first:.2f} per ${base:.0f}, $0 AI costs. Not dividend-adjusted.']
+        try:  # pre-declared statistical promotion gate (v1.6); informational, never unlocks live money
+            from eval.promotion_stats import evaluate, load
+            gate=evaluate(load(inbox.path))
+            lines += ['', 'Statistical promotion gate (official runs only): '+'; '.join(
+                f"{arm}: {r['verdict']} ({r['sessions']} sessions, {r['decisions']} decisions)" for arm,r in gate['arms'].items())]
+        except Exception as gate_error:
+            lines += ['', f'Statistical promotion gate unavailable ({type(gate_error).__name__}).']
         body='\n'.join(lines)+'\n'
         directory.mkdir(parents=True,exist_ok=True)
         path.write_text(body)
