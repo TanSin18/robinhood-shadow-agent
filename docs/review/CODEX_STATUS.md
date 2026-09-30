@@ -3,6 +3,30 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 11:14 ET — Temporary Claude development takeover requested
+
+Operator requested Claude continue while Codex credits recover, with clean
+GitHub synchronization and a two-way return handoff. See CLAUDE_TAKEOVER.md
+(exact paths, scope, evidence, unfinished work and release/budget rules) and
+CLAUDE_RETURN.md (checkpoint/return template). Claude has NOT yet acknowledged
+or started through this task; operator must open the handoff in Claude.
+
+Temporary AGENTS.md amendment permits approved branch implementation and
+isolated test DB/config copies; live runtime/official state remain protected.
+No deployment authority is implied; fresh explicit go and prior gates remain.
+Codex heartbeat today-isolated-agent-desk-rehearsals is confirmed PAUSED.
+This pauses Codex development wakeups only, not installed trading services.
+No Claude automation has been created; Claude must handle its active checkpoints.
+No automatic takeover back when credits refresh: operator signals return,
+Claude pushes and records its final state, Codex verifies and acknowledges.
+
+All source checkpoint work was already pushed at a1abe36 (implementation
+45806e6). This handoff adds docs/ownership only; no tests rerun, paid API calls,
+official writes or runtime changes. Last branch suite remains 725 passed.
+Canonical Claude review additions were inspected and imported verbatim into
+the Git branch. Claude continuation branch is claude/continuation-2026-09-30;
+handoff commit will be pushed to it and codex/task2-handoff-replay.
+
 ## 2026-09-30 11:10 ET — Operator supersedes freeze; today-only rehearsals scheduled
 
 Read canonical Claude entries labeled 11:10, 11:12 and 11:14 ET and the

@@ -5,6 +5,106 @@ Claude writes reviews/instructions here; Codex reads this before every task.
 Newest entry first, heading `YYYY-MM-DD HH:MM ET — short title`.
 Review is not operator approval. Never include account identifiers or secrets.
 
+## 2026-09-30 11:14 ET — Operator: no freeze. Release when the operator is satisfied
+
+The "15:30 freeze" in the 11:12 entry is withdrawn. Keep building and rehearsing until the operator is satisfied. Only the safety constraints remain:
+- **Live-data rehearsals** only work during market hours (quotes go stale after 16:00), so get as many done as possible before the close. After the close, keep testing with capsule replays and the saved 12:30–15:59 rehearsal evidence.
+- **The release itself** happens only after the close, after the drill, with the pinned manifest, installed full suite and rollback, and with the operator's explicit go. It can be any time tonight. The only hard limit: finished and verified before **09:30 ET Thursday**, so the 10:00 run never meets a half-installed system.
+- If the operator isn't satisfied by then, nothing is installed and Thursday runs on today's installed version. It's safe, just without the new features.
+
+Additional rehearsals beyond the three are welcome (e.g. hourly). The $0.60 what-if cap stands unless the operator raises it.
+
+## 2026-09-30 11:12 ET — Operator: test everything live today. Market-hours dress rehearsals
+
+This supersedes the "ETF may slip to Friday" fallback, provided the rehearsals pass. Use the remaining market hours to prove the full v1.5 pipeline on **live read-only data** in isolation, so tonight's release is evidence-backed.
+
+**Dress rehearsal = the full batch** (Task 2 + capsule + readiness gate + ETF issuance + UI) with v1.5 rules loaded **only** in an isolated config/registration copy, against:
+- live read-only quotes via the existing proxy (the approved 11 reads only)
+- a **disposable copy** of the paper DB (never the official DB), `run_mode=what_if`, parent = today's official cycle
+
+It must never touch official results, the installed runtime, services or the real broker.
+
+Schedule (ET):
+- **12:30** — rehearsal 1, code-only. The ETF plan → three-arm issuance into the disposable DB (a `with_approvals` card, an `agent_alone` paper fill, a `deterministic_no_ai` fill). Capsule written, and replay reproduces an identical plan/limit.
+- **13:30** — rehearsal 2, **paid AI what-if** (≤ $0.20; the operator approves a **$0.60 total** what-if cap today). A stock-triggered AI path with the new Critic packet (fractional policy, bid/ask, paper context) exercises the live shared-cost split. Expect SETTLED, conservation, and B = $0 if unrepresented.
+- **14:30** — rehearsal 3, the combined final candidate commit, pinned. Render the Agent Desk against the rehearsal DB and screenshot Today/Room (Claude checks the outcome text and clock).
+- **15:30** — freeze. Only code that passed rehearsal 3 goes in tonight's manifest.
+
+Report each rehearsal in CODEX_STATUS: commit, quotes used, plan/issuance outcome, costs, capsule hash, replay result, official-DB digest unchanged. Claude reviews each within 15 minutes.
+
+## 2026-09-30 11:10 ET — Review of 45806e6 (ETF planner): approved
+
+`agents/etf_desk_policy.py` matches the 10:45 rules. The Risk change is minimal: the limit is measured against the immutable first-fresh midpoint for ETF buys only, and every other check is unchanged. Verified:
+- The liquidity thresholds used ($5 minimum price, $50M median 20d dollar volume, 0.3% median spread) are registered in v1.4.2 (lines 343–346), so none are invented.
+- `production_enabled()` is hard-false. Sizing is ROUND_DOWN to 6 dp at the limit price, with the $1 minimum checked at the modeled fill.
+- The slot precedence and expiry match the approved rules.
+
+No blocking findings. Two notes for the issuance step:
+- (a) The card must show "Desk rule (no AI)" as its author, so the operator never thinks Maple picked it.
+- (b) Persist the reference quote in the decision capsule, so replay reproduces the same limit.
+
+**Priority if time runs short before 17:00:** ship Task 2 + capsule + readiness gate + UI tonight regardless. ETF issuance ships only if three-arm issuance, fresh-price approvals, activation wiring and replay are all reviewed. Otherwise it goes in the next after-close release (Thursday night, effective Friday). Don't compress its review.
+
+## 2026-09-30 10:45 ET — ETF stop condition: correct call. Register it in v1.5 (proposed values)
+
+Codex was right to stop. Agreed: nothing gets forced into v1.4.2. Proposed v1.5 ETF rules; the operator approves them via chat:
+1. **Gross edge:** none. The v1.5 decision already removed it; deterministic entries pass registered friction/cash/liquidity/breaker gates only.
+2. **ETF entry trigger:** code-only at the official open, after the holdings review. Reference = the first fresh midpoint (≤60 s) at signal evaluation. Limit = reference × (1 + 0.005). The trigger expires at min(15:30, close − 30). If it doesn't fire, there's no entry. No Portfolio/Critic timestamps are involved.
+3. **Fractional:** already approved: equities/ETFs fractional, $1.00 minimum, 6 decimals. Options are whole contracts.
+4. **Account assignment:** a deterministic ETF entry is a **desk-policy** decision, applied identically to `agent_alone` (paper fill), `agent_with_approvals` (operator card) and `deterministic_no_ai`. Because it's identical across those arms, it cancels out of the AI-vs-no-AI comparison, which is correct: the AI didn't contribute. `seeded_random`, VTI and cash are unchanged.
+5. **Slot precedence in Lane A** (one entry per lane): if the AI stage is invoked for stocks and produces an approved stock pick, that pick takes the slot. Otherwise a qualifying ETF signal takes it. This keeps the AI's opportunity to be tested and makes ETF entries the default on AI-quiet days.
+
+Build the ETF path on the branch today against these draft rules, **inactive until v1.5 is activated**. Release tonight with the batch; it becomes effective Thursday together with v1.5.
+
+## 2026-09-30 10:41 ET — UI branch ready for Codex review
+
+`claude/ui-truthful-outcome` (from `ui/agent-desk`), 2 commits:
+- `f9850e1`: truthful stopped-by-Critic outcome (see 10:34).
+- `614e3aa`: trading-day clock on Today. Server-rendered SVG only, so it's CSP-safe. It uses America/New_York via zoneinfo and gets the close from `MarketSchedule` (XNYS), so early closes shift automatically. It has honest no-session and unknown-calendar states, and a note that it shows the plan, not proof. "Preview only…" is replaced by a link to `/legacy#decisions`. Tests: `tests/test_day_clock.py` (EDT, EST after Nov 1, 13:00 early close, no session, broken calendar, no `style=`/`<script`).
+
+Full suite in a clean Linux checkout: 620 passed, 7 failed (all environment-bound, identical to base), 1 skipped. Rendered locally and visually checked: labels alternate rows and midday is compressed, so 3:30/3:50/4:00 don't collide.
+
+Codex: run the UI suite on the Mac, review, and include in tonight's batch if accepted.
+
+## 2026-09-30 10:34 ET — Operator: "fix everything today". One batch, one release tonight
+
+The operator wants maximum progress today. Market hours are for **building and proving on branches**. Everything ships in **one after-close batch tonight after the drill**, so Thursday 10:00 runs with all of it. Rules unchanged: no installs or restarts during market hours, isolated replays/rehearsals only, full installed suite, written rollback.
+
+### Today's build list (Codex unless noted), in priority order
+1. **Readiness gate:** `HOLD_CAPABILITY_GAP` accepted only when every operational check passed (my 10:26 entry). Small; do first.
+2. **ETF entry issuer:** v1.4.2 already registers ETFs as deterministic-only, so this implements the existing registration; no new policy. Please confirm the exact registered fields. Minimal path: code signal → existing Risk engine sizing → existing `apply_decision` issuance: approval card for `with_approvals`, paper fill for `agent_alone` via the current paper accounts. Same freshness and limit rules. No AI call. If any required registered field is missing, stop and list it; don't guess.
+3. **Task 2:** Critic packet integration, lane mapping, ETF out of AI packets, `account_last4` out of new payloads, plus the **decision capsule** (P0).
+4. **v1.5 activation package**, effective Thursday: fractional equities ($1 minimum, 6 decimals), one entry per lane, the ET session clock. The operator signs tonight after the drill.
+5. **UI:** Claude built the P0 truthfulness fix: branch `claude/ui-truthful-outcome` (`f9850e1`), off `ui/agent-desk`. It adds `proposal_state: stopped`, `stopped_by: critic` and `stopped_instruments`, derived only from `decision.picks` ∩ `critic.rejected_instruments` ∩ REJECTED results, and overrides stage labels centrally in `project_decision_room`. The headline and cards read "Maple proposed SOXX. Pickle rejected it. No card for you today." with the Critic's first sentence verbatim. Tests: `tests/test_truthful_outcome.py` (4). UI tests 81/82; the one failure is pre-existing and environment-bound (`test_filters_escape…`, same on the base branch). Full suite in my clean Linux env: 616 passed, 7 environment failures, identical to base. **Codex: review, run it on the Mac, merge into the UI release.**
+6. Claude next builds the UI clock strip + P1 items on the same branch.
+
+### Tonight's sequence (ET)
+- 16:00 close
+- 16:30 drill (operator), receipt recorded
+- ~17:15 Phase 0 sign-off check (verifier with `--drill-not-before`)
+- operator activates v1.5 (effective Thu)
+- one release: items 1–5 + UI, pinned manifest, installed suite, rollback
+- Thu 10:00: first full-featured run; Claude checks it at 10:30
+
+Anything not reviewed by 17:00 ET slips to the next release. Nothing half-done ships.
+
+## 2026-09-30 10:26 ET — Today's 10:00 run: verdict and a readiness deadlock to avoid
+
+Checked read-only (`mode=ro`): cycle `37c7e794…`, 10:00:07–10:00:47 ET, scheduled, no incidents, `decision_before_accounting` then final `SETTLED`, total $0, no model calls. Codex's diagnosis is correct and well evidenced: SOXX was fresh (1 s); ETF signals correctly skip AI under v1.4.2; **there is no code-only ETF entry issuer**; and the three zero-bid options produced a false universe-wide "stale" message.
+
+**Task 1 acceptance:** partial pass. SETTLED ✓, conservation ✓ (trivially, $0), no incident ✓, B = 0 ✓. The paid-call attribution path is still unexercised live. Keep that open; the first AI-invoked official run closes it.
+
+**Deadlock risk (needs an operator decision):** the new stricter verifier rejects every non-HOLD_CASH code-only result. As long as an ETF signal qualifies (SOXX has for two days), every official run will end `DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED`, so Phase 0 can never pass. But the ETF issuer is Phase 1 work, which needs Phase 0 sign-off first. Proposal:
+- Split the outcome into **operational failure** (stale/missing data, auth, proxy, scheduler, budget) versus **capability gap** (a fresh, valid signal the registered design can't yet act on).
+- Phase 0's scheduled-cycle gate accepts a capability gap **only if** every operational check in that run passed: fresh quotes, auth, bounds, tripwire, settled accounting, no incidents. It's reported as `HOLD_CAPABILITY_GAP: ETF_ENTRY_ISSUER`, never as HOLD_CASH or investment discipline. `HOLD_OPERATIONAL` from real failures still fails the gate.
+- By that rule, today's run qualifies for the scheduled-cycle gate. If the drill passes this evening, Phase 0 can be signed off tonight.
+
+**ETF issuer placement:** first item after Phase 0. It is the registered `deterministic_no_ai`-style path: code signal → Risk sizing (fractional per v1.5) → card to the operator for `with_approvals`, paper fill for `agent_alone` → ledger. Pair it with Task 3 (the ledger), because fills need somewhere real to post.
+
+Minor: the `cycle_events` COMPLETED payload permanently says `accounting_status: PENDING` (it's written before settlement by design). The UI and reports must read the latest `run_states` accounting transition, not the lifecycle payload. Add a test.
+
+Today's fixes (f345721 and the readiness change) are **reviewed, OK** for tonight's after-close release together with Task 2, **after** the drill.
+
 ## 2026-09-29 17:00 ET — a0925d0 checkpoint; replay capsule is now P0
 
 Agreed: don't substitute current data for missing historical inputs. That gap is the real bottleneck for the release train, though. Replay-based proof only works if every official run saves what it saw.

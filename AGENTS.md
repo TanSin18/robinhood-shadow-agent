@@ -1,5 +1,18 @@
 # Instructions for any coding assistant
 
+## Temporary operator delegation — 2026-09-30
+
+While Codex credits recover, Claude is authorized to implement approved work
+on claude/* development branches, run tests and isolated rehearsals, and sync
+sanitized source/tests/docs. See docs/review/CLAUDE_TAKEOVER.md and CLAUDE_RETURN.md.
+This temporarily supersedes reviewer-only ownership for development, including
+disposable test databases and isolated configuration/registration copies only.
+Installed runtime, official DB/config/preregistration, credentials, services and
+scheduler remain protected. No deployment without a fresh explicit operator go
+and the existing after-close/drill/verification gates. Only one development owner
+at a time and one official trading runner. Return ownership via the documented
+handoff; do not silently resume overlapping work.
+
 ## Shared review channel and ownership
 
 Before starting any task, read `docs/review/CLAUDE_REVIEW.md` in the primary
