@@ -1,0 +1,194 @@
+{
+  "status": "COMPLETED",
+  "data_mode": "whatif",
+  "trigger": "rehearsal",
+  "parent_official_run_id": "37c7e7947a124a9c821570a55ecb00db",
+  "cycle_id": "a3d12b62eec9443fb917ec5cac196aca",
+  "quote_count": 561,
+  "volatility_count": 14,
+  "market_open": true,
+  "api_cost_estimate_usd": "0",
+  "agents": [],
+  "ai_gate": {
+    "invoke": false,
+    "reason": "AI_NOT_NEEDED",
+    "cost_usd": "0"
+  },
+  "official_records_unchanged": true,
+  "stages": {
+    "collection": "completed",
+    "strategy": "completed",
+    "ai": "not_needed",
+    "risk": "not_needed_no_proposals"
+  },
+  "quote_freshness": {
+    "fresh": 552,
+    "stale_or_future": 9,
+    "maximum_age_seconds": 103.169482,
+    "limit_seconds": 60,
+    "observed_at": "2026-09-30T18:32:38.141999+00:00"
+  },
+  "risk_proposals_evaluated": 0,
+  "source_hash_count": 7,
+  "elapsed_seconds": 45.45,
+  "diagnostic_noncompliant": false,
+  "cap_waiver": false,
+  "real_orders": "blocked",
+  "cards_created": 0,
+  "fills_created": 0,
+  "scheduled_proof": false,
+  "news": "disabled",
+  "cost_basis": "estimated_api_equivalent",
+  "model_execution": "not proven unless a model stage is recorded",
+  "v15_preview": true,
+  "overrides": [
+    "official_window_treated_as_open_now",
+    "v15_desk_path_on_before_effective_time",
+    "interim_live_spread_rule_on"
+  ],
+  "desk_sandbox": {
+    "cards": [
+      {
+        "status": "YES",
+        "author": "Desk rule (no AI)",
+        "limit_price": "570.654075000",
+        "expires": "2026-09-30T19:30:00+00:00"
+      }
+    ],
+    "approval_fill": [
+      {
+        "card_id": "a3d12b62eec9443fb917ec5cac196aca-A-etf",
+        "status": "YES"
+      }
+    ],
+    "paper_arms_after": {
+      "agent_alone": {
+        "settled_cash": "474.519553940000",
+        "positions": {
+          "SOXX": {
+            "ticker": "SOXX",
+            "asset_class": "etf",
+            "quantity": "0.044871",
+            "average_cost": "567.860000",
+            "underlying_ticker": null,
+            "option_type": null,
+            "strike": null,
+            "expiry": null,
+            "multiplier": 1
+          }
+        }
+      },
+      "with_approvals": {
+        "settled_cash": "474.519105230000",
+        "positions": {
+          "SOXX": {
+            "ticker": "SOXX",
+            "asset_class": "etf",
+            "quantity": "0.044871",
+            "average_cost": "567.870000",
+            "underlying_ticker": null,
+            "option_type": null,
+            "strike": null,
+            "expiry": null,
+            "multiplier": 1
+          }
+        }
+      },
+      "deterministic_no_ai": {
+        "settled_cash": "474.519553940000",
+        "positions": {
+          "SOXX": {
+            "ticker": "SOXX",
+            "asset_class": "etf",
+            "quantity": "0.044871",
+            "average_cost": "567.860000",
+            "underlying_ticker": null,
+            "option_type": null,
+            "strike": null,
+            "expiry": null,
+            "multiplier": 1
+          }
+        }
+      }
+    }
+  },
+  "decision": {
+    "type": "DESK_ENTRY",
+    "reason": "Desk rule (no AI): registered ETF entry issued to paper arms."
+  },
+  "desk_results": [
+    {
+      "arm": "agent_alone",
+      "instrument": "SOXX",
+      "status": "filled",
+      "reasons": [],
+      "quantity": "0.044871",
+      "limit_price": "570.654075000",
+      "attribution": "desk_policy_not_ai"
+    },
+    {
+      "arm": "deterministic_no_ai",
+      "instrument": "SOXX",
+      "status": "filled",
+      "reasons": [],
+      "quantity": "0.044871",
+      "limit_price": "570.654075000",
+      "attribution": "desk_policy_not_ai"
+    },
+    {
+      "arm": "with_approvals",
+      "instrument": "SOXX",
+      "status": "PENDING",
+      "card_id": "a3d12b62eec9443fb917ec5cac196aca-A-etf",
+      "quantity": "0.044871",
+      "limit_price": "570.654075000",
+      "expires_at": "2026-09-30T19:30:00+00:00",
+      "attribution": "desk_policy_not_ai"
+    }
+  ],
+  "capsule_status": null,
+  "option_screen": {
+    "contracts_seen": 547,
+    "passed_all_filters": 0,
+    "funnel": [
+      {
+        "remaining": 538,
+        "removed": 9,
+        "stage": "quote_fresh"
+      },
+      {
+        "remaining": 40,
+        "removed": 498,
+        "stage": "underlying_has_buy_signal"
+      },
+      {
+        "remaining": 20,
+        "removed": 20,
+        "stage": "is_call"
+      },
+      {
+        "remaining": 20,
+        "removed": 0,
+        "stage": "valid_bid_ask"
+      },
+      {
+        "remaining": 7,
+        "removed": 13,
+        "stage": "spread_within_15pct"
+      },
+      {
+        "remaining": 0,
+        "removed": 7,
+        "stage": "at_least_one_contract_buyable"
+      },
+      {
+        "remaining": 0,
+        "removed": 0,
+        "stage": "one_contract_affordable"
+      }
+    ],
+    "bullish_underlyings": [
+      "SOXX"
+    ]
+  }
+}
