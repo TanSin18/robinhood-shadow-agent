@@ -5,6 +5,32 @@ Rules for every assistant: `AGENTS.md`, `CLAUDE.md`. **Do not start a second tra
 The operator does all Robinhood login, MFA and consent on the Mac. Never ask for or print
 credentials, codes, tokens or account numbers. Paper only: real orders are blocked.
 
+## 0. UPDATE 19:30 ET (read this first)
+
+- **Robinhood read proxy DOWN since 16:25 ET** (maintenance log: authorization status `PROXY_UNAVAILABLE`
+  on every check; last VALID ~16:20). The history backfill's first read at 16:21 got `UPSTREAM_READ_FAILED`
+  (no incident, no writes). The operator must restart it from the `robinhoodproxy` macOS account:
+  `launchctl kickstart -k gui/$(id -u)/com.openai.robinhood-read-proxy`, then
+  `../python/bin/python3 -B -E -s -m broker_proxy.revocation verify-reauthorized` from
+  `/Users/Shared/RobinhoodShadow/private/current/app`. If AUTH_EXPIRED: redo drill step 5. Without it,
+  Thursday 10:00 cannot read the market (fails safe, no trades).
+- **v1.6.0 signed** by the operator 16:25 ET (answers: Lane A paper capital $25,000; effective
+  2026-10-01 09:30 ET; 8% hard stop). Amendment `preregistration-amendment-v1.6.0.yaml` (sha 86c891cd…),
+  code `agents/v16_policy.py`: capital rebase at the first v1.6 cycle (build-phase Lane A archived in
+  `capital_rebases`), option buys paused, 15:50–15:58 ET protective exit inside the existing service tick.
+- **Statistical promotion gate** `eval/promotion_stats.py` (200 decisions or 252 sessions, 90% block
+  bootstrap above 0, official runs only). **Nightly S&P 500 screen service** `agents/nightly_screen.py`
+  (16:50 ET weekdays, read-only, own store). Fix: no-AI arm now settles T+1.
+- **Release D NOT YET INSTALLED.** Steps: `docs/review/RELEASE_D_TONIGHT.md` (manifest
+  `release-2026-09-30d-manifest.json`, 17 files + v1.6.0 root file, verified against HEAD; cloud suite
+  795 passed, 6 known environment failures). If it is not installed before 09:30 Thursday, v1.6 stays
+  inert (the pinned file is absent on the Mac) and Thursday runs v1.5 as rehearsed.
+- Dashboard overlay v7 (`claude/ui-decision-room-v2` @ `ae6d2ef`, Measurement panel) is already copied
+  into the live release; it loads at the next inbox restart (release D step 1). Backup `.v6-20260930`.
+- **Backtest** (`research/backtest_etf_rule.py`, 6 tests) is waiting for data: RELEASE_D step 4 runs the
+  read-only backfill (needs the proxy), then run
+  `python -m research.backtest_etf_rule --bars <B>/bars.csv --out <B>/report.json --md <B>/report.md`.
+
 ## 1. What is live on the operator's Mac right now
 
 | Piece | Where | State |

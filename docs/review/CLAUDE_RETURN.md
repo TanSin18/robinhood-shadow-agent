@@ -56,3 +56,8 @@
 ## 2026-09-30 16:15 ET
 
 Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `HANDOFF.md` now points to it. All branches pushed.
+
+## 2026-09-30 16:14–19:30 ET
+- Operator asked to implement the independent review's recommendations "right now". Done in code: backtest + read-only history backfill (research/), statistical promotion gate (eval/promotion_stats.py), v1.6.0 amendment signed by operator answers 16:25 ET ($25k Lane A paper capital, options paused, 15:50 ET protective exit with 8% stop, effective 2026-10-01 09:30), nightly S&P 500 shadow screen service, no-AI arm T+1 settlement fix. Release D manifest + RELEASE_D_TONIGHT.md. UI v7 Measurement panel copied into the live overlay.
+- Claude session limit hit 16:37 ET; resumed 19:19 ET.
+- 16:25 ET onward: Robinhood read proxy PROXY_UNAVAILABLE (maintenance log). Operator asked to restart it from the robinhoodproxy account and run verify-reauthorized. Release D and the backfill wait on this.
