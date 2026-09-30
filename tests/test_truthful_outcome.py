@@ -63,3 +63,27 @@ def test_zero_pick_hold_cash_is_unchanged():
     review = project_decision_room(records, [])[0]
     assert review['proposal_state'] == 'none'
     assert outcome(review) == 'Review finished. No trade proposed.'
+
+
+def _desk_records(decision_type, desk_results, signal_instruments=()):
+    return [{'trace_id': 'oct1', 'event': 'cycle_terminal', 'timestamp': '2026-10-01T14:00:40+00:00',
+             'payload': {'status': 'COMPLETED',
+                         'decision': {'type': decision_type, 'picks': [], 'signal_instruments': list(signal_instruments)},
+                         'results': [], 'desk_results': desk_results}}]
+
+
+def test_desk_entry_is_never_called_hold_cash():
+    desk = [{'arm': 'agent_alone', 'instrument': 'SOXX', 'status': 'filled'},
+            {'arm': 'deterministic_no_ai', 'instrument': 'SOXX', 'status': 'filled'},
+            {'arm': 'with_approvals', 'instrument': 'SOXX', 'status': 'PENDING'}]
+    review = project_decision_room(_desk_records('DESK_ENTRY', desk), [])[0]
+    assert review['header']['outcome'] == 'Desk rule entry'
+    heading = outcome(review)
+    assert 'Desk rule (no AI)' in heading and 'SOXX' in heading and 'card is waiting' in heading
+    assert 'No trade proposed' not in heading
+
+
+def test_capability_gap_is_named_honestly():
+    review = project_decision_room(_desk_records('HOLD_CAPABILITY_GAP', [], ['SOXX']), [])[0]
+    assert review['header']['outcome'] == 'Signal not yet actionable'
+    assert 'SOXX' in outcome(review) and 'can’t act' in outcome(review)

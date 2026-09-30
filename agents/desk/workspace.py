@@ -41,6 +41,15 @@ def outcome(review):
     if review.get('proposal_state') == 'stopped' and review.get('stopped_by') == 'critic':
         pm, critic = TEAM['portfolio'][0], TEAM['critic'][0]
         return f"{pm} proposed {_names(review.get('stopped_instruments', []))}. {critic} rejected it. No card for you today."
+    desk = review.get('desk') or {}
+    if review.get('decision_type') == 'DESK_ENTRY' and desk.get('instrument'):
+        waiting = ' Your card is waiting.' if desk.get('card_waiting') else ''
+        return f"Desk rule (no AI) bought a small paper slice of {desk['instrument']} for the automatic accounts.{waiting}"
+    if review.get('decision_type') == 'DESK_ENTRY_BLOCKED':
+        return 'The desk rule found an ETF signal but its own safety checks blocked the entry.'
+    if review.get('decision_type') == 'HOLD_CAPABILITY_GAP':
+        names = _names(review.get('signal_instruments', [])) or 'a fund'
+        return f'Found a valid signal for {names}, but the system can’t act on ETF signals yet. No trade.'
     if review.get('proposal_state') == 'recorded' and label == 'Hold cash':
         return 'Outcome not confirmed'
     if label == 'Hold cash':

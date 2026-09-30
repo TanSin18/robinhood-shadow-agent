@@ -669,6 +669,13 @@ def project_decision_room(records, cards):
         }
         stopped_by_critic = [i for i in picked if i in critic_rejected and i in rejected_results]
         critic_reason = critic_payload.get('counterargument') if isinstance(critic_payload.get('counterargument'), str) else None
+        decision_type = decision.get('type') if isinstance(decision.get('type'), str) else None
+        desk_results = [r for r in (payload.get('desk_results') or []) if isinstance(r, dict)]
+        desk_card_waiting = any(r.get('status') == 'PENDING' and r.get('arm') == 'with_approvals' for r in desk_results)
+        desk_filled = sorted({str(r.get('arm')) for r in desk_results if r.get('status') == 'filled'})
+        desk_instrument = next((str(r.get('instrument')) for r in desk_results if isinstance(r.get('instrument'), str)), None)
+        signal_instruments = [str(x) for x in decision.get('signal_instruments', []) if isinstance(x, str)] \
+            if isinstance(decision.get('signal_instruments'), list) else []
         if pending:
             outcome_label = 'Paper proposal waiting'
             action = f"Review {len(pending)} paper proposal" + ('s' if len(pending) != 1 else '')
@@ -680,6 +687,12 @@ def project_decision_room(records, cards):
             outcome_label, action = 'Risk blocked', 'Nothing needs your approval'
         elif unknown_result:
             outcome_label, action = 'Completion unconfirmed', 'Check run history'
+        elif terminal_state == 'COMPLETED' and decision_type in {'DESK_ENTRY', 'DESK_ENTRY_BLOCKED', 'HOLD_CAPABILITY_GAP'}:
+            outcome_label, action = {
+                'DESK_ENTRY': ('Desk rule entry', 'Check the desk-rule card' if desk_card_waiting else 'Nothing needs your approval'),
+                'DESK_ENTRY_BLOCKED': ('Desk rule blocked', 'Nothing needs your approval'),
+                'HOLD_CAPABILITY_GAP': ('Signal not yet actionable', 'Nothing needs your approval'),
+            }[decision_type]
         elif terminal_state == 'COMPLETED' and stopped_by_critic and negative_result_only:
             outcome_label, action = 'Proposal rejected by Critic', 'Nothing needs your approval'
         elif terminal_state == 'COMPLETED' and (
@@ -735,6 +748,12 @@ def project_decision_room(records, cards):
                 'stopped_by': 'critic' if (stopped_by_critic and proposal_state == 'stopped') else None,
                 'stopped_instruments': stopped_by_critic if proposal_state == 'stopped' else [],
                 'critic_reason': critic_reason if proposal_state == 'stopped' else None,
+                'decision_type': decision_type,
+                'desk': {'instrument': desk_instrument, 'filled_arms': desk_filled,
+                         'card_waiting': desk_card_waiting,
+                         'blocked_reasons': sorted({str(r.get('reason')) for r in desk_results
+                                                    if r.get('status') == 'BLOCKED' and r.get('reason')})},
+                'signal_instruments': signal_instruments,
                 'default_stage': next(
                     (
                         stage['key']
