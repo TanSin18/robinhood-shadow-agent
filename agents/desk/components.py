@@ -2,7 +2,7 @@
 from html import escape
 from .team import TEAM
 
-ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/portfolio', 'Portfolio'),
+ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & charts'), ('/portfolio', 'Portfolio'),
           ('/money', 'Road to money'), ('/scoreboard', 'Is the AI working?'),
           ('/controls', 'Controls'), ('/health', 'Tweaks and health'))
 

@@ -1,0 +1,196 @@
+"""Checks & charts: every recorded check of a run, plus record-backed charts.
+
+Server-rendered SVG only (strict CSP). Values come from agents.run_checks,
+which reads named public fields of the run's trace.
+"""
+from decimal import Decimal
+from .components import esc
+from .workspace import date_label, outcome
+
+ICON = {'pass': '✓', 'warn': '!', 'fail': '✕', 'info': 'i', 'unknown': '?'}
+
+
+def status_icon(status):
+    status = status if status in ICON else 'unknown'
+    return f'<span class="ck ck-{status}" aria-label="{status}">{ICON[status]}</span>'
+
+
+def cell(c, compact=False):
+    ok = c.get('ok')
+    if ok == 'skip':
+        return f'<td class="cond cond-skip" title="Not evaluated: an earlier condition already failed ({esc(c.get("value", "—"))})"><span>·</span>{"" if compact else " " + esc(c.get("value", "—"))}</td>'
+    cls = 'pass' if ok is True else 'fail' if ok is False else 'unknown'
+    return f'<td class="cond cond-{cls}" title="{esc(c.get("value", "—"))}"><span>{ICON[cls]}</span>{"" if compact else " " + esc(c.get("value", "—"))}</td>'
+
+
+# ------------------------------------------------------------------ charts
+def bar_chart(rows, *, title, note, threshold=None, threshold_label='', fmt=lambda v: f'{v * 100:+.1f}%'):
+    """Horizontal bars around zero. rows: (label, Decimal|None, css_class)."""
+    rows = [(l, v, c) for l, v, c in rows if v is not None]
+    if not rows:
+        return f'<figure class="chart"><figcaption>{esc(title)}</figcaption><p class="muted small">Not recorded for this run.</p></figure>'
+    values = [float(v) for _, v, _ in rows] + ([float(threshold)] if threshold is not None else [])
+    lo, hi = min(0.0, min(values)), max(0.0, max(values))
+    span = (hi - lo) or 1.0
+    left, width, row_h = 64, 330, 20
+    x = lambda v: left + (float(v) - lo) / span * width
+    height = len(rows) * row_h + 26
+    zero = x(0)
+    bars = ''
+    for i, (label, v, cls) in enumerate(rows):
+        y = 8 + i * row_h
+        a, b = sorted((zero, x(v)))
+        bars += (f'<g class="bar {esc(cls)}"><title>{esc(label)}: {esc(fmt(v))}</title>'
+                 f'<text class="bar-label" x="{left - 8}" y="{y + 12}" text-anchor="end">{esc(label)}</text>'
+                 f'<rect x="{a:.1f}" y="{y + 2}" width="{max(b - a, 1.5):.1f}" height="{row_h - 7}" rx="2"/>'
+                 f'<text class="bar-value" x="{(b + 6) if v >= 0 else (zero + 6):.1f}" y="{y + 12}" text-anchor="start">{esc(fmt(v))}</text></g>')
+    axis = f'<line class="axis-zero" x1="{zero:.1f}" x2="{zero:.1f}" y1="4" y2="{height - 18}"/>'
+    if threshold is not None:
+        t = x(threshold)
+        axis += (f'<line class="axis-threshold" x1="{t:.1f}" x2="{t:.1f}" y1="4" y2="{height - 18}"/>'
+                 f'<text class="axis-note" x="{t:.1f}" y="{height - 4}" text-anchor="middle">{esc(threshold_label)}</text>')
+    return (f'<figure class="chart"><figcaption>{esc(title)}</figcaption>'
+            f'<svg viewBox="0 0 470 {height}" role="img" aria-label="{esc(title)}">{axis}{bars}</svg>'
+            f'<p class="muted small">{esc(note)}</p></figure>')
+
+
+def charts(checks):
+    feats = checks.get('features') or []
+    strategies = {s['key']: s for s in checks.get('strategies', [])}
+    mom = strategies.get('momentum_rotation')
+    etfs = [r['instrument'] for r in mom['rows']] if mom else []
+    top = {r['instrument'] for r in mom['rows'] if r['signal']} if mom else set()
+    by = {f['instrument']: f for f in feats}
+    trend = sorted(((f['instrument'], f['vs_ma200'], 'pos' if (f['vs_ma200'] or 0) > 0 else 'neg') for f in feats),
+                   key=lambda r: -(r[1] or Decimal(0)))
+    momentum = sorted(((t, by.get(t, {}).get('m126'),
+                        'top' if t in top else 'pos' if by.get(t, {}).get('above_ma200') and (by.get(t, {}).get('m126') or 0) > 0 else 'off')
+                       for t in etfs), key=lambda r: -(r[1] or Decimal(-99)))
+    day = sorted(((f['instrument'], f['day'], 'trigger' if f['day'] is not None and f['day'] <= Decimal('-0.03') else 'neutral') for f in feats),
+                 key=lambda r: (r[1] if r[1] is not None else Decimal(0)))
+    return ('<div class="chart-grid">'
+            + bar_chart(trend, title='Trend check: price vs 200-day average',
+                        note='Right of zero = above the 200-day average (both strategies require this).')
+            + bar_chart(momentum, title='Momentum ranking (126 days, ETFs)',
+                        note='Highlighted = the one ETF the rule picks. Grey = fails the trend or momentum condition.')
+            + bar_chart(day, title='Last session move vs mean-reversion trigger', threshold=Decimal('-0.03'),
+                        threshold_label='−3% trigger', fmt=lambda v: f'{v * 100:+.2f}%',
+                        note='A name qualifies only if it fell 3% or more AND is above its 200-day average.')
+            + '</div>')
+
+
+# ------------------------------------------------------------------ sections
+def operational(rows):
+    if not rows:
+        return '<p class="muted">Operational checks were not recorded for this run.</p>'
+    groups = {}
+    for r in rows:
+        groups.setdefault(r['group'], []).append(r)
+    counts = {s: sum(r['status'] == s for r in rows) for s in ('pass', 'warn', 'fail')}
+    summary = (f'<p class="ck-summary">{status_icon("pass")} {counts["pass"]} passed · {status_icon("warn")} {counts["warn"]} warnings'
+               f' · {status_icon("fail")} {counts["fail"]} failed</p>')
+    body = ''
+    for group, items in groups.items():
+        body += f'<section class="ck-group"><h4>{esc(group)}</h4><ul>' + ''.join(
+            f'<li class="ck-row st-{esc(r["status"])}">{status_icon(r["status"])}<span class="ck-name">{esc(r["check"])}</span>'
+            f'<span class="ck-value">{esc(r["value"])}</span>' + (f'<span class="ck-note">{esc(r["note"])}</span>' if r.get('note') else '') + '</li>'
+            for r in items) + '</ul></section>'
+    return summary + f'<div class="ck-groups">{body}</div>'
+
+
+def strategy_tables(strategies, limit=None, compact=False):
+    if not strategies:
+        return '<p class="muted">Strategy conditions were not recorded for this run.</p>'
+    html = ''
+    for s in strategies:
+        rows = s['rows'][:limit] if limit else s['rows']
+        extra = ' compact' if compact else ''
+        head = ''.join(f'<th>{esc(label)}</th>' for _, label in s['conditions'])
+        body = ''
+        for r in rows:
+            flag = ' <span class="mismatch" title="Recomputed conditions disagree with the recorded outcome">mismatch</span>' if r['mismatch'] else ''
+            outcome_cls = 'signal' if r['signal'] else 'blocked'
+            body += (f'<tr class="row-{outcome_cls}"><th scope="row">{esc(r["instrument"])}</th>'
+                     + ''.join(cell(r['cells'][k], compact) for k, _ in s['conditions'])
+                     + f'<td class="outcome-{outcome_cls}"><strong>{esc("Signal" if r["signal"] else r["recorded"].capitalize())}</strong>{flag}'
+                     + (f'<small>{esc(r["reason"])}</small>' if r.get('reason') and not compact else '') + '</td></tr>')
+        more = f'<p class="muted small">Showing {len(rows)} of {len(s["rows"])}. All rows are on Checks &amp; charts.</p>' if limit and len(s['rows']) > limit else ''
+        verdict = (f'{s["signals"]} signal' + ('' if s['signals'] == 1 else 's')) + (f' · {s["mismatches"]} mismatch' if s['mismatches'] else ' · recorded outcome matches every row')
+        html += (f'<section class="strategy"><div class="strategy-head"><h4>{esc(s["title"])}</h4><span class="muted small">{esc(verdict)}</span></div>'
+                 f'<p class="muted small code">{esc(s["version"])}</p>'
+                 f'<div class="table-wrap"><table class="mini matrix{extra}"><thead><tr><th>Ticker</th>{head}<th>Recorded outcome</th></tr></thead><tbody>{body}</tbody></table></div>{more}</section>')
+    return html + ('<p class="muted small">Condition cells are re-evaluated from the features this run recorded, using the rule constants '
+                   'in <span class="code">research/strategy_signals.py</span>. The outcome column is what the run itself recorded; '
+                   'any disagreement is flagged “mismatch”.</p>')
+
+
+def risk_table(rows):
+    if not rows:
+        return '<p class="muted">No trade reached the safety rules in this run.</p>'
+    return ('<div class="table-wrap"><table class="mini"><thead><tr><th>Instrument</th><th>Arm</th><th>Status</th><th>Reasons</th></tr></thead><tbody>'
+            + ''.join(f'<tr><td>{esc(r["instrument"])}</td><td>{esc(r.get("arm") or "—")}</td><td>{esc(r["status"])}</td><td>{esc("; ".join(r["reasons"]) or "—")}</td></tr>' for r in rows)
+            + '</tbody></table></div>')
+
+
+def feature_table(feats):
+    if not feats:
+        return '<p class="muted">Features were not recorded.</p>'
+    p = lambda v, d=1: '—' if v is None else f'{v * 100:+.{d}f}%'
+    n = lambda v: '—' if v is None else f'{v:,.2f}'
+    return ('<div class="table-wrap"><table class="mini num"><thead><tr><th>Ticker</th><th>Price</th><th>200-day avg</th><th>vs avg</th>'
+            '<th>1-day</th><th>63-day</th><th>126-day</th><th>252-day</th><th>Closes</th></tr></thead><tbody>'
+            + ''.join(f'<tr><th scope="row">{esc(f["instrument"])}</th><td>{n(f["price"])}</td><td>{n(f["ma200"])}</td>'
+                      f'<td class="{"pos" if (f["vs_ma200"] or 0) > 0 else "neg"}">{p(f["vs_ma200"])}</td><td class="{"neg" if (f["day"] or 0) < 0 else "pos"}">{p(f["day"], 2)}</td>'
+                      f'<td>{p(f["m63"])}</td><td>{p(f["m126"])}</td><td>{p(f["m252"])}</td><td>{esc(f["closes"] if f["closes"] is not None else "—")}</td></tr>' for f in feats)
+            + '</tbody></table></div>')
+
+
+def history(reviews):
+    """One row per saved run: outcome, signals, AI gate and cost."""
+    if not reviews:
+        return ''
+    costs = [float(r.get('header', {}).get('api_cost_estimate_usd') or 0) for r in reviews]
+    top = max(costs) or 1.0
+    rows = ''
+    for r, cost in zip(reviews, costs):
+        checks = r.get('checks') or {}
+        signals = sum(s['signals'] for s in checks.get('strategies', []))
+        ops = checks.get('operational', [])
+        warn = sum(o['status'] in {'warn', 'fail'} for o in ops)
+        g = r.get('ai_gate')
+        stages = ''.join(f'<i class="dot st-{esc(s.get("status", "unavailable"))}" title="{esc(s.get("key"))}: {esc(s.get("status_label"))}"></i>' for s in r.get('stages', []))
+        rows += (f'<tr><td class="nowrap">{esc(date_label(r.get("timestamp")))}</td><td>{esc(outcome(r))}</td><td class="dots">{stages}</td>'
+                 f'<td class="num">{signals}</td><td>{esc("open" if g and g["open"] else "closed" if g else "—")}</td>'
+                 f'<td><svg class="spark" viewBox="0 0 100 10" aria-hidden="true"><rect x="0" y="1" width="{cost / top * 100:.1f}" height="8" rx="2"/></svg>'
+                 f'<span class="num">${cost:.4f}</span></td><td class="num">{warn or "—"}</td></tr>')
+    return ('<section class="room-card"><div class="card-head"><h3>Run history</h3><span class="muted small">Every saved run, newest first</span></div>'
+            '<div class="table-wrap"><table class="mini history"><thead><tr><th>Run</th><th>Outcome</th><th>Steps</th><th>Signals</th><th>AI gate</th><th>AI cost</th><th>Warnings</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div></section>')
+
+
+def run_section(review, index):
+    c = review.get('checks') or {}
+    missing = c.get('missing_evidence') or []
+    missing_html = ('<ul class="tight">' + ''.join('<li>' + esc(m) + '</li>' for m in missing) + '</ul>') if missing else '<p class="muted">None recorded.</p>'
+    return f'''<section class="scene-review checks-run" data-scene-review="{index}"{" hidden" if index else ""}>
+<header class="room-outcome"><div class="meta"><span>{esc(date_label(review.get("timestamp")))}</span><span>Decision date {esc(c.get("decision_date") or "not recorded")}</span><span>{esc(c.get("qualification") or "")}</span></div><h2>{esc(outcome(review))}</h2></header>
+<section class="room-card"><div class="card-head"><h3>System checks</h3><span class="muted small">Connection, registration, data, AI and outcome</span></div>{operational(c.get("operational", []))}</section>
+<section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
+<section class="room-card"><div class="card-head"><h3>Scanners · strategy conditions</h3><span class="muted small">Every ticker × every condition</span></div>{strategy_tables(c.get("strategies", []))}</section>
+<section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Pip’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
+<section class="room-card"><div class="card-head"><h3>Nugget · safety-rule results</h3></div>{risk_table(c.get("risk", []))}</section>
+<section class="room-card"><details class="sub"><summary>Raw features for every ticker</summary>{feature_table(c.get("features", []))}</details></section>
+</section>'''
+
+
+def render(state):
+    if not state.get('preview'):
+        from .components import card
+        return '<h1>Checks & charts</h1>' + card('Not available yet', '<p>This screen is part of the Agent Desk preview. No results are assumed.</p>')
+    reviews = state.get('decision_room', [])
+    choices = ''.join(f'<option value="{i}">{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
+    html = ('<div class="room-head"><div><h1>Checks &amp; charts</h1><p>Every check each step ran, with the numbers behind it.</p></div>'
+            f'<label>Run <select id="scene-review">{choices}</select></label></div>')
+    if not reviews:
+        return html + '<p>No saved review yet.</p>'
+    return html + history(reviews) + ''.join(run_section(r, i) for i, r in enumerate(reviews))

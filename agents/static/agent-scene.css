@@ -147,3 +147,36 @@ table.mini th,table.mini td{text-align:left!important}
 .agent-desk.team-preview .log-hit{min-height:0}
 table.mini{margin:0}.edge-label{font-size:11.5px}
 @media(max-width:760px){.insp-connect{overflow-x:auto}.cx-svg{min-width:560px}}
+
+/* checks */
+.insp-link{float:right;font-size:12px;margin-top:-34px;text-decoration:none}
+.ck{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font-size:10px;font-weight:700;flex:0 0 16px}
+.ck-pass{background:#17302a;color:#a6ecd0}.ck-warn{background:#3a2f16;color:#f3cf86}.ck-fail{background:#3a1c18;color:#ffb3a8}.ck-info{background:#1f2a3a;color:#a9c7f0}.ck-unknown{background:#262b33;color:#8f9aab}
+.ck-summary{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--text-3);margin:0 0 8px}
+.ck-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 18px}
+.ck-group h4{margin:6px 0 4px!important}.ck-group ul{list-style:none;margin:0;padding:0}
+.ck-row{display:grid;grid-template-columns:16px 1fr auto;gap:2px 8px;align-items:center;padding:5px 0;border-bottom:1px solid #1e252f;font-size:12.5px}
+.ck-name{color:var(--text-2,#c2cad6)}.ck-value{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;text-align:right}
+.ck-note{grid-column:2/-1;font-size:11.5px;color:var(--text-3);overflow-wrap:anywhere}
+.ck-row.st-warn .ck-value{color:#f3cf86}.ck-row.st-fail .ck-value{color:#ffb3a8}
+.strategy{margin:8px 0 14px}.strategy-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.strategy-head h4{margin:0!important}
+.matrix th[scope=row]{font-family:'Geist Mono',ui-monospace,monospace;font-weight:600;padding:6px 8px;border-top:1px solid var(--border);text-align:left}
+.cond{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;white-space:nowrap}.cond span{display:inline-block;width:14px;font-weight:700}
+.cond-pass{color:#a6ecd0}.cond-fail{color:#ffb3a8;background:#2a1714}.cond-unknown{color:var(--text-3)}
+.row-signal th[scope=row],.row-signal td{background:#132620}.outcome-signal strong{color:#a6ecd0}.outcome-blocked strong{color:var(--text-2,#c2cad6);font-weight:500}
+.matrix td small{display:block;color:var(--text-3);font-size:11px;white-space:normal}
+.mismatch{font-size:10.5px;padding:1px 6px;border-radius:4px;background:#3a2f16;color:#f3cf86;margin-left:4px}
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px 20px}
+.chart{margin:0;min-width:0}.chart figcaption{font-size:12.5px;font-weight:600;margin-bottom:4px}.chart svg{display:block;width:100%;height:auto}
+.chart text{font-family:Geist,system-ui,sans-serif}.bar-label{font-size:11px;fill:var(--text-2,#c2cad6);font-family:'Geist Mono',ui-monospace,monospace!important}
+.bar-value{font-size:10.5px;fill:var(--text-3)}
+.bar rect{fill:#4b5567}.bar.pos rect{fill:#4fae8a}.bar.neg rect{fill:#c7614f}.bar.top rect{fill:#c6b7f3}.bar.off rect{fill:#3a4250}.bar.trigger rect{fill:#e3a948}.bar.neutral rect{fill:#566174}
+.axis-zero{stroke:#6f7b8c;stroke-width:1}.axis-threshold{stroke:#e3a948;stroke-width:1.2;stroke-dasharray:4 3}.axis-note{font-size:10.5px;fill:#e3a948}
+.num td,.num th{text-align:right!important}.num th[scope=row]{text-align:left!important}td.pos{color:#a6ecd0}td.neg{color:#ffb3a8}
+.history .dots{white-space:nowrap}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:#3a4250}
+.dot.st-completed{background:#4fae8a}.dot.st-blocked{background:#c7614f}.dot.st-skipped,.dot.st-not_applicable{background:transparent;border:1px dashed #5b6677}
+.spark{width:70px;height:10px;vertical-align:middle;margin-right:6px}.spark rect{fill:#c6b7f3}.nowrap{white-space:nowrap}
+td.num,.history td .num{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px}
+.cond-skip{color:#5f6a7a}.chart-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+@media(max-width:520px){.chart-grid{grid-template-columns:1fr}}
+.matrix.compact th,.matrix.compact td{padding:4px 8px}.matrix.compact thead th{white-space:normal;font-size:10.5px}

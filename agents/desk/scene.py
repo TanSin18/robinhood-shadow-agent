@@ -189,10 +189,15 @@ def work(key, stage, review):
         html += facts([('Quotes', d.get('quote_count')), ('Volatility series', d.get('volatility_count')),
                        ('Price histories', len(d.get('history_counts') or {}) or None)])
         html += '<h4>Signals that qualified</h4>' + (chips(signals) or '<p class="muted">None recorded.</p>')
-        blocked = review.get('strategy_blocked') or []
-        if blocked:
-            html += (f'<details class="sub"><summary>Why the rest did not qualify · {len(blocked)}</summary>'
-                     + table(('Instrument', 'Strategy', 'Reason'), [(r['instrument'], r['strategy'], r['reason']) for r in blocked]) + '</details>')
+        checks = review.get('checks') or {}
+        if checks.get('strategies'):
+            from .checks import strategy_tables
+            html += '<h4>Strategy conditions</h4>' + strategy_tables(checks['strategies'], compact=True)
+        else:
+            blocked = review.get('strategy_blocked') or []
+            if blocked:
+                html += (f'<details class="sub"><summary>Why the rest did not qualify · {len(blocked)}</summary>'
+                         + table(('Instrument', 'Strategy', 'Reason'), [(r['instrument'], r['strategy'], r['reason']) for r in blocked]) + '</details>')
         g = review.get('ai_gate')
         if g:
             html += ('<h4>AI gate</h4><p>' + esc(('Opened for ' + (', '.join(g['candidates']) or 'candidates')) if g['open'] else 'Stayed closed — no AI was called')
@@ -223,6 +228,9 @@ def work(key, stage, review):
         html += '<h4>Counterargument</h4><p>' + esc(d.get('counterargument') or 'Not saved.') + '</p>'
     else:
         results = [r for r in d.get('results', []) if isinstance(r, dict)]
+        if key == 'final' and (review.get('checks') or {}).get('operational'):
+            from .checks import operational
+            html += '<h4>System checks</h4>' + operational(review['checks']['operational'])
         if key == 'final':
             html += facts([('Decision', review.get('decision_type')), ('Reason', review.get('decision_reason') or d.get('reason')),
                            ('AI cost estimate', ('$' + str(d['api_cost_estimate_usd'])) if d.get('api_cost_estimate_usd') else None)])
@@ -298,7 +306,7 @@ def inspector(key, stage, review, flow, rid, log, selected):
     return (f'<article class="inspector scene-character" id="{panel}" data-inspect="{key}"{"" if key == selected else " hidden"}>'
             f'<header class="insp-head"><span class="insp-face kind-{kind}">{portrait(key, 44)}</span><div><h3>{esc(name(key))} <small>{esc(ROLES[key])}</small></h3>'
             f'<p class="insp-meta"><span class="kind-label kind-{kind}">{esc(kind_label)}</span><span class="status-chip st-{tone(stage.get("status"))}">{chip}</span>{span_html}</p></div></header>'
-            f'<div class="insp-connect"><h4>Connections in this run</h4>{connection(key, review, flow)}</div>'
+            f'<a class="insp-link" href="/checks">All checks &amp; charts →</a><div class="insp-connect"><h4>Connections in this run</h4>{connection(key, review, flow)}</div>'
             f'<div role="tablist" aria-label="{esc(name(key))} details">{tablist}</div>{content}</article>')
 
 

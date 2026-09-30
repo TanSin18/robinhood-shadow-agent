@@ -1,7 +1,7 @@
-from . import today, decision_room, portfolio, money, scoreboard, controls, health
+from . import today, decision_room, portfolio, money, scoreboard, controls, health, checks
 from .components import ROUTES, shell
 
-SCREENS = {'/room': decision_room, '/portfolio': portfolio, '/money': money,
+SCREENS = {'/room': decision_room, '/checks': checks, '/portfolio': portfolio, '/money': money,
            '/scoreboard': scoreboard, '/controls': controls, '/health': health}
 
 

@@ -733,7 +733,7 @@ def project_decision_room(records, cards):
                     stage.update(status='not_applicable', status_label='Not reached', tone='neutral')
                 elif stage['key'] == 'final':
                     stage['status_label'] = 'No card'
-        from agents import run_log
+        from agents import run_log, run_checks
         ai_gate = run_log.gate(ordered)
         log = run_log.build_log(ordered)
         if ai_gate and not ai_gate['open']:
@@ -769,6 +769,7 @@ def project_decision_room(records, cards):
                 'log': log,
                 'stage_times': run_log.stage_times(ordered),
                 'strategy_blocked': run_log.strategy_blocked(ordered),
+                'checks': run_checks.build_checks(ordered),
                 'default_stage': next(
                     (
                         stage['key']
