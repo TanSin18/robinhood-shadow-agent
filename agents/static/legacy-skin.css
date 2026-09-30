@@ -38,3 +38,5 @@ body.legacy-skin{--canvas:#0f1217;--paper:#161b23;--ink:#e8ecf1;--forest:#c6b7f3
 .legacy-skin .phone-nav{background:#12161d;border-top:1px solid var(--line)}
 @media(max-width:800px){.legacy-skin .workspace{margin-left:0}}
 .legacy-skin .workspace>a.button[href="/"]{display:none}
+.legacy-skin .rail .desk-brand{display:block;font-size:16px;font-weight:700;color:var(--ink);text-decoration:none;padding:0 10px;margin-bottom:18px;letter-spacing:-.2px}
+.legacy-skin .phone-nav a{color:var(--muted)}

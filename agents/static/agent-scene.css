@@ -180,3 +180,10 @@ td.num,.history td .num{font-family:'Geist Mono',ui-monospace,monospace;font-siz
 .cond-skip{color:#5f6a7a}.chart-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
 @media(max-width:520px){.chart-grid{grid-template-columns:1fr}}
 .matrix.compact th,.matrix.compact td{padding:4px 8px}.matrix.compact thead th{white-space:normal;font-size:10.5px}
+/* consolidated layout */
+.today-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin:12px 0}
+.today-links{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px!important;font-size:13px}
+.today-warn{color:#f3cf86;font-size:13px;margin:4px 0!important}
+.later-note{border-top:1px solid var(--border);padding-top:8px;margin-top:12px!important}
+.log-row.log-mine{background:#1b1a27;border-left-color:var(--sel)}
+.card-head a.small{font-size:12px;text-decoration:none}

@@ -221,8 +221,9 @@ def work(key, stage, review):
         html += '<h4>Signals that qualified</h4>' + (chips(signals) or '<p class="muted">None recorded.</p>')
         checks = review.get('checks') or {}
         if checks.get('strategies'):
-            from .checks import strategy_tables
-            html += '<h4>Strategy conditions</h4>' + strategy_tables(checks['strategies'], compact=True)
+            summary = '; '.join(f"{s['title']}: {s['signals']} signal" + ('' if s['signals'] == 1 else 's')
+                                + (f", {s['mismatches']} mismatch" if s['mismatches'] else '') for s in checks['strategies'])
+            html += f'<h4>Strategy conditions</h4><p>{esc(summary)}. <a href="/checks">Every ticker × condition →</a></p>'
         else:
             blocked = review.get('strategy_blocked') or []
             if blocked:
@@ -258,9 +259,11 @@ def work(key, stage, review):
         html += '<h4>Counterargument</h4><p>' + esc(d.get('counterargument') or 'Not saved.') + '</p>'
     else:
         results = [r for r in d.get('results', []) if isinstance(r, dict)]
-        if key == 'final' and (review.get('checks') or {}).get('operational'):
-            from .checks import operational
-            html += '<h4>System checks</h4>' + operational(review['checks']['operational'])
+        ops = (review.get('checks') or {}).get('operational') or []
+        if key == 'final' and ops:
+            bad = [o for o in ops if o['status'] in {'warn', 'fail'}]
+            html += (f'<h4>System checks</h4><p>{sum(o["status"] == "pass" for o in ops)} passed, {len(bad)} need attention'
+                     + (': ' + esc('; '.join(o['check'] + ' ' + o['value'] for o in bad)) if bad else '') + '. <a href="/checks">Details →</a></p>')
         if key == 'final':
             html += facts([('Decision', review.get('decision_type')), ('Reason', review.get('decision_reason') or d.get('reason')),
                            ('AI cost estimate', ('$' + str(d['api_cost_estimate_usd'])) if d.get('api_cost_estimate_usd') else None)])
@@ -319,17 +322,13 @@ def inspector(key, stage, review, flow, rid, log, selected):
     kind, kind_label = KIND[key]
     times = (review.get('stage_times') or {}).get(key, {})
     span = (f'{clock(times["start"])} → {clock(times.get("end"))}' + (f' · {times["seconds"]}s' if 'seconds' in times else '')) if times.get('start') else ''
-    mine = [e for e in log if e['actor'] == key or (key == 'evidence' and e['actor'] in {'gate', 'system'})]
     panel = f'inspect-{rid}-{key}'
-    tabs = (('work', 'Work'), ('log', f'Log · {len(mine)}'), ('report', 'Report'), ('ask', 'Ask'), ('tune', 'Tune'))
+    tabs = (('work', 'Work'), ('report', 'Original report'))
     tablist = ''.join(f'<button type="button" role="tab" id="{panel}-{t}-tab" aria-controls="{panel}-{t}" aria-selected="{str(t == "work").lower()}" data-character-tab="{t}">{esc(label)}</button>' for t, label in tabs)
-    ask = (f'<div class="ask-intro">{portrait("explainer", 40)}<div><h4>Ask Bubbles about {esc(name(key))}’s work</h4><p class="muted">Unavailable until after the Phase 0 gate and the cited-answer service is tested. No model is connected to this view.</p></div></div>'
-           f'<label for="{panel}-question">Your question</label><textarea disabled id="{panel}-question" placeholder="Questions will use only this agent’s saved records for this review."></textarea>')
-    tune = ('<p class="muted">Read-only — editable after Phase 0 via side test. Safety rules stay locked.</p>'
-            '<div class="tune-row"><div><strong>Research depth</strong><p class="muted">Current value not loaded. No setting is implied.</p></div><span class="slider-unavailable" role="img" aria-label="Slider unavailable; no current value loaded"></span></div>'
-            '<div class="tune-row"><strong>Safety limits</strong><span>Locked</span></div><div class="tune-row"><strong>Real orders</strong><span>Blocked in Stage 1</span></div>')
     report = f'<details class="original-report" open><summary>Original report</summary><p class="report">{esc(stage.get("summary") or "No report was saved.")}</p></details>'
-    panes = {'work': tools_block(key, stage, review) + work(key, stage, review), 'log': log_rows(mine), 'report': report, 'ask': ask, 'tune': tune}
+    later = ('<p class="muted small later-note">Coming after the Phase 0 gate: ask Bubbles about this work, and tune it via side tests '
+             '(read-only until then — editable after Phase 0 via side test; safety rules stay locked).</p>')
+    panes = {'work': tools_block(key, stage, review) + work(key, stage, review) + later, 'report': report}
     content = ''.join(f'<section role="tabpanel" id="{panel}-{t}" aria-labelledby="{panel}-{t}-tab" data-character-pane="{t}"{"" if t == "work" else " hidden"}>{panes[t]}</section>' for t, _ in tabs)
     chip = esc(stage.get('status_label') or 'Not recorded')
     span_html = f'<span class="span">{esc(span)}</span>' if span else ''

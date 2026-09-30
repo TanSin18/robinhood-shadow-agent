@@ -16,20 +16,14 @@ def state():
         {'review_id': 'older', 'stages': [], 'outcome': {'reason': 'Older review'}}]}
 
 
-def test_preview_opens_one_connected_review_with_reports_closed():
+def test_today_is_a_short_summary_that_links_to_details():
     html = render('/', state(), None, '')
-    assert 'Your team' in html
-    assert 'data-team-flow' in html
-    assert 'Expected workflow' in html
-    assert 'Review finished. No trade proposed.' in html
-    assert 'News was not collected' not in html
-    assert 'Original report' in html
-    assert '<details open' not in html
-    assert 'Show evidence' in html
+    assert 'Latest run' in html and 'Review finished. No trade proposed.' in html
+    assert 'href="/room"' in html and 'href="/checks"' in html and 'href="/legacy#decisions"' in html
+    assert 'data-team-flow' not in html  # the flow lives only in the Decision room
     assert '<b>Untrusted research</b>' not in html
-    assert '&lt;b&gt;Untrusted research&lt;/b&gt;' in html
     assert '<form' not in html
-    assert 'data-review="1" hidden' in html
+    assert 'Run history' in html
 
 
 def test_incomplete_review_does_not_claim_hold_or_live_progress():

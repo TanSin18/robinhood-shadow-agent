@@ -24,6 +24,7 @@ scenes.forEach((review, index) => {
       n.setAttribute('aria-pressed', String(on));
     });
     focusEdges(actor);
+    review.querySelectorAll('.log-scroll .log-row').forEach(r => r.classList.toggle('log-mine', r.dataset.logActor === actor || (actor === 'evidence' && ['gate', 'system'].includes(r.dataset.logActor))));
     if (scroll) review.querySelector(`[data-inspect="${actor}"]`)?.scrollIntoView({block: 'nearest', behavior: 'auto'});
   }
   nodes().forEach(n => {

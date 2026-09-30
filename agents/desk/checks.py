@@ -239,4 +239,4 @@ def render(state):
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
     if not reviews:
         return html + '<p>No saved review yet.</p>'
-    return html + history(reviews) + ''.join(run_section(r, i) for i, r in enumerate(reviews))
+    return html + ''.join(run_section(r, i) for i, r in enumerate(reviews))

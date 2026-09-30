@@ -7,6 +7,18 @@ ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & char
           ('/controls', 'Controls'), ('/health', 'Tweaks and health'))
 
 
+# One navigation for the whole dashboard. Operational views (Approvals, History,
+# Results, Controls) are served by the unchanged operational page at /legacy.
+NAV = (('/', 'Today', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/room', 'Decision room', ''),
+       ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
+       ('/legacy#results', 'Results', 'results'), ('/legacy#controls', 'Controls', 'controls'))
+
+
+def nav_links(path):
+    return ''.join(f'<a href="{href}"' + (f' data-nav="{key}"' if key else '') + (' aria-current="page"' if href == path else '')
+                   + f'>{esc(label)}</a>' for href, label, key in NAV)
+
+
 def esc(value):
     return escape(str(value), quote=True)
 
@@ -26,7 +38,7 @@ def shell(title, body, path='/', state=None):
     state = state or {}
     stopped = state.get('paused') or any(t.get('incident_id') for t in state.get('tripwire', []))
     safety = 'Safety stop or pause active · real orders blocked' if stopped else 'Paper only · real orders blocked'
-    links = ''.join(f'<a href="{route}"'+(' aria-current="page"' if route == path else '')+f'>{"Road to real money" if state.get("preview") and route == "/money" else label}</a>' for route, label in ROUTES)
+    links = nav_links(path) if state.get('preview') else ''.join(f'<a href="{route}"'+(' aria-current="page"' if route == path else '')+f'>{label}</a>' for route, label in ROUTES)
     scripts = '<script src="/assets/agent-desk.js" defer></script><script src="/assets/agent-scene.js" defer></script>' if state.get('preview') else '<script src="/assets/dashboard.js" defer></script><script src="/assets/agent-desk.js" defer></script>'
     preview = '<p class="desk-preview" role="status">Preview — view only · No approvals, controls or broker connection</p>' if state.get('preview') else ''
     refresh = ''

@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 from agents.inbox_web import make_server as operational_server
 from .preview import snapshot, ASSETS
 from .router import render
-from .components import ROUTES
+from .components import ROUTES, nav_links
 
 
 def make_server(inbox, port=8765, **options):
@@ -32,8 +32,13 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('<link rel="stylesheet" href="/assets/dashboard.css">',
                     '<link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/legacy-skin.css">', 1)
                 content = content.replace('<body ', '<body class="legacy-skin" ', 1)
-                content = content.replace('<p class="rail-caption">Your paper trading desk</p>',
-                    '<p class="rail-caption">Approvals &amp; controls</p><a class="desk-back" href="/">← Agent Desk: Today, Decision room, Checks</a>', 1)
+                import re
+                content = re.sub(r'<a class="brand" href="/legacy"[^>]*>.*?</a>\s*<p class="rail-caption">[^<]*</p>',
+                                 '<a class="brand desk-brand" href="/">↗ Agent Desk</a>', content, count=1, flags=re.S)
+                content = re.sub(r'<nav class="desktop-nav"[^>]*>.*?</nav>',
+                                 '<nav class="desktop-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
+                content = re.sub(r'<nav class="phone-nav"[^>]*>.*?</nav>(?=</body>)',
+                                 '<nav class="phone-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
             super().send(status, content, content_type)
 
         def do_GET(self):
@@ -50,10 +55,8 @@ def make_server(inbox, port=8765, **options):
                 try:
                     state = snapshot(inbox.path)
                     body = render(path, state, None, '')
-                    body = body.replace('Preview — view only · No approvals, controls or broker connection',
-                        'Agent Desk — view only · Real orders blocked · '
-                        '<a href="/legacy#decisions">Approvals</a> · <a href="/legacy#controls">Live controls</a> · '
-                        '<a href="/legacy#history">Full history</a>')
+                    # One navigation (sidebar) covers Approvals/History/Results/Controls; no second banner.
+                    body = body.replace('<p class="desk-preview" role="status">Preview — view only · No approvals, controls or broker connection</p>', '')
                     body = body.replace('http://127.0.0.1:8765/#controls', '/legacy#controls')
                     body = body.replace('Open live controls on 8765', 'Open live controls')
                 except Exception:

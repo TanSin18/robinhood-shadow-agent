@@ -160,18 +160,43 @@ def review_view(review, index):
     return html+'</section></section>'
 
 def render(state):
+    """Today: a short summary that points to the one place holding each detail."""
     reviews = state.get('decision_room', [])
-    html = '<div class="team-toolbar"><div><h1>Your investment team</h1><p>See the decision. Explore the work behind it.</p></div>'
-    if reviews:
-        html += '<label>Review <select id="team-review">'+''.join(f'<option value="{i}">{esc(date_label(r.get("timestamp")))}</option>' for i,r in enumerate(reviews))+'</select></label>'
-    html += '<a class="team-refresh" href="/">Refresh records</a><a class="button" href="/room">Enter Decision room</a></div>'
-    html += render_clock(state.get('now'))
-    if state.get('paused'): html += '<p class="team-pause">Paper activity is paused. You’re viewing saved work.</p>'
-    if not reviews: html += '<section class="team-outcome"><h2>No saved review yet</h2><p>When a review is recorded, its team and outcome will appear here.</p></section>'
-    html += ''.join(review_view(review, i) for i,review in enumerate(reviews))
-    html += '<section class="team-next"><h2>Needs you</h2>'
     cards = state.get('cards', [])
-    if cards:
-        html += ''.join('<details><summary>'+esc(c.get('proposal', {}).get('ticker', 'Saved proposal'))+' · '+esc(c.get('status', 'Unknown'))+'</summary>'+preview_card(c)+'</details>' for c in cards[:30])
-    else: html += '<p>No approval cards in the saved inbox.</p>'
-    return html+'<p class="team-caption">This page is view-only. <a href="/legacy#decisions">Approve or reject cards in Approvals →</a></p></section>'
+    pending = [c for c in cards if c.get('status') == 'PENDING']
+    html = '<div class="room-head"><div><h1>Today</h1><p>What happened, what needs you, and whether the system is healthy.</p></div></div>'
+    html += render_clock(state.get('now'))
+    if state.get('paused'):
+        html += '<p class="team-pause">Paper activity is paused. Resume it in Controls.</p>'
+    if not reviews:
+        html += '<section class="team-outcome"><h2>No saved review yet</h2><p>When a review is recorded, its outcome will appear here.</p></section>'
+        return html + '<div class="today-grid">' + _needs_you(pending, cards) + '</div>'
+    latest = reviews[0]
+    reason = latest.get('decision_reason') or ''
+    if latest.get('proposal_state') == 'stopped' and latest.get('critic_reason'):
+        reason = TEAM['critic'][0] + '’s reason (original report): “' + first_sentence(latest['critic_reason']) + '”'
+    html += (f'<section class="team-outcome"><span class="team-date">Latest run · {esc(date_label(latest.get("timestamp")))}</span>'
+             f'<h2>{esc(outcome(latest))}</h2>' + (f'<p>{esc(reason)}</p>' if reason else '')
+             + '<p class="today-links"><a href="/room">See how it flowed →</a><a href="/checks">See every check →</a></p></section>')
+    ops = (latest.get('checks') or {}).get('operational', [])
+    warn = [o for o in ops if o['status'] in {'warn', 'fail'}]
+    health = ('<p class="muted">System checks were not recorded for this run.</p>' if not ops else
+              f'<p><strong>{sum(o["status"] == "pass" for o in ops)}</strong> passed · <strong>{len(warn)}</strong> need attention</p>'
+              + ''.join(f'<p class="today-warn">! {esc(o["check"])}: {esc(o["value"])}' + (f' — {esc(o["note"])}' if o.get('note') else '') + '</p>' for o in warn[:4]))
+    html += ('<div class="today-grid">' + _needs_you(pending, cards)
+             + f'<section class="room-card"><div class="card-head"><h3>System health</h3><a class="small" href="/checks">Details →</a></div>{health}</section></div>')
+    from .checks import history
+    return html + history(reviews)
+
+
+def _needs_you(pending, recent=()):
+    def line(c):
+        p = c.get('proposal', {}) if isinstance(c.get('proposal'), dict) else {}
+        return (f'<p><strong>{esc(p.get("ticker", "Card"))}</strong> · {esc(c.get("status", ""))} · {esc(c.get("expiry_label", ""))}'
+                + (f'<br><span class="muted small">{esc(first_sentence(p.get("thesis", ""), 140))}</span>' if p.get('thesis') else '') + '</p>')
+    body = ''.join(line(c) for c in pending[:5]) if pending else '<p class="muted">No approval cards are waiting.</p>'
+    others = [c for c in recent if c not in pending][:3]
+    if others:
+        body += '<details class="sub"><summary>Recent cards</summary>' + ''.join(line(c) for c in others) + '</details>'
+    return (f'<section class="room-card"><div class="card-head"><h3>Needs you · {len(pending)}</h3>'
+            f'<a class="small" href="/legacy#decisions">Open Approvals →</a></div>{body}</section>')

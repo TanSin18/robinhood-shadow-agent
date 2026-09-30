@@ -20,10 +20,10 @@ def test_historical_scene_without_run_log_shows_unrecorded_edges_bench_and_disab
     assert 'data-actor="filings_news"' not in html
     assert 'data-edge=' not in html
     assert 'Original report' in html and '<script>unsafe' not in html
-    for name in ('Work','Log','Report','Ask','Tune'):
+    for name in ('Work','Original report'):
         assert name in html
     assert 'editable after Phase 0 via side test' in html
-    assert '<textarea disabled' in html
+    assert '<textarea' not in html  # no disabled placeholder controls
 
 
 def test_only_valid_same_run_records_create_replay_edges():
@@ -71,5 +71,4 @@ def test_saved_structured_news_fact_and_source_are_not_claimed_missing():
 
 def test_unknown_tuning_value_has_no_invented_slider_thumb():
     html=render('/room',{'preview':True,'decision_room':[review()]},None,'')
-    assert 'slider-unavailable' in html
-    assert 'type="range"' not in html
+    assert 'slider' not in html and 'type="range"' not in html

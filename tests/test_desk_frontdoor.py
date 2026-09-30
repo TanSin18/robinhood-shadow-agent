@@ -11,7 +11,8 @@ def test_frontdoor_preserves_legacy_actions_and_readonly_home(tmp_path, monkeypa
     inbox, _ = setup_runtime(tmp_path)
     with serving(inbox) as url:
         page = read(url)
-        assert 'Agent Desk — view only' in page
+        assert 'Preview — view only' not in page  # one navigation, no second banner
+        assert 'data-nav="decisions"' in page
         assert 'href="/legacy#decisions"' in page
         assert 'href="/legacy#controls"' in page
         assert '<form' not in page
@@ -21,9 +22,10 @@ def test_frontdoor_preserves_legacy_actions_and_readonly_home(tmp_path, monkeypa
         assert 'href="/legacy#decisions"' in legacy
         assert 'action="/legacy#decisions"' in legacy
         assert 'href="/">Agent Desk home' in legacy
+        assert 'legacy-skin' in legacy and 'Checks &amp; charts' in legacy
         assert 'Confirm pause' in read(url+'/control?action=pause')
         for path in ('/room','/portfolio','/money','/scoreboard','/controls','/health'):
-            assert 'Agent Desk — view only' in read(url+path)
+            assert 'href="/legacy#decisions"' in read(url+path)
         assert 'font-face' in read(url+'/assets/agent-desk.css')
 
 
