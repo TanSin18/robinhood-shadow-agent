@@ -1,4 +1,14 @@
-# Current handoff — September 29, 2026
+# Current handoff — September 30, 2026 evening (Claude)
+
+**Start here: `docs/review/HANDOFF_2026-09-30_EVENING.md`** (self-contained: live
+state on the Mac, branches, Thursday 2026-10-01 expectations and the 10:30 ET
+check, how exits/AI gate/run categories work, release procedure, ranked gaps).
+Chronology: `docs/review/CLAUDE_RETURN.md`. Runtime source of truth is branch
+`claude/continuation-2026-09-30`; Agent Desk UI is `claude/ui-decision-room-v2`.
+Release C is installed; v1.5.0/v1.5.1/v1.5.2 amendments switch on 2026-10-01
+09:30 ET. Paper only; real orders blocked. Do not start a second trading runner.
+
+# Previous handoff — September 29, 2026
 
 Read `docs/review/CLAUDE_REVIEW.md` before work and
 `docs/review/CODEX_STATUS.md` for current deployment/evidence and questions.

@@ -52,3 +52,7 @@
 - 15:55 ET: GAP FOUND. Desk-rule ETF positions had a recorded exit but no executor: AI may not vote on ETFs and the no-AI arm has no seller. Fix on branch claude/etf-exit (c51bfe1): agents/etf_exit.py plus run_cycle hook, inert until the v1.5.1 amendment is signed and pinned. Also: under v1.5, ETF holdings no longer trigger a pointless daily AI review. Draft amendment docs/superpowers/plans/preregistration-amendment-v1.5.1.draft.yaml. Target: Thursday after-close release, effective Friday 09:30 ET. SOXX is about 25% above its 200-day average, so an exit cannot trigger before then.
 - 15:56 ET release B installed (ETF exit v1.5.1, universe screen). UI v6 (run categories, exit headlines) applied to the dashboard release.
 - 16:00 ET RELEASE C INSTALLED (stock backstop v1.5.2): 771 passed, 0 failed; backup release-rollback.2zwyvqe1; fingerprint 0a1726f0…; config hash 5949a467… (23 tickers). The revocation_drill gate is now TRUE. Only blocker left: a fresh scheduled full cycle (Thursday 10:00). Checked on the Mac: v15_active, exit_rule_active and stock_backstop_active are all False now and all True at 2026-10-01 09:31 ET. No stop flags.
+
+## 2026-09-30 16:15 ET
+
+Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `HANDOFF.md` now points to it. All branches pushed.
