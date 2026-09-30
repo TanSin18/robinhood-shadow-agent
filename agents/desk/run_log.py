@@ -134,7 +134,10 @@ def describe(event, started):
         return _entry(event, 'evidence', f'Scored the universe: {len(signals)} qualified signal' + ('' if len(signals) == 1 else 's'), [
             'Signals: ' + (', '.join(signals) or 'none'),
             'Not eligible: ' + ('; '.join(_blocked(event.get('blocked'))) or 'none recorded'),
-            'Candidate states: ' + (_states(event.get('candidate_decisions')) or 'not recorded')],
+            'Candidate states: ' + (_states(event.get('candidate_decisions')) or 'not recorded'),
+            ('Options: ' + str(event['option_screen'].get('contracts_seen')) + ' contracts screened, '
+             + str(event['option_screen'].get('passed_all_filters')) + ' passed every filter')
+            if isinstance(event.get('option_screen'), dict) and 'contracts_seen' in event['option_screen'] else None],
             'good' if signals else 'info')
     if name == 'ai_invocation_gate':
         opened = event.get('invoke') is True

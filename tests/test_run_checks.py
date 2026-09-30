@@ -67,3 +67,17 @@ def test_sanitizer_keeps_token_counts_but_drops_token_values():
     from agents.desk.preview import public
     kept = public({'input_tokens': 5, 'output_tokens': 2, 'access_token': 'x', 'refresh_token': 'y', 'authorization_id': 'z'})
     assert kept == {'input_tokens': 5, 'output_tokens': 2}
+
+
+def test_options_screen_is_shown_when_recorded_and_explained_when_not():
+    from agents.desk.run_checks import option_screen
+    from agents.desk.checks import options_section
+    assert 'did not record an options screen' in options_section(None)
+    ordered = [{'event': 'strategy_evaluated', 'option_screen': {
+        'contracts_seen': 547, 'passed_all_filters': 0, 'bullish_underlyings': ['SOXX'],
+        'funnel': [{'stage': 'quote_fresh', 'removed': 2, 'remaining': 545},
+                   {'stage': 'one_contract_affordable', 'removed': 40, 'remaining': 0}],
+        'by_underlying': {'SOXX': {'contracts': 40, 'passed': 0, 'cheapest_call_cost': '812.00', 'available_risk_notional': '480.00'}}}}]
+    opt = option_screen(ordered)
+    html = options_section(opt)
+    assert '547 seen → 0 passed' in html and '$812.00' in html and '1 contract fits the lane' in html

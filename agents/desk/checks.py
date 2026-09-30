@@ -7,6 +7,11 @@ from decimal import Decimal
 from .components import esc
 from .workspace import date_label, outcome
 
+
+def table(head, rows):
+    from .scene import table as _table
+    return _table(head, rows)
+
 ICON = {'pass': '✓', 'warn': '!', 'fail': '✕', 'info': 'i', 'unknown': '?'}
 
 
@@ -168,6 +173,28 @@ def history(reviews):
             f'<tbody>{rows}</tbody></table></div></section>')
 
 
+def options_section(opt):
+    if not opt:
+        return ('<p class="muted">This run did not record an options screen. Runs from the 2026-09-30 evening release on record how many '
+                'contracts pass each filter.</p><p class="muted small">Rules: a call on an underlying with a buy signal, valid bid/ask, '
+                'spread within 15% of the midpoint, and one contract (ask × 100) within the lane’s available money.</p>')
+    top = max([r['remaining'] or 0 for r in opt['funnel']] + [opt.get('seen') or 0, 1])
+    rows = ''
+    prev = opt.get('seen') or 0
+    for i, r in enumerate(opt['funnel']):
+        w = (r['remaining'] or 0) / top * 300
+        rows += (f'<g class="bar {"top" if i == len(opt["funnel"]) - 1 else "pos"}"><text class="bar-label" x="172" y="{16 + i * 22}" text-anchor="end">{esc(r["stage"])}</text>'
+                 f'<rect x="180" y="{5 + i * 22}" width="{max(w, 1.5):.1f}" height="15" rx="2"/>'
+                 f'<text class="bar-value" x="{186 + w:.1f}" y="{16 + i * 22}">{esc(r["remaining"])} left (−{esc(r["removed"])})</text></g>')
+        prev = r['remaining']
+    chart = (f'<figure class="chart"><figcaption>Option contracts surviving each filter · {esc(opt.get("seen"))} seen → {esc(opt.get("passed"))} passed</figcaption>'
+             f'<svg viewBox="0 0 620 {len(opt["funnel"]) * 22 + 8}" role="img" aria-label="Options funnel">{rows}</svg></figure>')
+    under = table(('Underlying', 'Contracts', 'Passed', 'Cheapest call (1 contract)', 'Available in lane'),
+                  [(u['underlying'], u['contracts'], u['passed'], ('$' + u['cheapest_call_cost']) if u['cheapest_call_cost'] else '—',
+                    ('$' + u['available']) if u['available'] else '—') for u in opt['by_underlying']]) if opt['by_underlying'] else ''
+    return chart + f'<p class="muted small">Underlyings with a buy signal: {esc(", ".join(opt["bullish"]) or "none")}</p>' + under
+
+
 def usage_table(review):
     u = review.get('agent_usage') or {}
     stages = {s.get('key'): s for s in review.get('stages', [])}
@@ -194,6 +221,7 @@ def run_section(review, index):
 <section class="room-card"><div class="card-head"><h3>System checks</h3><span class="muted small">Connection, registration, data, AI and outcome</span></div>{operational(c.get("operational", []))}</section>
 <section class="room-card"><div class="card-head"><h3>AI steps · model, tools and tokens</h3></div>{usage_table(review)}</section>
 <section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
+<section class="room-card"><div class="card-head"><h3>Options screen (Lane B)</h3><span class="muted small">Why contracts were or weren’t considered</span></div>{options_section(c.get("options"))}</section>
 <section class="room-card"><div class="card-head"><h3>Scanners · strategy conditions</h3><span class="muted small">Every ticker × every condition</span></div>{strategy_tables(c.get("strategies", []))}</section>
 <section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Pip’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
 <section class="room-card"><div class="card-head"><h3>Nugget · safety-rule results</h3></div>{risk_table(c.get("risk", []))}</section>

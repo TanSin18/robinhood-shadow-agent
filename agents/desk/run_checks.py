@@ -190,6 +190,25 @@ def risk_checks(payload):
     return rows
 
 
+def option_screen(ordered):
+    event = next((e for e in reversed(ordered) if e.get('event') == 'strategy_evaluated'), None)
+    screen = event.get('option_screen') if event and isinstance(event.get('option_screen'), dict) else None
+    if not screen or not isinstance(screen.get('funnel'), list):
+        return None
+    labels = {'quote_fresh': 'Fresh quote', 'underlying_has_buy_signal': 'Underlying has a buy signal',
+              'is_call': 'Is a call', 'valid_bid_ask': 'Valid bid/ask', 'spread_within_15pct': 'Spread ≤ 15% of mid',
+              'at_least_one_contract_buyable': 'At least 1 contract buyable', 'one_contract_affordable': '1 contract fits the lane'}
+    funnel = [{'stage': labels.get(str(r.get('stage')), _s(r.get('stage'), 40)), 'removed': r.get('removed'), 'remaining': r.get('remaining')}
+              for r in screen['funnel'] if isinstance(r, dict)]
+    under = []
+    for name, row in (screen.get('by_underlying') or {}).items():
+        if isinstance(row, dict):
+            under.append({'underlying': _s(name, 12), 'contracts': row.get('contracts'), 'passed': row.get('passed'),
+                          'cheapest_call_cost': _s(row.get('cheapest_call_cost'), 20), 'available': _s(row.get('available_risk_notional'), 20)})
+    return {'seen': screen.get('contracts_seen'), 'passed': screen.get('passed_all_filters'), 'funnel': funnel,
+            'bullish': [_s(x, 12) for x in screen.get('bullish_underlyings', []) if _s(x, 12)], 'by_underlying': under}
+
+
 def build_checks(ordered):
     terminal = next((e for e in reversed(ordered) if e.get('event') == 'cycle_terminal'), None)
     payload = terminal.get('payload') if terminal and isinstance(terminal.get('payload'), dict) else {}
@@ -202,5 +221,6 @@ def build_checks(ordered):
         'strategies': strategy_matrix(assessment, features),
         'operational': operational(payload) if payload else [],
         'risk': risk_checks(payload),
+        'options': option_screen(ordered),
         'missing_evidence': [x for x in (_s(m, 400) for m in payload.get('missing_evidence', [])) if x] if isinstance(payload.get('missing_evidence'), list) else [],
     }
