@@ -1,4 +1,5 @@
 """run_cycle wiring for v1.5 desk-policy ETF entries (explicitly enabled only)."""
+import json
 from datetime import timedelta
 
 from agents.daily_cycle import FixtureReader, run_cycle
@@ -54,6 +55,7 @@ def test_enabled_issues_three_arm_desk_entry(tmp_path, monkeypatch):
     arms = {r['arm']: r['status'] for r in result['desk_results']}
     assert arms == {'agent_alone': 'filled', 'deterministic_no_ai': 'filled', 'with_approvals': 'PENDING'}
     assert result['api_cost_estimate_usd'] == '0' and result['agents'] == []
+    assert 'account_last4' not in json.dumps(result)
 
 
 def test_enabled_but_no_volume_evidence_blocks_honestly(tmp_path, monkeypatch):

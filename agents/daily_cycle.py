@@ -313,6 +313,39 @@ def apply_decision(inbox, config, decision, critic, snapshot, now, cycle_id, *, 
     return results
 
 
+LANE_GUIDE={'A':'Stocks and ETFs as shares (paper, fractional shares allowed, $1 minimum). META, AAPL etc. are Lane A.',
+            'B':'Defined-risk long call/put option contracts only, whole contracts, identified by contract ID.'}
+
+
+def blind_critic_request(research, decision, snapshot, inbox, market_open, eligible, signals, choices):
+    """v1.5 Critic input: complete, blind dossiers. Excludes Portfolio's reasoning."""
+    from agents.decision_packet import build_critic_packet
+    by_id={str(c['instrument']):c for c in choices}
+    selections=[]
+    for pick in decision.picks:
+        symbol=str(pick.instrument)
+        contract=snapshot['contracts'].get(symbol)
+        lane='B' if contract else 'A'
+        quote=snapshot['quotes'].get(symbol)
+        state=inbox.state(lane,'agent_alone')
+        held=state['positions'].get(symbol,{})
+        evidence={'asset_class':'option' if contract else ('etf' if symbol in ETF_UNIVERSE else 'stock'),
+                  'bid':str(quote.bid) if quote else None,'ask':str(quote.ask) if quote else None,
+                  'quote_time':quote.timestamp.isoformat() if quote else None,
+                  'realized_vol_20d':by_id.get(symbol,{}).get('realized_vol_20d'),
+                  'source_ids':[f'quote:{symbol}'] if quote else [],'contract':contract}
+        paper={'lane':lane,'fractional_allowed':None if contract else True,
+               'settled_cash':state['settled_cash'],'unsettled_cash':state['unsettled_cash'],
+               'held_quantity':held.get('quantity','0'),'pending_quantity':'0'}
+        try:
+            selections.append(build_critic_packet(pick.model_dump(mode='json'),evidence,paper))
+        except ValueError as error:
+            selections.append({'selection':{'instrument':symbol},'invalid_packet':str(error)})
+    return {'research':research.model_dump(mode='json'),'selections':selections,
+            'decision':{'picks':[{k:v for k,v in p.model_dump(mode='json').items() if k!='reason'} for p in decision.picks]},
+            'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':signals,'lane_guide':LANE_GUIDE}
+
+
 def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, now, cycle_id, *,
                       lifecycle=None, enabled=False, approved_ai_stock_pick=False, entry_slot_used=False):
     """v1.5 desk-policy ETF entry. Inert (returns None) unless explicitly enabled
@@ -575,7 +608,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                     'risk_proposals_evaluated':0} if rehearsal else {}),
                 'collector_evidence':getattr(reader,'evidence',None),
                 'transport_evidence':{'collector':getattr(reader,'evidence',None),'inference':[]},
-                'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),
+                'quote_count':len(snapshot['quotes']),
                 'volatility_count':len(snapshot['vols']),'market_open':market_open,
                 'strategy_assessment':strategy_assessment,
                 'decision':{'type':decision_type,'picks':[],'reason':reason,
@@ -611,19 +644,28 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
             phase0_reservations.clear()
             return finish({'status':'COMPLETED','decision':{'type':'HOLD_OPERATIONAL','picks':[],'reason':str(error)},'critic':None,'results':[],'reason':str(error),'ai_gate':{'invoke':True,'reason':ai_gate.reason},'news_checked':False,'news':[],'missing_evidence':['BUDGET_MINIMUM_NOT_AVAILABLE']})
     try:
-        research_request={'symbols':sorted({str(candidate['instrument']) for candidate in model_candidates}),'now':observed_at.isoformat(),'candidates':model_candidates,'strategy_assessment':strategy_assessment,'news_enabled':False}
+        if desk_policy_enabled:
+            # v1.5: ETF signals never enter AI packets; lanes are explicit.
+            model_candidates=[c for c in model_candidates if str(c['instrument']) not in ETF_UNIVERSE]
+        ai_signals=[s for s in strategy_assessment['signals']
+                    if not (desk_policy_enabled and str(s['instrument']) in ETF_UNIVERSE)]
+        research_request={'symbols':sorted({str(candidate['instrument']) for candidate in model_candidates}),'now':observed_at.isoformat(),'candidates':model_candidates,'strategy_assessment':({**strategy_assessment,'signals':ai_signals} if desk_policy_enabled else strategy_assessment),'news_enabled':False}
         research=run('research',Research,research_request)
         research_rows=candidate_decisions(choices,[],completed['research'],{'picks':[]},
                                           {'rejected_instruments':[]},[],[])
         trace_event('stage_completed',role='research',agent='Research Agent',
                     output=completed['research'],candidate_decisions=research_rows)
-        portfolio_request={'research':research.model_dump(mode='json'),'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':strategy_assessment['signals'],'candidates':model_candidates,'paper_accounts':accounts}
+        portfolio_request={'research':research.model_dump(mode='json'),'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':ai_signals,'candidates':model_candidates,'paper_accounts':accounts}
+        if desk_policy_enabled:
+            portfolio_request['lane_guide']=LANE_GUIDE
         decision=run('portfolio',Decision,portfolio_request)
         portfolio_rows=candidate_decisions(choices,[],{'compared_symbols':[]},
                                            completed['portfolio'],{'rejected_instruments':[]},[],[])
         trace_event('stage_completed',role='portfolio',agent='Portfolio Agent',
                     output=completed['portfolio'],candidate_decisions=portfolio_rows)
-        critic_request={'research':research.model_dump(mode='json'),'decision':decision.model_dump(mode='json'),'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':strategy_assessment['signals']}
+        critic_request={'research':research.model_dump(mode='json'),'decision':decision.model_dump(mode='json'),'market_open':market_open,'eligible_instruments':eligible,'strategy_signals':ai_signals}
+        if desk_policy_enabled:
+            critic_request=blind_critic_request(research,decision,snapshot,inbox,market_open,eligible,ai_signals,choices)
         critic=run('critic',Critique,critic_request)
         critic_rows=candidate_decisions(choices,[],{'compared_symbols':[]},{'picks':[]},
                                         completed['critic'],[],[])
@@ -679,7 +721,7 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
     trace_event('risk_evaluated',status='completed' if market_open else 'not_run',
                 results=results,real_execution='blocked',candidate_decisions=risk_rows)
     inbox.mark_accounts(snapshot['quotes'],completion_time,data_mode)
-    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'account_last4':snapshot['account_last4'],'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'desk_results':desk_results or [],'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
+    result={'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),'collector_evidence':getattr(reader,'evidence',None),'quote_count':len(snapshot['quotes']),'volatility_count':len(snapshot['vols']),'market_open':market_open,'strategy_assessment':strategy_assessment,'decision':decision.model_dump(mode='json'),'critic':critic.model_dump(mode='json'),'results':results,'desk_results':desk_results or [],'reason':decision.reason,'news_checked':False,'news':[],'missing_evidence':research.missing_evidence+['News disabled pending tool isolation verification'],'source_hashes':source_hashes,'notification_policy':'required_actions_only'}
     result['transport_evidence']={'collector':getattr(reader,'evidence',None),'inference':getattr(bridge,'isolation_evidence',[])}
     # Persist observed benchmark prices, never manufacture an unchanged benchmark.
     if snapshot['benchmark'] and not rehearsal:
