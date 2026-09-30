@@ -5,7 +5,25 @@ Rules for every assistant: `AGENTS.md`, `CLAUDE.md`. **Do not start a second tra
 The operator does all Robinhood login, MFA and consent on the Mac. Never ask for or print
 credentials, codes, tokens or account numbers. Paper only: real orders are blocked.
 
-## 0. UPDATE 19:30 ET (read this first)
+## 0a. UPDATE 19:50 ET
+- Proxy restarted by the operator 19:26 ET; authorization VALID again from 19:30 ET.
+- **Release D INSTALLED 19:32 ET** (797 passed; backup release-rollback.78pvi9lh; fingerprint 5a441956…).
+  Verified on the Mac: v1.5/1.5.1/1.5.2/1.6 all False now, all True at 2026-10-01 09:31 ET.
+- Backfill done (238 calls, 2005→2026 for 15 ETFs; SOXX 2010, XLRE 2015, XLC 2018).
+  **Backtest verdict NOT PROVEN** (docs/review/evidence/backtest-etf-rule-2026-09-30.md): registered rule
+  0.4%/yr after tax vs VTI 8.3%; the live 10% drawdown latch (`peak_breaker_latched`, never cleared)
+  froze buying in July 2010. Signal alone 1.7%/yr, Sharpe 0.20 vs 0.54. Independent re-implementation
+  agrees. 252-session momentum looks better (≈VTI after costs) but is a post-hoc pick: shadow-test only.
+- Nightly screen service install failed: Permission denied on /Users/Shared/RobinhoodShadow/launch
+  (needs `sudo`). Operator asked to rerun with sudo.
+- Follow-up found: Robinhood daily bars begin 00:00Z, so ET conversion labels each session one day
+  early (live features are still correct: the 10:00 run used the prior session's close). Affects
+  date-keyed lookups: option expiry-close settlement and the 20-session backstop count (±1).
+  Fix in data parsing before options resume.
+- Follow-up: the permanent 10% drawdown latch will eventually freeze the $25k book too; needs an
+  explicit, registered reset rule.
+
+## 0. UPDATE 19:30 ET
 
 - **Robinhood read proxy DOWN since 16:25 ET** (maintenance log: authorization status `PROXY_UNAVAILABLE`
   on every check; last VALID ~16:20). The history backfill's first read at 16:21 got `UPSTREAM_READ_FAILED`
