@@ -75,6 +75,7 @@ def short_stage(stage, review):
         if key == 'critic': return 'Rejected ' + names + ' — stopped here.'
         if key == 'risk': return 'No proposal reached the safety checks.'
         if key == 'final': return 'No card: stopped by the Critic.'
+    if status == 'skipped' and stage.get('status_label') == 'Not called': return 'Not called — the AI gate stayed closed.'
     if status == 'not_applicable': return 'No proposed trade needed this check.'
     if status == 'active': return 'Was working at the last recorded update.'
     if status in {'waiting', 'unavailable'} or status is None: return 'No completed work saved for this step.'
@@ -115,6 +116,8 @@ def review_view(review, index):
     heading = outcome(review)
     issues = concerns(review)
     reason = ' · '.join(x[0] for x in issues) or 'Open an agent to explore the saved review.'
+    if review.get('decision_reason'):
+        reason = review['decision_reason']
     if review.get('proposal_state') == 'stopped' and review.get('critic_reason'):
         reason = TEAM['critic'][0] + '’s reason (original report): “' + first_sentence(review['critic_reason']) + '”'
     html = f'<section data-review="{index}"{hidden}><div class="team-outcome"><span class="team-date">{esc(date_label(review.get("timestamp")))}</span><h2>{esc(heading)}</h2><p>{esc(reason)}</p><details><summary>Why this outcome?</summary><p>{esc(review.get("outcome", {}).get("reason") or "The reason was not saved.")}</p></details></div>'

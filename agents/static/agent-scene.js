@@ -1,84 +1,118 @@
 'use strict';
+// Decision room: selection, log filters and a replay of the recorded run log.
+// Nothing here fetches data; it only moves highlight between server-rendered records.
 document.documentElement.classList.add('scene-enhanced');
-const scenes = Array.from(document.querySelectorAll('[data-scene-review]'));
+const PIPE = ['evidence', 'research', 'portfolio', 'critic', 'risk', 'final'];
 const players = [];
+const scenes = Array.from(document.querySelectorAll('[data-scene-review]'));
 scenes.forEach((review, index) => {
   review.hidden = index !== 0;
-  const scene = review.querySelector('[data-scene]');
-  const steps = Array.from(scene.querySelectorAll('[data-handoff-step]'));
-  let current = 0, timer = null;
-  const play = scene.querySelector('[data-replay="play"]');
-  function stop() {
-    clearInterval(timer); timer = null;
-    play.textContent = 'Play'; scene.classList.remove('is-playing');
-  }
-  function select(n) {
-    if (!steps.length) return;
-    current = Math.max(0, Math.min(n, steps.length - 1));
-    const selected = steps[current];
-    const edges = selected.dataset.handoffEdges.split(' ');
-    scene.querySelectorAll('[data-edge]').forEach(edge => edge.classList.toggle('edge-selected', edges.includes(edge.dataset.edge)));
-    steps.forEach((step,i) => step.setAttribute('aria-current', String(i === current)));
-    scene.querySelector('.speech-who').textContent = selected.querySelector('.handoff-from').textContent;
-    scene.querySelector('.speech-message').textContent = selected.querySelector('.handoff-message').textContent;
-    scene.querySelector('[data-step-label]').textContent = `Step ${current + 1} of ${steps.length} · Recorded replay`;
-    scene.querySelector('[data-replay="previous"]').disabled = current === 0;
-    scene.querySelector('[data-replay="next"]').disabled = current === steps.length - 1;
-  }
-  scene.querySelectorAll('[data-replay]').forEach(button => button.addEventListener('click', () => {
-    if (!steps.length) return;
-    const action = button.dataset.replay;
-    if (action === 'play') {
-      if (timer) { stop(); return; }
-      if (current === steps.length - 1) select(0);
-      play.textContent = 'Pause'; scene.classList.add('is-playing');
-      timer = setInterval(() => { if (current === steps.length - 1) stop(); else select(current + 1); }, 2200);
-    } else {
-      stop();
-      if (action === 'all') {
-        scene.querySelectorAll('[data-edge]').forEach(edge => edge.classList.add('edge-selected'));
-        scene.querySelector('[data-step-label]').textContent = 'Whole recorded path';
-      } else select(current + (action === 'previous' ? -1 : 1));
-    }
-  }));
-  steps.forEach((step,i) => step.addEventListener('click', () => { stop(); select(i); }));
-  scene.addEventListener('keydown', event => {
-    if (!steps.length || !event.target.closest('.scene-player')) return;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-      event.preventDefault(); stop(); select(current + (event.key === 'ArrowRight' ? 1 : -1));
-    }
-  });
-  review.querySelectorAll('[data-character]').forEach(button => button.addEventListener('click', () => {
-    const panel = document.getElementById(button.dataset.character);
-    const next = !panel.open;
-    review.querySelectorAll('.scene-character').forEach(p => { p.open = false; });
-    panel.open = next;
-    if (next) panel.scrollIntoView({block:'nearest',behavior:'auto'});
-  }));
-  review.querySelectorAll('.scene-character').forEach(panel => {
-    panel.addEventListener('toggle', () => {
-      const button = review.querySelector(`[data-character="${panel.id}"]`);
-      button.setAttribute('aria-expanded', String(panel.open));
+  const nodes = () => review.querySelectorAll('.flow-node[data-actor], .flow-item[data-actor]');
+  function focusEdges(actor) {
+    review.querySelectorAll('.flow-svg .flow-edge[data-flow]').forEach(edge => {
+      const [a, b] = edge.dataset.flow.split('-');
+      edge.classList.toggle('edge-focus', a === actor || b === actor);
     });
+  }
+  function select(actor, scroll) {
+    if (!PIPE.includes(actor)) actor = 'evidence';
+    review.dataset.selected = actor;
+    review.querySelectorAll('[data-inspect]').forEach(p => { p.hidden = p.dataset.inspect !== actor; });
+    nodes().forEach(n => {
+      const on = n.dataset.actor === actor;
+      n.classList.toggle('is-selected', on);
+      n.setAttribute('aria-pressed', String(on));
+    });
+    focusEdges(actor);
+    if (scroll) review.querySelector(`[data-inspect="${actor}"]`)?.scrollIntoView({block: 'nearest', behavior: 'auto'});
+  }
+  nodes().forEach(n => {
+    n.addEventListener('click', () => { stop(); select(n.dataset.actor, false); });
+    n.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stop(); select(n.dataset.actor, false); }
+    });
+  });
+  review.querySelectorAll('[data-log-select]').forEach(b => b.addEventListener('click', () => {
+    stop(); select(b.dataset.logSelect, true); mark(b.closest('.log-row'));
+  }));
+  // Tabs inside each inspector.
+  review.querySelectorAll('.inspector').forEach(panel => {
     const tabs = Array.from(panel.querySelectorAll('[data-character-tab]'));
-    function tabSelect(name) {
-      tabs.forEach(t => { const chosen=t.dataset.characterTab===name; t.setAttribute('aria-selected',String(chosen)); t.tabIndex=chosen?0:-1; });
-      panel.querySelectorAll('[data-character-pane]').forEach(p => { p.hidden=p.dataset.characterPane!==name; });
+    function tab(nameSel) {
+      tabs.forEach(t => { const on = t.dataset.characterTab === nameSel; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; });
+      panel.querySelectorAll('[data-character-pane]').forEach(p => { p.hidden = p.dataset.characterPane !== nameSel; });
     }
-    tabs.forEach((tab,i) => {
-      tab.addEventListener('click', () => tabSelect(tab.dataset.characterTab));
-      tab.addEventListener('keydown', e => {
-        if (!['ArrowLeft','ArrowRight'].includes(e.key)) return;
-        e.preventDefault(); const t=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
-        tabSelect(t.dataset.characterTab); t.focus();
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => tab(t.dataset.characterTab));
+      t.addEventListener('keydown', e => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+        e.preventDefault();
+        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        tab(next.dataset.characterTab); next.focus();
       });
     });
-    tabSelect('work');
+    tab('work');
   });
-  select(0); players.push(stop);
+  // Log filters.
+  const logRows = Array.from(review.querySelectorAll('.log-scroll .log-row'));
+  review.querySelectorAll('[data-log-filter]').forEach(b => b.addEventListener('click', () => {
+    review.querySelectorAll('[data-log-filter]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    const f = b.dataset.logFilter;
+    logRows.forEach(r => { r.hidden = f !== 'all' && r.dataset.logActor !== f; });
+  }));
+  // Replay: walk the recorded log in order; pacing follows recorded offsets.
+  const label = review.querySelector('[data-step-label]');
+  const play = review.querySelector('[data-replay="play"]');
+  let current = -1, timer = null;
+  function mark(row) {
+    logRows.forEach(r => r.removeAttribute('aria-current'));
+    if (row) { row.setAttribute('aria-current', 'true'); row.scrollIntoView({block: 'nearest', behavior: 'auto'}); }
+  }
+  function seconds(row) { const m = /\+(\d+)s/.exec(row?.querySelector('.log-offset')?.textContent || ''); return m ? Number(m[1]) : null; }
+  function step(n) {
+    if (!logRows.length) return;
+    current = Math.max(0, Math.min(n, logRows.length - 1));
+    const row = logRows[current];
+    const actor = row.dataset.logActor;
+    review.querySelectorAll('.flow-node, .flow-gate').forEach(x => x.classList.remove('is-live'));
+    review.querySelectorAll('.flow-edge').forEach(x => x.classList.remove('edge-live'));
+    if (actor === 'gate') review.querySelector('.flow-gate')?.classList.add('is-live');
+    else review.querySelector(`.flow-node[data-actor="${actor}"]`)?.classList.add('is-live');
+    review.querySelectorAll('.flow-svg .flow-edge[data-flow]').forEach(e => {
+      const to = e.dataset.flow.split('-')[1];
+      if (to === actor || (actor === 'gate' && e.dataset.flow === 'evidence-research')) e.classList.add('edge-live');
+    });
+    if (PIPE.includes(actor)) select(actor, false);
+    mark(row);
+    const t = row.querySelector('time')?.textContent || '';
+    const who = row.querySelector('.log-actor')?.textContent || '';
+    label.textContent = `${current + 1}/${logRows.length} · ${t} · ${who}: ${row.querySelector('.log-title').textContent}`;
+    review.querySelector('[data-replay="previous"]').disabled = current === 0;
+    review.querySelector('[data-replay="next"]').disabled = current === logRows.length - 1;
+  }
+  function stop() { clearTimeout(timer); timer = null; if (play) play.textContent = 'Replay run'; review.classList.remove('is-playing'); }
+  function tick() {
+    if (current >= logRows.length - 1) { stop(); return; }
+    const a = seconds(logRows[current]), b = seconds(logRows[current + 1]);
+    step(current + 1);
+    const gap = (a !== null && b !== null) ? (b - a) * 90 : 900;
+    timer = setTimeout(tick, Math.max(650, Math.min(2200, gap + 650)));
+  }
+  review.querySelectorAll('[data-replay]').forEach(b => b.addEventListener('click', () => {
+    if (!logRows.length) return;
+    const action = b.dataset.replay;
+    if (action === 'play') {
+      if (timer) { stop(); return; }
+      if (current >= logRows.length - 1) current = -1;
+      play.textContent = 'Pause'; review.classList.add('is-playing');
+      tick();
+    } else { stop(); step(current + (action === 'previous' ? -1 : 1)); }
+  }));
+  players.push(stop);
+  select(review.dataset.selected || 'final', false);
 });
 document.querySelector('#scene-review')?.addEventListener('change', e => {
-  players.forEach(stop => stop());
-  scenes.forEach(s => { s.hidden=s.dataset.sceneReview!==e.target.value; });
+  players.forEach(s => s());
+  scenes.forEach(s => { s.hidden = s.dataset.sceneReview !== e.target.value; });
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) players.forEach(stop => stop()); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) players.forEach(s => s()); });

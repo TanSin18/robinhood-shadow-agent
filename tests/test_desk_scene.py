@@ -10,9 +10,9 @@ def review():
             'outcome':{},'lanes':{'A':[],'B':[]}}
 
 
-def test_historical_scene_has_expected_edges_bench_and_disabled_player():
+def test_historical_scene_without_run_log_shows_unrecorded_edges_bench_and_disabled_player():
     html=render('/room',{'preview':True,'decision_room':[review()]},None,'')
-    assert 'scene-map' in html and 'edge-expected' in html
+    assert 'scene-map' in html and 'edge-unknown' in html and 'edge-carried' not in html
     assert 'Expected workflow' in html
     assert 'data-replay="play" disabled' in html
     assert 'No recorded handoff messages' in html
@@ -20,7 +20,7 @@ def test_historical_scene_has_expected_edges_bench_and_disabled_player():
     assert 'data-actor="filings_news"' not in html
     assert 'data-edge=' not in html
     assert 'Original report' in html and '<script>unsafe' not in html
-    for name in ('Recorded work','Ask','Tune'):
+    for name in ('Work','Log','Report','Ask','Tune'):
         assert name in html
     assert 'editable after Phase 0 via side test' in html
     assert '<textarea disabled' in html
@@ -37,7 +37,6 @@ def test_only_valid_same_run_records_create_replay_edges():
     html=render('/room',{'preview':True,'decision_room':[r],'handoffs':rows},None,'')
     assert 'data-edge="research-portfolio"' in html
     assert 'Cited evidence is ready.' in html
-    assert 'edge-expected' not in html
     assert 'data-replay="play" disabled' not in html
     assert 'data-edge="portfolio-critic"' not in html
 

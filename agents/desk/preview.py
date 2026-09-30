@@ -41,7 +41,7 @@ def open_readonly(path):
 
 def public(value):
     if isinstance(value,dict):
-        return {k:public(v) for k,v in value.items() if not any(s in k.lower() for s in ('account_id','account_number','token','secret','credential'))}
+        return {k:public(v) for k,v in value.items() if not any(s in k.lower() for s in ('account_id','account_number','last4','token','secret','credential'))}
     if isinstance(value,list): return [public(v) for v in value]
     return value
 

@@ -733,6 +733,16 @@ def project_decision_room(records, cards):
                     stage.update(status='not_applicable', status_label='Not reached', tone='neutral')
                 elif stage['key'] == 'final':
                     stage['status_label'] = 'No card'
+        from agents import run_log
+        ai_gate = run_log.gate(ordered)
+        log = run_log.build_log(ordered)
+        if ai_gate and not ai_gate['open']:
+            called = {entry['actor'] for entry in log}
+            for stage in stages:
+                if stage['key'] in run_log.AI_STAGES and stage['key'] not in called:
+                    stage.update(status='skipped', status_label='Not called', tone='neutral',
+                                 summary='Not called: the AI gate stayed closed for this run'
+                                 + (f" ({ai_gate['reason']})." if ai_gate.get('reason') else '.'))
         completed_stages = sum(stage['status'] in {'completed', 'blocked'} for stage in stages)
         reviews.append(
             {
@@ -754,6 +764,11 @@ def project_decision_room(records, cards):
                          'blocked_reasons': sorted({str(r.get('reason')) for r in desk_results
                                                     if r.get('status') == 'BLOCKED' and r.get('reason')})},
                 'signal_instruments': signal_instruments,
+                'decision_reason': _text(decision.get('reason'), 400),
+                'ai_gate': ai_gate,
+                'log': log,
+                'stage_times': run_log.stage_times(ordered),
+                'strategy_blocked': run_log.strategy_blocked(ordered),
                 'default_stage': next(
                     (
                         stage['key']
@@ -790,6 +805,9 @@ def project_decision_room(records, cards):
                 ],
             }
         )
+    from agents.run_log import flow
+    for review in reviews:
+        review['flow'] = flow(review, review['log'])
     return sorted(
         reviews,
         key=lambda review: _aware(review['timestamp'])
