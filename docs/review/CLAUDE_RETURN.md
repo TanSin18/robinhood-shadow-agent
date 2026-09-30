@@ -25,3 +25,9 @@
 - Running processes / incomplete tests / reservations: none
 - Git push verified / uncommitted files: verified; none
 - Return state: IN_PROGRESS
+
+## 2026-09-30 13:50 ET — UI overhaul (not deployed)
+- Branch `claude/ui-decision-room-v2` @ f38ca94 (on top of `claude/ui-truthful-outcome`).
+- Decision room v2: trace-backed flow graph, agent inspector with connection mini-graph, whitelisted run log (`agents/run_log.py`), compact type (`agent-compact.css`). Preview sanitizer now also drops `*last4*` keys.
+- Desk tests pass; full suite shows only the 7 known environment failures (plus one timing-flaky preview socket test that passes on rerun).
+- Deploy needs a separate UI release and an inbox restart, with operator approval. Not scheduled before Thursday's 10:00 run.
