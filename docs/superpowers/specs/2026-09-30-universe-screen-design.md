@@ -105,7 +105,19 @@ Screen every current S&P 500 constituent plus a reviewed list of liquid ETFs wit
 - More candidates means more AI calls and more Critic rejections. Watch cost per decision in the shadow period.
 - Sector concentration: the existing risk engine limits position size, not sector. Consider a sector cap in v1.6.
 
-## 8. Operator decisions needed
+## 8. Decisions (operator 14:44 ET: "you decide"; sector ETFs "now and together")
+
+- Constituent source (free and reliable): the S&P 500 ETF issuers' official daily holdings files.
+  - State Street SPY daily holdings is the primary.
+  - iShares IVV holdings is the cross-check.
+  - A ticker is kept only if both files list it. Differences are recorded, and the file date and hash are pinned.
+  - Everything stays labelled SURVIVORSHIP-BIASED until historical membership is validated.
+- Nightly call budget: 600 calls and 20 minutes. First-fill cap: 120 symbols a night. Stop cleanly on the first provider error.
+- Shadow period: at least 5 trading days, and at least 4 of those nights must finish cleanly. Activate only after the review.
+- Bounds: shortlist 30 → verified 20 → AI research 8 (the v1.5 draft values). The AI budget reservation still caps real spend.
+- Sector ETFs: added now through the re-signed v1.5.0 amendment (effective 2026-10-01 09:30 ET), and kept in the reviewed ETF list the broad screen will use.
+
+## 8a. Original open questions
 
 1. Constituent source for the universe file:
    - a manually downloaded public index-holdings file (for example an S&P 500 ETF's published holdings)
