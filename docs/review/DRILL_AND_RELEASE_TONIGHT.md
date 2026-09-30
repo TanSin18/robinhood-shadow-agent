@@ -74,6 +74,20 @@ PY
 ```
 Expect `whitelist 23`. Remove the temporary rehearsal copy too: `rm $P/config/settings.rehearsal23.local.yaml`.
 
+## 7c. First S&P 500 background screen (optional tonight, shadow only)
+Downloads the two free holdings files, builds the pinned list and fetches the first
+batch of price history (120 tickers). It never trades and never touches official records.
+
+```sh
+W=~/.codex/worktrees/robinhood-live-rehearsal; P=/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent; D=/Users/tanmaysinnarkar/LocalProjects/robinhood-diagnostics/universe; mkdir -p $D \
+ && curl -fsSL -A "Mozilla/5.0" -o $D/spy.xlsx "https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-spy.xlsx" \
+ && curl -fsSL -A "Mozilla/5.0" -o $D/ivv.csv "https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf/1467271812596.ajax?fileType=csv&fileName=IVV_holdings&dataType=fund" \
+ && cd $W && git fetch -q origin claude/universe-screen && git switch -q --detach FETCH_HEAD && git log --oneline -1 \
+ && $P/.venv/bin/python -m agents.universe_screen build --spy-xlsx $D/spy.xlsx --ivv-csv $D/ivv.csv --as-of $(date +%F) --out $D/sp500-$(date +%F).json \
+ && $P/.venv/bin/python -m agents.universe_screen --config $P/config/settings.local.yaml --official-database $P/data/agent.db --universe $D/sp500-$(date +%F).json --store $D/store/universe.db
+```
+Paste both JSON blocks to Claude. If a download fails, stop there and tell Claude.
+
 ## 8. Resume before Thursday 10:00 ET
 http://127.0.0.1:8765/legacy#controls → **Resume**. If left paused, Thursday's run will not happen.
 Keep the Mac awake and plugged in 09:45–16:35 Thursday.
