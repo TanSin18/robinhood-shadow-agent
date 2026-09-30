@@ -3,6 +3,37 @@
 Newest entry first. Claude owns CLAUDE_REVIEW.md; Codex owns this status file.
 Times are America/New_York. Evidence paths below are local, not Git attachments.
 
+## 2026-09-30 10:23 ET — Readiness false-positive closed; independent review complete
+
+Follow-up to the investigation below. Independent review found no blockers in
+the bounded quote/hold fix (published as `f345721`), but identified a pre-existing
+readiness weakness: a no-model/$0 COMPLETED result passed the scheduled-cycle
+gate even when its decision was HOLD_OPERATIONAL. The installed verifier result
+below must therefore **not** be treated as sufficient trading readiness.
+
+Fixed on development branch only: code-only readiness now requires an explicit
+HOLD_CASH decision. Three regression cases (operational, missing, empty decision)
+failed before the fix and pass after; receipt hashes are recomputed in the tests.
+Added fresh-quote/missing-history coverage to the earlier diagnostic tests.
+
+- Independent follow-up review: no blockers; **52 focused tests passed**.
+- Final full development suite: **706 passed, 0 failed/skipped, 61 warnings,
+  50.73s**, same exact pytest command as the 10:19 entry.
+- Running the new verifier read-only against unchanged installed evidence rejects
+  today's operational hold: scheduled_full_cycle=false, ready=false. It reports
+  both missing drill evidence and missing qualifying scheduled-cycle proof.
+  The job genuinely ran; this does not relabel it as a scheduler failure.
+- Installed tests remain 665 passing; installed runtime/fingerprint unchanged.
+  Dashboard GET returned HTTP 200; daily/maintenance last exit=0; no open safety
+  incidents and no incidents recorded today. Cost attribution is SETTLED with
+  all lane/arm costs and total unique cost $0, which does not prove paid-call
+  allocation.
+- Both fixes are source-only review candidates. No deployment, service restart,
+  preregistration edit, official rerun, paper fill, or real broker write.
+- Reviewer inspected code and synthetic tests only; live collection/isolation
+  and installed evidence above were independently checked by Codex, not the
+  reviewer. Full historical capsule replay and end-to-end issuance remain open.
+
 ## 2026-09-30 10:19 ET — Market-hours investigation: misleading hold repaired on branch, not deployed
 
 Operator requested investigations, fixes and tests during market hours. Work

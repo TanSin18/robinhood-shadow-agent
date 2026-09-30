@@ -66,6 +66,7 @@ def evidence(tmp_path):
         'quote_count': 14, 'volatility_count': 14,
         'market_open': True, 'api_cost_estimate_usd': '0',
         'ai_gate': {'invoke': False, 'reason': 'AI_NOT_NEEDED', 'cost_usd': '0'},
+        'decision': {'type': 'HOLD_CASH', 'picks': []},
         'source_hashes': {'robinhood-mcp:get_accounts': 'a' * 64},
         'notification_policy': 'log_only',
     }
@@ -122,6 +123,21 @@ def test_new_receipt_timestamp_cannot_relabel_old_drill(tmp_path):
 def replace_receipt(proof, receipt):
     with sqlite3.connect(proof.database) as db:
         db.execute('UPDATE run_states SET payload_json=? WHERE id=2', (json.dumps(receipt),))
+
+
+@pytest.mark.parametrize('decision', [None, {}, {'type': 'HOLD_OPERATIONAL', 'picks': [],
+    'reason_code': 'DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED'}])
+def test_code_only_operational_or_missing_decision_is_not_readiness_proof(tmp_path, decision):
+    from agents.readiness import canonical_hash
+    proof, result, receipt, now = evidence(tmp_path)
+    result['decision'] = decision
+    receipt['result_hash'] = canonical_hash(result)
+    with sqlite3.connect(proof.database) as db:
+        db.execute('UPDATE run_states SET payload_json=? WHERE id=1', (json.dumps(result),))
+    replace_receipt(proof, receipt)
+    report = proof.assess(now)
+    assert not report['gates']['scheduled_full_cycle']
+    assert not report['phase0_gate_passed']
 
 
 def test_interactive_success_does_not_prove_background_auth(tmp_path):

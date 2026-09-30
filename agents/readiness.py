@@ -260,9 +260,11 @@ class OperationalProof(BaseModel):
                 hashes=result.get('source_hashes') or {}
                 hashes_ok=bool(hashes) and all(isinstance(value,str) and len(value)==64 for value in hashes.values())
                 gate=result.get('ai_gate') or {}
+                decision=result.get('decision')
                 code_only=(gate.get('invoke') is False and result.get('agents')==[]
                            and Decimal(str(result.get('api_cost_estimate_usd')))==0
-                           and sessions==[])
+                           and sessions==[] and isinstance(decision,dict)
+                           and decision.get('type')=='HOLD_CASH')
                 ai_cycle=(result.get('agents')==EXPECTED_AGENTS and len(sessions)==3)
                 valid = (
                     receipt['source_hash'] == source_hash and receipt['config_hash'] == config.config_hash

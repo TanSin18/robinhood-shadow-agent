@@ -27,7 +27,7 @@ def test_zero_bid_option_exclusion_retains_contract_identity(tmp_path):
     assert 'contract-1' not in snapshot['quotes']
 
 
-def cycle(tmp_path, monkeypatch, *, signal=False, invalid_option=False, stale=False, empty=False):
+def cycle(tmp_path, monkeypatch, *, signal=False, invalid_option=False, stale=False, empty=False, missing_history=False):
     inbox, config = setup_runtime(tmp_path)
     from data.database_role import require_database_role
     require_database_role(inbox.path, 'live')
@@ -36,6 +36,8 @@ def cycle(tmp_path, monkeypatch, *, signal=False, invalid_option=False, stale=Fa
             reads = super().collect(now, held)
             if empty:
                 reads = [r for r in reads if r['tool'] not in {'get_equity_quotes', 'get_option_quotes'}]
+            if missing_history:
+                reads = [r for r in reads if r['tool'] != 'get_equity_historicals']
             if invalid_option:
                 reads.append({'tool': 'get_option_quotes', 'data': {'results': [{'quote': {
                     'instrument_id': 'contract-1', 'bid_price': '0', 'ask_price': '.2',
@@ -79,5 +81,12 @@ def test_etf_signal_reports_unimplemented_execution_not_stale_data(tmp_path, mon
 @pytest.mark.parametrize('empty', [False, True])
 def test_no_usable_candidates_is_operational_not_cash_hold(tmp_path, monkeypatch, empty):
     result = cycle(tmp_path, monkeypatch, stale=not empty, empty=empty)
+    assert result['decision']['type'] == 'HOLD_OPERATIONAL'
+    assert result['decision']['reason_code'] == 'NO_FRESH_ELIGIBLE_CANDIDATES'
+
+
+def test_fresh_quotes_without_sizing_history_are_operational_hold(tmp_path, monkeypatch):
+    result = cycle(tmp_path, monkeypatch, missing_history=True)
+    assert result['quote_freshness']['fresh'] > 0
     assert result['decision']['type'] == 'HOLD_OPERATIONAL'
     assert result['decision']['reason_code'] == 'NO_FRESH_ELIGIBLE_CANDIDATES'
