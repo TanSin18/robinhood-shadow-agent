@@ -26,7 +26,7 @@ def production_enabled(registration_path, now):
     from pathlib import Path
     from agents.v15_activation import v15_active
     root = Path(registration_path)
-    root = root.parent if root.name == 'preregistration.yaml' else root
+    root = root.parent if root.suffix == '.yaml' else root
     return v15_active(root, now)
 
 

@@ -1,9 +1,11 @@
 """Byte-pinned activation of preregistration v1.5 policy.
 
 Nothing here reads an environment variable, dashboard switch or draft file.
-v1.5 behaviour is active only when the installed root ``preregistration.yaml``
-is byte-identical to the operator-approved v1.5 file whose SHA-256 is pinned
-below, and the current time is at or after its effective time. Both constants
+The v1.4.2 root ``preregistration.yaml`` stays byte-identical (Phase 0 safety
+loaders pin it). v1.5 is a scoped amendment layer file,
+``preregistration-amendment-v1.5.0.yaml``, active only when it is byte-identical
+to the operator-signed file pinned below, declares the installed root as its
+base, and the current time is at or after its effective time. Both constants
 are set by the reviewed activation release; until then they stay ``None`` and
 every v1.5 path is inert.
 """
@@ -15,6 +17,7 @@ from pathlib import Path
 
 APPROVED_V15_SHA256: str | None = None
 EFFECTIVE_FROM: datetime | None = None
+AMENDMENT_NAME = 'preregistration-amendment-v1.5.0.yaml'
 
 
 def registration_sha256(path: Path) -> str:
@@ -28,10 +31,17 @@ def v15_active(root: Path, now: datetime, *, approved_sha256=None, effective_fro
         return False
     if now.tzinfo is None or effective.tzinfo is None or now < effective:
         return False
-    path = Path(root) / 'preregistration.yaml'
+    root = Path(root)
+    amendment = root / AMENDMENT_NAME
     try:
-        if path.is_symlink():
+        if amendment.is_symlink() or (root / 'preregistration.yaml').is_symlink():
             return False
-        return registration_sha256(path) == approved
-    except OSError:
+        if registration_sha256(amendment) != approved:
+            return False
+        import yaml
+        declared = (yaml.safe_load(amendment.read_bytes()) or {}).get('amendment', {})
+        if declared.get('base_sha256') != registration_sha256(root / 'preregistration.yaml'):
+            return False
+        return (declared.get('operator_signature') or {}).get('status') == 'SIGNED'
+    except (OSError, ValueError, AttributeError):
         return False

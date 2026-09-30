@@ -127,13 +127,24 @@ def test_recorded_20_session_median_spread_is_used_when_available(tmp_path):
         assert median_recorded_spread(db, 'SOXX', NOW.date().isoformat()) < D('.003')
 
 
-def test_activation_is_byte_pinned(tmp_path):
-    from agents.v15_activation import v15_active, registration_sha256
-    reg = tmp_path / 'preregistration.yaml'
-    reg.write_text('version: 1.5.0\n')
-    digest = registration_sha256(reg)
-    assert not v15_active(tmp_path, NOW)                                         # constants unset
+def test_activation_is_byte_pinned_signed_amendment_over_unchanged_base(tmp_path):
+    import yaml
+    from agents.v15_activation import v15_active, registration_sha256, AMENDMENT_NAME
+    base = tmp_path / 'preregistration.yaml'
+    base.write_text('registration: {version: 1.4.2}\n')
+    def amendment(status, base_sha):
+        path = tmp_path / AMENDMENT_NAME
+        path.write_text(yaml.safe_dump({'amendment': {'base_sha256': base_sha,
+                                                      'operator_signature': {'status': status}}}))
+        return registration_sha256(path)
+    digest = amendment('SIGNED', registration_sha256(base))
+    assert not v15_active(tmp_path, NOW)                                              # constants unset
     assert v15_active(tmp_path, NOW, approved_sha256=digest, effective_from=NOW)
     assert not v15_active(tmp_path, NOW, approved_sha256=digest, effective_from=NOW + timedelta(days=1))
-    reg.write_text('version: 1.5.0 # edited\n')
+    unsigned = amendment('PENDING', registration_sha256(base))
+    assert not v15_active(tmp_path, NOW, approved_sha256=unsigned, effective_from=NOW)
+    wrong_base = amendment('SIGNED', '0' * 64)
+    assert not v15_active(tmp_path, NOW, approved_sha256=wrong_base, effective_from=NOW)
+    digest = amendment('SIGNED', registration_sha256(base))
+    base.write_text('registration: {version: 1.4.2} # edited\n')                     # base changed
     assert not v15_active(tmp_path, NOW, approved_sha256=digest, effective_from=NOW)

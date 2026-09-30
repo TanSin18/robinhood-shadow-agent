@@ -62,10 +62,10 @@ def median_recorded_spread(db, symbol: str, before_day: str) -> Decimal | None:
     return D(str(median(D(r[0]) for r in rows)))
 
 
-def liquidity_spread(recorded: Decimal | None, reference: Quote, current: Quote) -> Decimal | None:
+def liquidity_spread(recorded: Decimal | None, reference: Quote, current: Quote, interim=None) -> Decimal | None:
     if recorded is not None:
         return recorded
-    if not LIQUIDITY_INTERIM_LIVE_SPREAD:
+    if not (LIQUIDITY_INTERIM_LIVE_SPREAD if interim is None else interim):
         return None
     spreads = [spread_fraction(reference), spread_fraction(current)]
     return None if any(s is None for s in spreads) else max(spreads)
@@ -73,7 +73,7 @@ def liquidity_spread(recorded: Decimal | None, reference: Quote, current: Quote)
 
 def issue_desk_entry(inbox, config, *, signal, snapshot, evaluated_at, now, cycle_id,
                      lifecycle=None, approved_ai_stock_pick=False, entry_slot_used=False,
-                     holdings_review_complete=True, recorded_spread=None):
+                     holdings_review_complete=True, recorded_spread=None, interim_live_spread=None):
     """Plan and issue one Lane A desk-policy ETF entry. Returns per-arm results."""
     symbol = str(signal.get('instrument'))
     quote = snapshot['quotes'].get(symbol)
@@ -81,7 +81,7 @@ def issue_desk_entry(inbox, config, *, signal, snapshot, evaluated_at, now, cycl
     if quote is None or vol is None:
         return [{'arm': arm, 'status': 'BLOCKED', 'reason': 'MISSING_DATA', 'instrument': symbol,
                  'attribution': 'desk_policy_not_ai'} for arm in (*IMMEDIATE_ARMS, APPROVAL_ARM)]
-    spread = liquidity_spread(recorded_spread, quote, quote)
+    spread = liquidity_spread(recorded_spread, quote, quote, interim_live_spread)
     dollar_volume = snapshot.get('median_dollar_volume_20d', {}).get(symbol)
     results = []
     with inbox.connect() as db:

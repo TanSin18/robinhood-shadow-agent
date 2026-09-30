@@ -7,8 +7,8 @@ No official writes, no services, no model calls, no broker writes.
 
 Rehearsal-only overrides, reported explicitly:
   * the 10:00-10:20 official-window check is treated as "market open now";
-  * the v1.5 interim live-spread liquidity rule is on (operator-approved 11:28 ET),
-    because v1.5 is not yet activated on the installed runtime.
+  * the v1.5 desk path is enabled although the amendment is not yet signed
+    (it carries the operator-approved 11:28 ET interim live-spread rule).
 """
 from __future__ import annotations
 

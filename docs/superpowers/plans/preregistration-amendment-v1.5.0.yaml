@@ -1,0 +1,110 @@
+# Scoped v1.5.0 amendment layer. The v1.4.2 root registration stays byte-identical.
+# Activation requires operator signature AND the pinned SHA-256 in agents/v15_activation.py.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.5.0
+  kind: scoped_amendment_layer
+  base_version: 1.4.2
+  base_sha256: 39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075
+  base_registration_unchanged: true
+  effective_from_et: '2026-10-01T09:30:00-04:00'
+  operator_signature:
+    status: PENDING
+    signed_by: null
+    signed_at_et: null
+    required_before: '2026-10-01T09:30:00-04:00'
+    prerequisites:
+    - completed_revocation_and_reauthorization_drill_receipt
+    - installed_full_suite_pass
+    - pinned_release_manifest_and_rollback
+  scope_statement: Activates only the rules below. Every v1.4.2 rule not named here is unchanged. Pulse,
+    ledger, seat modules, token-cap finalization and universe expansion are NOT activated by this amendment.
+etf_desk_policy:
+  operator_approved_on: '2026-09-30'
+  approval_source: CLAUDE_REVIEW_2026-09-30_1045_ET_and_operator_chat
+  effective_not_before_et: '2026-10-01T00:00:00-04:00'
+  activation_required: true
+  decision_owner: deterministic_code
+  decision_attribution: desk_policy_not_ai
+  registered_strategy_gross_edge_required: false
+  probability_and_edge_ratio_gates_apply: false
+  retained_gates:
+  - friction
+  - liquidity
+  - settled_cash
+  - holdings
+  - volatility
+  - position_limits
+  - breakers
+  - global_kill_switch
+  - freshness
+  reference: first_fresh_midpoint_at_official_signal_evaluation_after_holdings_review
+  maximum_quote_age_seconds: 60
+  maximum_limit_distance_fraction: '0.005'
+  entry_limit_formula: reference_midpoint * (1 + maximum_limit_distance_fraction)
+  trigger_expiry_formula: min(15:30_ET, exchange_close_minus_30_minutes)
+  no_trigger_action: no_entry
+  model_timestamps_or_critic_pass_required: false
+  equity_fractional_allowed: true
+  minimum_notional_usd: '1.00'
+  equity_quantity_decimal_places: 6
+  option_quantity: whole_contracts
+  applies_to:
+  - agent_alone
+  - with_approvals
+  - deterministic_no_ai
+  public_approval_arm_alias: agent_with_approvals
+  excluded_arms:
+  - seeded_random
+  - vti
+  - cash
+  lane: A
+  maximum_entries_per_official_cycle: 1
+  slot_precedence: approved_ai_stock_pick_then_qualified_etf_signal
+  with_approvals_requires_operator_yes: true
+  approval_fill_quote: fresh_at_approval_plus_registered_slippage
+  never_attribute_desk_policy_return_to_ai: true
+  approval_fill_window: until_trigger_expiry_then_APPROVED_NOT_FILLED
+  approval_fill_reads: get_equity_quotes_for_approved_card_symbols_only
+  liquidity_evidence:
+    operator_approved_on: '2026-09-30'
+    approval_source: operator_chat_2026-09-30_1128_ET_approve_liquidity
+    minimum_median_20d_dollar_volume_usd: 50000000
+    dollar_volume_source: median_of_last_20_completed_session_close_times_volume_from_approved_historicals
+    missing_volume_action: block_entry_LIQUIDITY_EVIDENCE_MISSING
+    maximum_median_spread_fraction: '0.003'
+    spread_source_when_20_recorded_sessions_exist: median_of_first_official_spread_observation_per_session
+    interim_spread_rule_until_20_recorded_sessions: max(live_spread_at_reference, live_spread_at_fill)
+      <= 0.003
+    spread_recording: first_official_cycle_observation_per_symbol_per_session_append_only
+    invented_liquidity_values_allowed: false
+decisions:
+  maximum_new_discretionary_open_or_add_per_lane_per_official_open: 1
+  maximum_new_discretionary_open_or_add_total: 2
+  required_close_and_reduce_actions_may_be_multiple: true
+  etf_and_macro_ai_voting: forbidden
+  retain_registered_research_stage_and_ranking_test: true
+  critic_packet_excludes_portfolio_reasoning: true
+  preliminary_quantity_is_non_executable: true
+  final_quantity_owner: deterministic_risk
+  paper_equity_fractional: true
+  minimum_notional_usd: 1.0
+  equity_quantity_decimal_places: 6
+  options_quantity: whole_contracts
+readiness:
+  hold_capability_gap_accepted_for_scheduled_cycle_gate_only_with_all_operational_checks: true
+  registered_capability_gap_codes:
+  - DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED
+  operator_approved_on: '2026-09-30'
+decision_capsule:
+  per_cycle_content_addressed_sanitized_capsule: true
+  capture_failure_never_fails_cycle: true
+  identifier_keys_forbidden: true
+not_activated_by_this_amendment:
+- session.pulse
+- ledger
+- seats
+- token_cap_finalization
+- universe_expansion
+- advisory_rebuttal
+- what_if_budget_increase

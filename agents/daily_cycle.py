@@ -366,7 +366,9 @@ def desk_policy_entry(inbox, config, snapshot, signal_map, fresh_instruments, no
         recorded=median_recorded_spread(db,str(signal['instrument']),day)
     return issue_desk_entry(inbox,config,signal=signal,snapshot=snapshot,evaluated_at=now,now=now,
                             cycle_id=cycle_id,lifecycle=lifecycle,approved_ai_stock_pick=approved_ai_stock_pick,
-                            entry_slot_used=entry_slot_used,recorded_spread=recorded)
+                            entry_slot_used=entry_slot_used,recorded_spread=recorded,
+                            # The signed v1.5 amendment registers the interim live-spread rule.
+                            interim_live_spread=True)
 
 
 def record_daily_spreads(inbox, snapshot, now, cycle_id):
