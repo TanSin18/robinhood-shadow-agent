@@ -54,3 +54,16 @@ def shell(title, body, path='/', state=None):
 
 def deferred(title, milestone):
     return f'<h1>{esc(title)}</h1>'+card('Not available yet', f'<p>This screen is scheduled for {esc(milestone)}. No results are assumed.</p>')
+
+
+def category_chips(review):
+    cat = review.get('category') or {}
+    chips = ''.join(f'<span class="cat cat-{esc(t["tone"])}" title="{esc(t["title"])}">{esc(t["label"])}</span>' for t in cat.get('tags', []))
+    if cat:
+        chips += f'<span class="cat cat-{"counts" if cat.get("counts") else "nocount"}">{esc(cat.get("counts_reason", ""))}</span>'
+    return f'<div class="cat-row">{chips}</div>' if chips else ''
+
+
+def category_prefix(review):
+    cat = review.get('category') or {}
+    return '' if not cat else ('[Official] ' if cat.get('group') == 'official' else '[Build] ')

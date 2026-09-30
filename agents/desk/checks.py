@@ -4,7 +4,7 @@ Server-rendered SVG only (strict CSP). Values come from agents.run_checks,
 which reads named public fields of the run's trace.
 """
 from decimal import Decimal
-from .components import esc
+from .components import esc, category_chips, category_prefix
 from .workspace import date_label, outcome
 
 
@@ -164,12 +164,15 @@ def history(reviews):
         warn = sum(o['status'] in {'warn', 'fail'} for o in ops)
         g = r.get('ai_gate')
         stages = ''.join(f'<i class="dot st-{esc(s.get("status", "unavailable"))}" title="{esc(s.get("key"))}: {esc(s.get("status_label"))}"></i>' for s in r.get('stages', []))
-        rows += (f'<tr><td class="nowrap">{esc(date_label(r.get("timestamp")))}</td><td>{esc(outcome(r))}</td><td class="dots">{stages}</td>'
+        cat = r.get('category') or {}
+        kind = ('<span class="cat cat-official">Official</span>' if cat.get('group') == 'official' else '<span class="cat cat-build">Build</span>') if cat else ''
+        extra = ''.join(f'<span class="cat cat-{esc(t["tone"])}" title="{esc(t["title"])}">{esc(t["label"])}</span>' for t in cat.get('tags', [])[1:] if t['tone'] in {'warn', 'stop'})
+        rows += (f'<tr class="{"row-build" if cat.get("group") == "build" else ""}"><td class="nowrap">{esc(date_label(r.get("timestamp")))}</td><td>{kind}{extra}</td><td>{esc(outcome(r))}</td><td class="dots">{stages}</td>'
                  f'<td class="num">{signals}</td><td>{esc("open" if g and g["open"] else "closed" if g else "—")}</td>'
                  f'<td><svg class="spark" viewBox="0 0 100 10" aria-hidden="true"><rect x="0" y="1" width="{cost / top * 100:.1f}" height="8" rx="2"/></svg>'
                  f'<span class="num">${cost:.4f}</span></td><td class="num">{warn or "—"}</td></tr>')
-    return ('<section class="room-card"><div class="card-head"><h3>Run history</h3><span class="muted small">Every saved run, newest first</span></div>'
-            '<div class="table-wrap"><table class="mini history"><thead><tr><th>Run</th><th>Outcome</th><th>Steps</th><th>Signals</th><th>AI gate</th><th>AI cost</th><th>Warnings</th></tr></thead>'
+    return ('<section class="room-card"><div class="card-head"><h3>Run history</h3><span class="muted small">Build = made while the system was being built (never counts) · Official = counts from Oct 1, 9:30 AM ET</span></div>'
+            '<div class="table-wrap"><table class="mini history"><thead><tr><th>Run</th><th>Category</th><th>Outcome</th><th>Steps</th><th>Signals</th><th>AI gate</th><th>AI cost</th><th>Warnings</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div></section>')
 
 
@@ -217,7 +220,7 @@ def run_section(review, index):
     missing = c.get('missing_evidence') or []
     missing_html = ('<ul class="tight">' + ''.join('<li>' + esc(m) + '</li>' for m in missing) + '</ul>') if missing else '<p class="muted">None recorded.</p>'
     return f'''<section class="scene-review checks-run" data-scene-review="{index}"{" hidden" if index else ""}>
-<header class="room-outcome"><div class="meta"><span>{esc(date_label(review.get("timestamp")))}</span><span>Decision date {esc(c.get("decision_date") or "not recorded")}</span><span>{esc(c.get("qualification") or "")}</span></div><h2>{esc(outcome(review))}</h2></header>
+<header class="room-outcome">{category_chips(review)}<div class="meta"><span>{esc(date_label(review.get("timestamp")))}</span><span>Decision date {esc(c.get("decision_date") or "not recorded")}</span><span>{esc(c.get("qualification") or "")}</span></div><h2>{esc(outcome(review))}</h2></header>
 <section class="room-card"><div class="card-head"><h3>System checks</h3><span class="muted small">Connection, registration, data, AI and outcome</span></div>{operational(c.get("operational", []))}</section>
 <section class="room-card"><div class="card-head"><h3>AI steps · model, tools and tokens</h3></div>{usage_table(review)}</section>
 <section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
@@ -234,7 +237,7 @@ def render(state):
         from .components import card
         return '<h1>Checks & charts</h1>' + card('Not available yet', '<p>This screen is part of the Agent Desk preview. No results are assumed.</p>')
     reviews = state.get('decision_room', [])
-    choices = ''.join(f'<option value="{i}">{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
+    choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="room-head"><div><h1>Checks &amp; charts</h1><p>Every check each step ran, with the numbers behind it.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
     if not reviews:

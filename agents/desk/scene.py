@@ -8,7 +8,7 @@ style or script).
 """
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from .components import esc
+from .components import esc, category_chips, category_prefix
 from .team import TEAM
 from .workspace import date_label, outcome, first_sentence
 
@@ -395,7 +395,7 @@ def scene(review, index, rows):
     no_handoff = '' if recorded else '<p class="muted small">No recorded handoff messages for this run. Every recorded event is listed below.</p>'
     tech = ' → '.join(str(e.get('event', '')) for e in review.get('technical_events', [])) or 'Not recorded'
     return f'''<section class="scene-review" data-scene-review="{index}" data-selected="{selected}"{" hidden" if index else ""}>
-<header class="room-outcome"><div class="meta">{meta_html}</div><h2>{esc(outcome(review))}</h2>{f"<p>{esc(reason)}</p>" if reason else ""}</header>
+<header class="room-outcome">{category_chips(review)}<div class="meta">{meta_html}</div><h2>{esc(outcome(review))}</h2>{f"<p>{esc(reason)}</p>" if reason else ""}</header>
 <section class="room-card flow-card scene-stage" data-scene><div class="card-head"><h3>How this run flowed</h3>{legend}</div>
 <p class="scene-mode">{esc(mode)}</p><div class="scene-map">{flow_graph(review, index, stages, flow, pairs)}</div>{flow_list(stages, flow)}{player}</section>
 <div class="room-split"><section class="room-card inspect-card"><div class="card-head"><h3>Selected step</h3><span class="muted small">Click a node or a log line</span></div>{inspectors}</section>
@@ -408,7 +408,7 @@ def scene(review, index, rows):
 
 def render(state):
     reviews = state.get('decision_room', [])
-    choices = ''.join(f'<option value="{i}">{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
+    choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="scene-heading room-head"><div><h1>Decision room</h1><p>Every step of a run, straight from its saved records.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
     if not reviews: return html + '<p>No saved review yet.</p>'

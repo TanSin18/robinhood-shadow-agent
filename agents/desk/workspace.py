@@ -1,7 +1,7 @@
 """Plain-language, read-only view of the existing six-stage records."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from .components import esc
+from .components import esc, category_chips
 from .team import TEAM
 from .approval_card import preview_card
 from .clock import render_clock
@@ -41,6 +41,13 @@ def outcome(review):
     if review.get('proposal_state') == 'stopped' and review.get('stopped_by') == 'critic':
         pm, critic = TEAM['portfolio'][0], TEAM['critic'][0]
         return f"{pm} proposed {_names(review.get('stopped_instruments', []))}. {critic} rejected it. No card for you today."
+    exits = [e for e in review.get('desk_exits') or [] if e.get('status') in {'filled', 'PENDING'}]
+    if exits:
+        sold = sorted({e['instrument'] for e in exits if e.get('instrument')})
+        why = {'CLOSED_AT_OR_BELOW_200_DAY_AVERAGE': 'it closed at or below its 200-day average',
+               'MOMENTUM_126D_NOT_POSITIVE': 'its 126-day momentum turned negative'}.get(exits[0].get('exit_reason'), 'its exit condition was met')
+        card = ' Your SELL card is waiting.' if any(e.get('status') == 'PENDING' for e in exits) else ''
+        return f"Desk rule (no AI) sold {_names(sold)} because {why}.{card}"
     desk = review.get('desk') or {}
     if review.get('decision_type') == 'DESK_ENTRY' and desk.get('instrument'):
         waiting = ' Your card is waiting.' if desk.get('card_waiting') else ''
@@ -175,7 +182,7 @@ def render(state):
     reason = latest.get('decision_reason') or ''
     if latest.get('proposal_state') == 'stopped' and latest.get('critic_reason'):
         reason = TEAM['critic'][0] + '’s reason (original report): “' + first_sentence(latest['critic_reason']) + '”'
-    html += (f'<section class="team-outcome"><span class="team-date">Latest run · {esc(date_label(latest.get("timestamp")))}</span>'
+    html += (f'<section class="team-outcome">{category_chips(latest)}<span class="team-date">Latest run · {esc(date_label(latest.get("timestamp")))}</span>'
              f'<h2>{esc(outcome(latest))}</h2>' + (f'<p>{esc(reason)}</p>' if reason else '')
              + '<p class="today-links"><a href="/room">See how it flowed →</a><a href="/checks">See every check →</a></p></section>')
     ops = (latest.get('checks') or {}).get('operational', [])

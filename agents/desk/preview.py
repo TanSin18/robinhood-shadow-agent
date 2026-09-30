@@ -65,6 +65,15 @@ def snapshot(path,*,now=None):
                        if 'broker_tripwire_events' in tables else None)
         paper_rows=[dict(r) for r in db.execute('SELECT lane,track,payload FROM paper_accounts')] if 'paper_accounts' in tables else []
         values=rows('daily_values','id,created_at,payload_json','id')
+        cycle_meta={}
+        if 'cycle_runs' in tables:
+            for r in db.execute('SELECT payload FROM cycle_runs'):
+                try:
+                    m=json.loads(r['payload'])
+                except (TypeError,ValueError):
+                    continue
+                if isinstance(m,dict) and isinstance(m.get('cycle_id'),str):
+                    cycle_meta[m['cycle_id']]={k:m.get(k) for k in ('trigger','recovery_of','temporary_api_budget_usd','recovery_count')}
     projected=[]
     for row in cards:
         card=public(json.loads(row['payload']))
@@ -82,6 +91,9 @@ def snapshot(path,*,now=None):
     records=[{**public(json.loads(r['payload_json'])), '_row_id':r['id'], '_created_at':r['created_at']} for r in traces]
     # Same documented six-stage projector; unrecorded work remains unrecorded.
     rooms=project_decision_room(records,projected)
+    from .run_category import categorize
+    for room in rooms:
+        room['category']=categorize(room, cycle_meta.get(room.get('review_id')))
     history=[]
     for row in runs:
         payload=public(json.loads(row['payload_json']))

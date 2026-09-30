@@ -763,6 +763,10 @@ def project_decision_room(records, cards):
                 'stopped_instruments': stopped_by_critic if proposal_state == 'stopped' else [],
                 'critic_reason': critic_reason if proposal_state == 'stopped' else None,
                 'decision_type': decision_type,
+                'trigger': payload.get('trigger') if isinstance(payload.get('trigger'), str) else None,
+                'desk_exits': [
+                    {k: r.get(k) for k in ('arm', 'instrument', 'status', 'side', 'quantity', 'price', 'exit_reason', 'card_id', 'reason')}
+                    for r in (payload.get('desk_exits') or []) if isinstance(r, dict)],
                 'desk': {'instrument': desk_instrument, 'filled_arms': desk_filled,
                          'card_waiting': desk_card_waiting,
                          'blocked_reasons': sorted({str(r.get('reason')) for r in desk_results

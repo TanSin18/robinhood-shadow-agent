@@ -194,6 +194,7 @@ def describe(event, started):
             'Decision: ' + (_s(decision.get('type'), 40) or 'not recorded'),
             'Reason: ' + (_first_sentence(decision.get('reason') or payload.get('reason')) or 'not saved'),
             'Results: ' + (', '.join(_results(payload.get('results')) + _results(payload.get('desk_results'))) or 'none'),
+            ('Desk exits: ' + ', '.join(_results(payload.get('desk_exits')))) if payload.get('desk_exits') else None,
             'AI cost estimate: $' + (_s(payload.get('api_cost_estimate_usd'), 20) or 'not recorded')],
             'good' if status.upper() == 'COMPLETED' else 'stop')
     if name == 'bridge_failure':
