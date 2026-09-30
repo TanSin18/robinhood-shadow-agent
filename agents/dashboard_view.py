@@ -14,7 +14,10 @@ LABELS = {'WAITING': 'Waiting for the next review', 'MARKET_CLOSED': 'Market clo
           'UNCONFIRMED': 'Review completion unconfirmed', 'FAILED': 'Review failed',
           'HOLD': 'Completed · No trade recommended', 'COMPLETED': 'Review completed',
           'PENDING': 'Waiting for you', 'YES': 'YES · Approved', 'NO': 'NO · Skipped',
-          'EXPIRED': 'Expired', 'RESOLVED': 'Resolved', 'filled': 'Paper fill', 'skipped': 'Skipped', 'RISK_BLOCKED': 'Blocked by risk checks'}
+          'EXPIRED': 'Expired', 'RESOLVED': 'Resolved',
+          'APPROVED_AWAITING_FILL': 'YES · Waiting for a fresh price at or under the limit',
+          'APPROVED_NOT_FILLED': 'YES · Not filled — price stayed above the limit until the cutoff',
+          'APPROVED_RISK_BLOCKED': 'YES · Blocked by risk checks at fill time', 'filled': 'Paper fill', 'skipped': 'Skipped', 'RISK_BLOCKED': 'Blocked by risk checks'}
 
 
 def esc(value):
