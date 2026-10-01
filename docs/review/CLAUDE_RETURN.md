@@ -61,3 +61,8 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - Operator asked to implement the independent review's recommendations "right now". Done in code: backtest + read-only history backfill (research/), statistical promotion gate (eval/promotion_stats.py), v1.6.0 amendment signed by operator answers 16:25 ET ($25k Lane A paper capital, options paused, 15:50 ET protective exit with 8% stop, effective 2026-10-01 09:30), nightly S&P 500 shadow screen service, no-AI arm T+1 settlement fix. Release D manifest + RELEASE_D_TONIGHT.md. UI v7 Measurement panel copied into the live overlay.
 - Claude session limit hit 16:37 ET; resumed 19:19 ET.
 - 16:25 ET onward: Robinhood read proxy PROXY_UNAVAILABLE (maintenance log). Operator asked to restart it from the robinhoodproxy account and run verify-reauthorized. Release D and the backfill wait on this.
+
+## 2026-09-30 21:50 ET — research harness (branch `claude/research-harness`, research only)
+- Operator scope: two recipes only (registered_momentum_126_200_top1, dual_trend_vol_target_etf17); no S&P recipes; Adventure + post-mortem as schemas/tests only; draft breaker reset; no Official writes, no install, no restart.
+- Trials 14 and 15 both NOT_PROVEN (excess vs VTI −8.2%/yr and −5.0%/yr; deflated Sharpe 0.0001 / 0.02 counting 15 trials). Results: docs/review/evidence/research/ on that branch. Trial log copy: robinhood-diagnostics/research/trials.db.
+- Draft v1.6.1 (unsigned): latch clears at ≤5% off peak (clause A). Finding: clause A cannot unfreeze an all-cash arm; option B (re-base the peak after 20 latched sessions) is set out for the operator.
