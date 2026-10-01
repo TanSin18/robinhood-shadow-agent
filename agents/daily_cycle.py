@@ -369,10 +369,10 @@ def desk_policy_exits(target, config, strategy_assessment, snapshot, now, cycle_
         return []
     from agents.etf_exit import issue_desk_exits, stock_backstop_exits
     out=[]
-    if exit_rule_active():
+    if exit_rule_active(now=now):
         out+=issue_desk_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
                               now=now,cycle_id=cycle_id,lifecycle=lifecycle)
-    if stock_backstop_active():
+    if stock_backstop_active(now=now):
         out+=stock_backstop_exits(target,config,strategy_assessment=strategy_assessment,snapshot=snapshot,
                                   now=now,cycle_id=cycle_id,lifecycle=lifecycle)
     return out
