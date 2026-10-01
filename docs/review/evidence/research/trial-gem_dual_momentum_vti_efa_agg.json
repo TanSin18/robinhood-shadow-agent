@@ -1,0 +1,178 @@
+{
+ "trial_id": 16,
+ "dataset": {
+  "bars_sha256": "36ea39c94463b5d4a89a01b03001677404e8afee56349bdf0feff3fa7ddcfa6a",
+  "bars_file": "bars.csv",
+  "symbols": {
+   "VTI": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "EFA": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "AGG": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   }
+  },
+  "missing_symbols": [],
+  "first_session": "2005-01-03",
+  "last_session": "2026-09-29",
+  "span_years": 21.74,
+  "session_labels_shifted_plus_one_day": true,
+  "adjustment": "split_only_price_return_no_dividends",
+  "label": "CERTIFIED_ETF_HISTORY"
+ },
+ "recipe": {
+  "id": "gem_dual_momentum_vti_efa_agg",
+  "version": 1,
+  "sha256": "7f58dfe5734dcf76ba7e9daa2aa615aa0471aed546a46e7fd255a16e4d3e3737"
+ },
+ "capital": 25000.0,
+ "start_session": "2006-01-04",
+ "end_session": "2026-09-29",
+ "strategy": {
+  "cagr_after_all_tax": 0.0395,
+  "cagr_pre_liquidation": 0.0395,
+  "ann_vol": 0.1584,
+  "sharpe_rf0": 0.324,
+  "max_drawdown": 0.4092,
+  "trades": 91,
+  "invested_share_of_days": 1.0,
+  "tax_paid": 10829.68,
+  "cost_paid": 2905.89,
+  "drawdown_latch_on": null,
+  "calendar_returns": {
+   "2006": 0.1829,
+   "2007": 0.0721,
+   "2008": -0.0816,
+   "2009": 0.0453,
+   "2010": 0.0762,
+   "2011": -0.1415,
+   "2012": 0.0273,
+   "2013": 0.1984,
+   "2014": 0.1051,
+   "2015": -0.1109,
+   "2016": 0.0598,
+   "2017": 0.1173,
+   "2018": -0.0576,
+   "2019": 0.0241,
+   "2020": -0.0326,
+   "2021": 0.2404,
+   "2022": -0.1912,
+   "2023": 0.083,
+   "2024": 0.2217,
+   "2025": 0.0514,
+   "2026": 0.0608
+  }
+ },
+ "vti": {
+  "cagr_after_all_tax": 0.0831,
+  "cagr_pre_liquidation": 0.0901,
+  "ann_vol": 0.1979,
+  "sharpe_rf0": 0.535,
+  "max_drawdown": 0.5665
+ },
+ "excess_vs_vti": {
+  "annual_excess_log_growth": -0.0475,
+  "ci90": [
+   -0.0906,
+   -0.0068
+  ],
+  "share_of_draws_above_zero": 0.029,
+  "block_days": 21,
+  "draws": 2000,
+  "note": "pre-tax daily equity, so tax timing is excluded",
+  "daily_information_ratio": -0.02088,
+  "annualized_information_ratio": -0.332
+ },
+ "walk_forward": {
+  "folds": 249,
+  "share_positive": 0.221,
+  "mean_monthly_excess_log": -0.00395,
+  "worst_month": {
+   "month": "2020-04",
+   "strategy": -0.02133,
+   "vti": 0.13133,
+   "excess_log": -0.14496
+  },
+  "best_month": {
+   "month": "2008-10",
+   "strategy": -0.02668,
+   "vti": -0.17478,
+   "excess_log": 0.16506
+  },
+  "by_year": {
+   "2006": 0.0616,
+   "2007": 0.035,
+   "2008": 0.3986,
+   "2009": -0.1868,
+   "2010": -0.0678,
+   "2011": -0.1429,
+   "2012": -0.1037,
+   "2013": -0.0882,
+   "2014": 0.0,
+   "2015": -0.1013,
+   "2016": -0.0424,
+   "2017": -0.0632,
+   "2018": 0.0134,
+   "2019": -0.2246,
+   "2020": -0.2067,
+   "2021": 0.0,
+   "2022": 0.0212,
+   "2023": -0.136,
+   "2024": 0.0,
+   "2025": -0.0956,
+   "2026": -0.0536
+  }
+ },
+ "deflated_sharpe": {
+  "probability": 0.024,
+  "benchmark_sr_daily": 0.0065,
+  "trials_counted": 16
+ },
+ "verdict": "NOT_PROVEN",
+ "pass_rule": "certified dataset AND 90% interval of excess > 0 AND deflated Sharpe probability >= 0.95 AND after-tax CAGR above VTI",
+ "promotion": "never automatic: a PASS only allows a shadow (Adventure) run; Official needs a signed amendment",
+ "holding_share": {
+  "VTI": 0.57,
+  "EFA": 0.217,
+  "AGG": 0.213
+ },
+ "switches": 45,
+ "price_only_bias_estimate": 0.0096,
+ "secondary_benchmark": {
+  "name": "buy_and_hold_60pct_VTI_40pct_EFA_no_rebalancing",
+  "cagr_after_all_tax": 0.0662,
+  "sharpe_rf0": 0.45,
+  "max_drawdown": 0.5921,
+  "excess_vs_strategy": {
+   "annual_excess_log_growth": -0.0312,
+   "ci90": [
+    -0.0739,
+    0.0101
+   ],
+   "share_of_draws_above_zero": 0.104,
+   "block_days": 21,
+   "draws": 2000,
+   "note": "pre-tax daily equity, so tax timing is excluded"
+  }
+ },
+ "periods_cagr_pre_tax": {
+  "pre_publication": {
+   "strategy": 0.0485,
+   "vti": 0.0595,
+   "vti60_efa40": 0.0384
+  },
+  "post_publication": {
+   "strategy": 0.0325,
+   "vti": 0.1138,
+   "vti60_efa40": 0.0992
+  }
+ }
+}
