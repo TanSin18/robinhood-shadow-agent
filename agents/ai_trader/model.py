@@ -76,16 +76,14 @@ class BudgetedModels:
 
 
 class OpenAIResponsesClient:
-    """Production adapter (not used by tests). Requires OPENAI_API_KEY in the service environment."""
+    """Production adapter (not used by tests). Reads the API key from the login Keychain like the Official run."""
 
     def __init__(self, client=None):
         if client is None:
-            import os
-            from openai import OpenAI
-            key = os.environ.get('OPENAI_API_KEY')
-            if not key:
-                raise ModelError('API_ACCESS_NOT_CONFIGURED')
-            client = OpenAI(api_key=key, base_url='https://api.openai.com/v1', max_retries=0, timeout=120.0)
+            # Same credential path as the Official scheduled run: the key stays in the login Keychain and is
+            # read only on the first real model call.
+            from agents.scheduled_inference import LazyAPIClient
+            client = LazyAPIClient()
         self.client = client
 
     def __call__(self, model, prompt, schema, envelope):
