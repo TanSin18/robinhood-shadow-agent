@@ -1,0 +1,57 @@
+# Research recipe (pre-registered 2026-10-01, before any data for these symbols was fetched or looked at).
+# Trial 19. One parameter set. The harness hashes this file's bytes; any edit is a new trial.
+# Runs no earlier than 2026-11-01 (the operator's research pause on new backtests holds until 2026-10-31).
+# Why this one: the published evidence that held up is slow trend across markets that do not move
+# together (Faber 2007 and its 2006-2016 out-of-sample decade; AQR's century of trend), not more
+# lookbacks on equity cousins of VTI, which trials 14-17 already showed lag VTI after tax.
+recipe:
+  id: multi_asset_trend_10m_6sleeve
+  version: 1
+  status: research_only_never_official
+  description: >-
+    Faber-style tactical allocation, monthly, long only, no leverage. Six equal sleeves (1/6 each):
+    US stocks, developed international stocks, intermediate Treasuries, gold, broad commodities and US
+    real estate. On the first session of each month, using completed closes only: each sleeve is held
+    if its last month-end close is above its 10-month simple moving average of month-end closes;
+    otherwise that sleeve's sixth is held in cash. Sleeves are not reallocated to each other.
+  engine: multi_asset_sma_timing
+  publication_year: 2007
+  run_not_before: '2026-11-01'
+universe:
+  kind: etf_list
+  symbols: [VTI, EFA, IEF, GLD, DBC, VNQ]
+  join_rule: decisions start once all six have 210 completed sessions (DBC starts 2006-02)
+signal:
+  lookback_months: 10
+  rule: month_end_close_above_10_month_sma
+  features_from: completed_sessions_through_t_minus_1
+  cash_when_off: true
+rebalance: first_session_of_each_month_at_open
+execution:
+  timing: next_session_open
+  buy_cost: half_spread_plus_0.1pct_slippage
+  sell_cost: half_spread
+  settlement: T_plus_1_cash_account_buy_with_settled_cash_only
+sizing: {weight_per_sleeve: 0.1666667, leverage: none, shorts: none}
+breakers: none
+tax: {short_term: 0.35, long_term: 0.15, liquidation_at_end: true}
+benchmark: VTI_buy_and_hold_same_costs_and_tax
+secondary_benchmark: equal_weight_same_six_buy_and_hold_monthly_rebalanced
+report_periods:
+  pre_publication: ['2007-01-01', '2007-12-31']
+  post_publication: ['2008-01-01', '2026-12-31']
+success_metric: annual_excess_log_growth_vs_vti_pre_tax_with_90pct_block_bootstrap_interval
+secondary_metrics: [max_drawdown, worst_12_month_return, share_of_months_in_cash, excess_vs_secondary_benchmark]
+fitted_parameters: none
+expectation_stated_in_advance: >-
+  Most likely outcome: return below VTI, drawdown far smaller than VTI's (2008, 2020, 2022). It is
+  reported as NOT_PROVEN against the primary metric unless the interval clears zero; the drawdown result
+  is reported but does not by itself unlock anything.
+known_bias: >-
+  Price-only data omits dividends and bond/REIT income (IEF and VNQ most), understating the sleeves that
+  pay most; cash earns zero in the backtest. A shortfall smaller than this bias is reported as INCONCLUSIVE.
+data_requirement:
+  minimum_years: 15
+  point_in_time_universe_required: false
+  certified_label: CERTIFIED_ETF_HISTORY
+deflated_sharpe: counts every trial-log row, including the 13 exploratory looks
