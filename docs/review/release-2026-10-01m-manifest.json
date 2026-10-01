@@ -1,0 +1,22 @@
+{
+  "source_commit": "f33fe71a0e7aa5d4fd0122ccfb2f9591b42dfa97",
+  "installed_base_commit": "42e892e",
+  "before_source_fingerprint": "da64fc73e70292931403542fa3aa5f17f046aa26d949d399d61c652b61e1aacd",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/analyst/ask.py": {
+      "before_sha256": null,
+      "after_sha256": "5409375f8ecd4e69fe6937d8a286a28f5c9ca6f03144327d1ed98d80c4867afd"
+    },
+    "agents/analyst/cli.py": {
+      "before_sha256": "6b917f698041c9145085ad79ed0664c96e3ca15fa22bd42ab21e9e3a168b5095",
+      "after_sha256": "b97c7fe8ddbefe5a15038eed1a99c31c662b8d66d2a10e112068d97d38bbece6"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": "c143c3e0262382195932e9f4695de94e609a248b3f9ea163417e1e535f9d148e",
+      "after_sha256": "cd08c7f697178b70154d7defbb6baba4474385a27c2b05f0a6b457451116354c"
+    }
+  },
+  "root_files": {}
+}
