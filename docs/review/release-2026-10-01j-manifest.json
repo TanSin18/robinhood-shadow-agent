@@ -1,0 +1,46 @@
+{
+  "source_commit": "d7a9472b5fbeef17ec6a283d2cc0156e34a334a4",
+  "installed_base_commit": "bc043a5",
+  "before_source_fingerprint": "d9e592979635b64a386b0b2c1a2f41fc7852afdd10b38aa0a5c0f372ed3af9c5",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/ai_trader/model.py": {
+      "before_sha256": "56907785711a47dbda28ec1f0be0d9659106a1e92ce41bf3704afaa1b08e0c14",
+      "after_sha256": "8ac213f2312c2a458e1b889a86bafb1b6fb9b89de36df9fb1bda2755f0cbf41c"
+    },
+    "agents/analyst/commentary.py": {
+      "before_sha256": "1acc8add915100b602c74e3ffbc4b776b8a49223caf37162ce38af4e593222bc",
+      "after_sha256": "6c7e072bf8e4d2e4733546d6aa3861471e5bcd0798bc91aea12fc28523c5af43"
+    },
+    "agents/analyst/guard.py": {
+      "before_sha256": null,
+      "after_sha256": "4432c833998811cac325707ef8f07d7fe8321ab7357e9a06245348ccd33da5b8"
+    },
+    "agents/analyst/hook.py": {
+      "before_sha256": "7f7ed158d9e85d440e552e5b0d2bc9dae898faaf603739f2d607bbe2cd907a84",
+      "after_sha256": "3d3b5b1aa423cb1675c8980fb35ac2821db65088974dfd6f1cd3a60b6223ac9c"
+    },
+    "agents/analyst/store.py": {
+      "before_sha256": "3bdc0f350ae32be9ae7a9c780ec2428df9e4699edff0cc6eea3a322440c3cf6d",
+      "after_sha256": "ffda9fbdf88e422fd4bfa0d89f7220503edb60379eaf84d18168847737e5fb4b"
+    },
+    "agents/analyst/team.py": {
+      "before_sha256": null,
+      "after_sha256": "4776dcf9a11f0ed4b8f43c4d35846c5b360299ad473de58f7e056b63d7245306"
+    },
+    "agents/daily_cycle.py": {
+      "before_sha256": "0adee4583b3d797209dd88a78b8f8642c30907698a120d49a82dacfdf43220bf",
+      "after_sha256": "16eca6c9627d05c88490688acc1401c8b5a63deac47fbaec44e86e8d0893a890"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": "b0f9aa2247e06bb24a6cea0b91029af69f869227e680bd9770a463110f544975",
+      "after_sha256": "426519e9e3cbc681d666b36d30652d7f2a4b6e2c795427a086f99fd07c001e75"
+    },
+    "tests/test_desk_cycle_integration.py": {
+      "before_sha256": "00ee60c860645137fc3ea30e0589e39b4254938cbcf89295d878e35fdbe78b07",
+      "after_sha256": "4ebf2df9348c701219a38a7a7646471cee2cf22a186fd53411e93ff8740450c8"
+    }
+  },
+  "root_files": {}
+}
