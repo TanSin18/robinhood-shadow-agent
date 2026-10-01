@@ -1,0 +1,26 @@
+{
+  "source_commit": "0386e1fe57b1d2cead2d9ba12b76ce526b2de5eb",
+  "installed_base_commit": "8ac562f",
+  "before_source_fingerprint": "c1644558970ba0d9bd3ce0cdd45c1865bf00a110dcb250c22474d34ddf89acb8",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/ai_trader/cycle.py": {
+      "before_sha256": "0786fd7c12d08a39e6775696970d796372ae3f25697d50e1bca1c8239dc1f1f8",
+      "after_sha256": "d1b35780e157a2cc01d281ed339584f38865a6e23a10e0106740a592ead2211c"
+    },
+    "agents/ai_trader/model.py": {
+      "before_sha256": "8c2f3da6533df4d6342c69e955fc560242ee01339c678c517b57a0af4385b3f4",
+      "after_sha256": "56907785711a47dbda28ec1f0be0d9659106a1e92ce41bf3704afaa1b08e0c14"
+    },
+    "agents/ai_trader/tools.py": {
+      "before_sha256": "b2b81470af213abf3ae11854c4612ffccbc5e11b5c90135272b86af0bb447117",
+      "after_sha256": "cff142ee8428023e4dc078a4f49cf4514da9b85281baa6ba03cbbbad5f3a26c3"
+    },
+    "tests/test_ai_trader.py": {
+      "before_sha256": "a7d673c7b524ec4183a22aa50ffa9a8fb97b6bf921e687e23df84f6fe4f090d9",
+      "after_sha256": "04ebd89e4ef7fa5c6986c8896cbdde5cfe783e85093f79911f28d91af125adf2"
+    }
+  },
+  "root_files": {}
+}
