@@ -4,6 +4,10 @@
     python -m agents.analyst.cli status --official-database <agent.db>
     python -m agents.analyst.cli pause  --official-database <agent.db>
     python -m agents.analyst.cli resume --official-database <agent.db>
+    python -m agents.analyst.cli ask    --official-database <agent.db>   < {"question": "...", "context": "...", "packet": {...}}
+
+`ask` is what the dashboard runs when the operator asks Bubbles a question: it reads one JSON object from
+standard input, answers from that packet only (no tools, budgeted, numbers checked) and stores the answer.
 
 Optional, for SEC filings: write one line with your name and email to
 robinhood-diagnostics/analyst/contact.txt (EDGAR asks every client to identify itself).
@@ -17,9 +21,31 @@ from agents.analyst import commentary
 from agents.analyst.store import AnalystStore, default_path
 
 
-def main(argv=None):
+def _ask(store, raw, now, client):
+    from zoneinfo import ZoneInfo
+    from agents.analyst import ask
+    if store.meta('paused') == '1':
+        return {'status': 'ANALYST_PAUSED'}
+    try:
+        body = json.loads(raw)
+        if not isinstance(body, dict) or not isinstance(body.get('packet'), dict):
+            raise ValueError
+    except ValueError:
+        return {'status': 'INVALID_REQUEST'}
+    if client is None:
+        from agents.ai_trader.model import OpenAIResponsesClient
+        client = OpenAIResponsesClient()
+    day = now.astimezone(ZoneInfo('America/New_York')).date().isoformat()
+    try:
+        out = ask.answer(store, body.get('question'), body['packet'], now, client, day=day, context=str(body.get('context') or ''))
+    except ask.AskError as error:
+        return {'status': str(error)}
+    return {'status': out['status'], 'flags': (out.get('checks') or {}).get('flags', [])}
+
+
+def main(argv=None, *, stdin=None, client=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('command', choices=['init', 'status', 'pause', 'resume'])
+    p.add_argument('command', choices=['init', 'status', 'pause', 'resume', 'ask'])
     p.add_argument('--official-database', required=True)
     p.add_argument('--path')
     a = p.parse_args(argv)
@@ -29,6 +55,10 @@ def main(argv=None):
     if a.command != 'init' and not path.is_file():
         raise SystemExit('Not set up yet: run init first.')
     store = AnalystStore(path, official)
+    if a.command == 'ask':
+        import sys
+        print(json.dumps(_ask(store, (stdin or sys.stdin).read(200_000), now, client)))
+        return 0
     if a.command == 'init' and not store.meta('initialized_at'):
         store.set_meta('initialized_at', now.isoformat())
         store.set_meta('prompt_sha256', commentary.prompt_sha256())

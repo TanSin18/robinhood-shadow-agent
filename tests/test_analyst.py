@@ -436,3 +436,56 @@ def test_ask_records_a_model_failure_and_stops_at_the_daily_limit(tmp_path, monk
     assert out['status'] == 'FAILED_ModelError'
     monkeypatch.setattr(ask, 'MAX_PER_DAY', 1)
     assert ask.answer(store, 'Again?', {}, NOW_AM, broken, day='2026-10-05') == {'status': 'DAILY_QUESTION_LIMIT'}
+
+
+def test_ask_accepts_numbers_from_rule_text_and_refers_to_earlier_questions(tmp_path):
+    from agents.analyst import ask
+    official = _official(tmp_path)
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', official)
+    prompts = []
+
+    def client(model, prompt, schema, envelope):
+        prompts.append(prompt)
+        return ({'answer': 'A holding is sold at 15:50 if it is 8% below cost or under its 200-day average; 77.5 is invented.', 'missing': '',
+                 'sources': ['rule_book_matches'], 'follow_ups': [], 'cited_numbers': []}, 900, 120)
+    pkt = {'rule_book_matches': [{'name': 'Protective stop', 'condition': '8% below cost, or at/below the 200-day average', 'when': '15:50 ET'}]}
+    out = ask.answer(store, 'When do we sell?', pkt, NOW_AM, client, day='2026-10-05')
+    assert out['checks']['flags'] == ['UNCITED_NUMBER:77.5']          # numbers written in the rule text are known; the invented one is not
+    ask.answer(store, 'And why?', pkt, NOW_AM, client, day='2026-10-05')
+    assert '"EARLIER_QUESTIONS"' in prompts[1] and 'When do we sell?' in prompts[1] and '"EARLIER_QUESTIONS"' not in prompts[0]
+
+
+def test_ask_keeps_half_the_daily_cap_for_the_team(tmp_path, monkeypatch):
+    from agents.analyst import ask
+    official = _official(tmp_path)
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', official)
+    monkeypatch.setattr(ask, 'ASK_DAILY_USD', '0.03')
+
+    def client(model, prompt, schema, envelope):
+        return ({'answer': 'Nothing traded.', 'missing': '', 'sources': [], 'follow_ups': [], 'cited_numbers': []}, 18000, 3000)
+    assert ask.answer(store, 'One?', {}, NOW_AM, client, day='2026-10-05')['status'] == 'ANSWERED'
+    assert ask.answer(store, 'Two?', {}, NOW_AM, client, day='2026-10-05') == {'status': 'DAILY_QUESTION_BUDGET'}
+
+
+def test_cli_ask_reads_one_json_request_and_respects_pause(tmp_path, capsys):
+    import io
+    from agents.analyst import cli
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    store = AnalystStore(path, official)
+
+    def client(model, prompt, schema, envelope):
+        return ({'answer': 'The desk held.', 'missing': '', 'sources': ['decision'], 'follow_ups': [], 'cited_numbers': []}, 500, 60)
+    args = ['ask', '--official-database', str(official), '--path', str(path)]
+    req = json.dumps({'question': 'What happened?', 'context': 'room', 'packet': {'decision': {'id': 'decision', 'type': 'HOLD'}}})
+    assert cli.main(args, stdin=io.StringIO(req), client=client) == 0
+    assert json.loads(capsys.readouterr().out) == {'status': 'ANSWERED', 'flags': []}
+    cli.main(args, stdin=io.StringIO('not json'), client=client)
+    assert json.loads(capsys.readouterr().out)['status'] == 'INVALID_REQUEST'
+    cli.main(args, stdin=io.StringIO(json.dumps({'question': ' ', 'packet': {}})), client=client)
+    assert json.loads(capsys.readouterr().out)['status'] == 'EMPTY_QUESTION'
+    store.set_meta('paused', '1')
+    cli.main(args, stdin=io.StringIO(req), client=client)
+    assert json.loads(capsys.readouterr().out)['status'] == 'ANALYST_PAUSED'
+    with store.connect() as db:
+        assert db.execute('SELECT COUNT(*) FROM qa').fetchone()[0] == 1
