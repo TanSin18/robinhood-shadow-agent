@@ -270,3 +270,4 @@ tr.v10-scr-blocked td{color:var(--text-3)}
 .an-strip rect{opacity:.85}
 .key{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 tr.an-held td{background:rgba(61,198,255,.08)}
+tr.an-sell td{background:rgba(255,122,92,.08)}

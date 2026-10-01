@@ -17,6 +17,59 @@ def default_path(official_db):
     return Path(official_db).resolve().parents[2] / 'robinhood-diagnostics' / 'analyst' / 'analyst.db'
 
 
+def _has(db, table):
+    return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
+
+
+ACCOUNTS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only'}
+CHOP_CLS = {'TRENDING': 'pos', 'CHOPPY': 'mixed', 'LOW_VOL': 'neutral', 'OVEREXTENDED': 'neg'}
+
+
+def _guard(g):
+    if not g:
+        return '<p class="v10-empty">No exit-guard check yet; it runs after the close with the regime model.</p>'
+    rows = ''
+    for e in g.get('exits') or []:
+        if e.get('status') != 'OK':
+            continue
+        lane, _, track = (e.get('account') or '').partition(':')
+        first = e.get('first_would_sell') or {}
+        trig = '; '.join(e.get('triggers') or []) or 'none'
+        rows += (f'<tr class="{"an-sell" if e.get("verdict") == "WOULD_SELL" else ""}"><td><b>{esc(e.get("ticker"))}</b><small> {esc(ACCOUNTS.get(track, track))} · {esc(lane)}</small></td>'
+                 f'<td class="num">${e.get("average_cost"):,.2f}</td><td class="num">${e.get("last_close"):,.2f}</td>'
+                 f'<td class="num">{pct(e.get("gain_pct"))}<small> peak {pct(e.get("peak_gain_pct"))}</small></td>'
+                 f'<td class="num">${e.get("guard_stop"):,.2f}<small> {esc(e.get("guard_stop_rule"))}</small></td>'
+                 f'<td class="num">{pct(e.get("distance_to_guard_pct"))}</td>'
+                 f'<td><span class="an-sent {"neg" if e.get("verdict") == "WOULD_SELL" else "pos"}">{esc((e.get("verdict") or "").replace("_", " ").lower())}</span>'
+                 f'<small> {esc(trig)}</small>' + (f'<small> · first flagged {esc(first.get("day"))} at ${first.get("price"):,.2f}</small>' if first.get('price') else '')
+                 + '</td></tr>')
+    gate = ''.join(f'<li><b>{esc(x.get("ticker"))}</b>: {esc(x.get("label"))} → a chop gate would have '
+                   f'{"<b>blocked</b>" if x.get("would_block") else "allowed"} today’s official entry</li>' for x in g.get('entry_gate') or [])
+    return ('<div class="table-wrap"><table class="mini"><thead><tr><th>Holding</th><th>Cost</th><th>Last close</th><th>Gain</th>'
+            '<th>Guard stop (highest of the rules)</th><th>Room to stop</th><th>Verdict</th></tr></thead>'
+            f'<tbody>{rows or "<tr><td colspan=7>No holdings.</td></tr>"}</tbody></table></div>'
+            + (f'<ul class="v10-list">{gate}</ul>' if gate else '')
+            + '<p class="v10-note">Rules: chandelier stop = highest close since entry − 3 × ATR(22), trailing up only; profit lock = break-even once '
+              'the gain reaches 2 × ATR, cost + 2 × ATR at 4 × ATR; give-back = sell if half of a 10%+ peak gain is gone; fast trend break = below '
+              'the 50-day average in a stressed regime; plus the official 8% stop and 200-day exit. The guard stop shown is the highest of them. '
+              'Shadow only: nothing is sold. Each first “would sell” keeps its price so the record shows whether the guard saved money or cut a '
+              'winner early; it becomes real only through a signed amendment.</p>')
+
+
+def _chop(g):
+    chop = (g or {}).get('chop') or {}
+    if not chop:
+        return '<p class="v10-empty">No chop labels yet; written after the close.</p>'
+    rows = ''.join(f'<tr><td><b>{esc(t)}</b></td><td><span class="an-sent {CHOP_CLS.get(c.get("label"), "")}">{esc((c.get("label") or "").replace("_", " ").lower())}</span></td>'
+                   f'<td class="num">{c.get("adx14", "—")}</td><td class="num">{c.get("atr14_pct", "—")}%</td>'
+                   f'<td class="num">{c.get("stretch_vs_ma50_atr", "—")}</td><td>{esc(c.get("gate"))}</td></tr>'
+                   for t, c in sorted(chop.items()) if c.get('status') == 'OK')
+    return ('<div class="table-wrap"><table class="mini"><thead><tr><th>Name</th><th>Tape</th><th>ADX(14)</th><th>ATR(14) % of price</th>'
+            f'<th>Distance from 50-day avg (ATRs)</th><th>Gate</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            '<p class="v10-note">Trending = ADX ≥ 20; choppy = ADX < 20; low vol = ATR% in the bottom fifth of its own last year; overextended = more '
+            'than 3 ATRs from the 50-day average. Only “trending” would pass a chop gate. Shadow only: the official run does not read it yet.</p>')
+
+
 def load(official_db):
     path = default_path(official_db)
     if not path.is_file():
@@ -37,7 +90,7 @@ def load(official_db):
         spent = db.execute("SELECT day, SUM(COALESCE(actual, reserved)) FROM budget GROUP BY day ORDER BY day DESC LIMIT 1").fetchone()
         return {'exists': True, 'meta': {k: v for k, v in meta.items() if not k.endswith(('_attempts', 'attempts'))},
                 'morning': latest('notes', 'morning'), 'close': latest('notes', 'close'), 'regime': latest('regimes'),
-                'kelly': latest('kelly'), 'auction': latest('auction'), 'news_morning': latest('news', 'morning'),
+                'kelly': latest('kelly'), 'auction': latest('auction'), 'guard': latest('guard') if _has(db, 'guard') else None, 'news_morning': latest('news', 'morning'),
                 'news_close': latest('news', 'close'), 'spent': {'day': spent[0], 'usd': spent[1]} if spent and spent[0] else None}
     except sqlite3.Error as error:
         return {'exists': True, 'error': type(error).__name__}
@@ -171,6 +224,8 @@ def render(state):
                     '<div class="v10-grid an-notes">', _note(a.get('morning'), (a.get('news_morning') or {}).get('items'), 'Morning note'),
                     _note(a.get('close'), (a.get('news_close') or {}).get('items') or news_all, 'After-close note'), '</div>',
                     f'<section class="v10-panel"><h3>Market regime <small>3-state hidden Markov model on VTI, retrained after every close</small></h3>{_regime(a.get("regime"))}</section>',
+                    f'<section class="v10-panel"><h3>Exit guard <small>protect gains, stop losses: what adaptive exits would do with each holding</small></h3>{_guard(a.get("guard"))}</section>',
+                    f'<section class="v10-panel"><h3>Chop gate <small>trend or chop, per name: when a gate would sit out</small></h3>{_chop(a.get("guard"))}</section>',
                     f'<section class="v10-panel"><h3>Shadow Kelly sizes <small>what Kelly would say, next to what the risk engine actually uses</small></h3>{_kelly(a.get("kelly"), held)}</section>',
                     f'<section class="v10-panel"><h3>Daily auction read</h3>{_auction(a.get("auction"))}</section>',
                     f'<section class="v10-panel"><h3>Headlines <small>untrusted text, stored with links; the AI only summarises them</small></h3>'

@@ -146,6 +146,15 @@ QUESTIONS = (
     ('Operational risk', 'One Mac, launchd, SQLite in WAL mode, a local proxy and a private network for the dashboard. What would you harden before '
      'trusting it with real money, even small?'),
 )
+ROSTER = (
+    ('Nugget', 'Safety rules', 'active', 'The 26 coded risk checks on every order, the breakers and the tripwire. Code, not a model.'),
+    ('Maple', 'Portfolio (gpt-5.4-mini)', 'standby', 'Runs only when a stock signal or a held stock needs review. Not called yet: every day so far was ETF-only.'),
+    ('Pickle', 'Critic (gpt-5.4)', 'standby', 'Reviews Maple’s idea with a blind packet and can reject it. Not called yet, for the same reason.'),
+    ('Biscuit', 'Filings and news', 'advisory', 'Since Oct 1 reads free headlines and SEC filings and writes per-ticker notes. Never used in a trade decision.'),
+    ('Bubbles', 'Explainer', 'advisory', 'Since Oct 1 writes the morning and after-close commentary. Checked for uncited numbers and order-like language.'),
+    ('Pip', 'Research / earnings analyst (gpt-5.4-nano)', 'standby', 'First AI stage when a stock signal or held stock appears; summarises the evidence packet. '
+     'Not called yet. No earnings calendar is wired; that part is planned.'),
+)
 FILES = (
     ('agents/daily_cycle.py', 'The 10:00 official run and the 15:50 protective check'),
     ('research/strategy_signals.py', 'The momentum, dip and option signal rules'),
@@ -197,7 +206,7 @@ def _cards(items):
 def render(state):
     c = catalogue()
     issues = [i for i in c.get('known_issues') or [] if i.get('severity') == 'high']
-    toc = (('map', 'System map'), ('run', 'One trading day'), ('seats', 'Who decides'), ('safety', 'Safety layers'),
+    toc = (('map', 'System map'), ('run', 'One trading day'), ('seats', 'Who decides'), ('roster', 'Agent roster'), ('safety', 'Safety layers'),
            ('evidence', 'How results are judged'), ('research', 'Research so far'), ('issues', 'Known issues'),
            ('questions', 'Questions for you'), ('files', 'Where to look in the code'))
     flow = ('Read', 'Features', 'Signals', 'AI gate', 'AI stages or desk rule', 'Risk engine', 'Three accounts', 'Valuation + capsule', 'Exits', 'Reports')
@@ -237,6 +246,10 @@ def render(state):
                  '<h3>Official desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>Analyst desk (AI off the trading path)</h3>' + _seats(SEATS_TRADER)
                  + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and specs are '
                  'hashed; changing either starts a new trial.</p>'),
+        _section('roster', 'Agent roster, as it really is today', 'Active = runs every day; standby = wired but not yet triggered; advisory = writes notes '
+                 'that no trade reads; planned = not built.',
+                 '<div class="ar-seats">' + ''.join(f'<div class="ar-seat k-{"code" if st == "active" else "ai" if st in ("standby", "advisory") else "you"}">'
+                                                    f'<b>{esc(n)} · {esc(r)}</b><span>{esc(st)}</span><p>{esc(d)}</p></div>' for n, r, st, d in ROSTER) + '</div>'),
         _section('safety', 'Safety layers', 'Independent layers. Any one of them is enough to stop a real order.', _cards(LAYERS)),
         _section('evidence', 'How results are judged', 'Designed so a lucky streak or a tuned backtest cannot be mistaken for skill.', _cards(EVIDENCE)),
         _section('research', 'Research so far', 'Every registered backtest since the harness existed. None beat simply holding VTI after costs and tax.',
