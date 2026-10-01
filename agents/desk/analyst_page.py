@@ -253,31 +253,152 @@ def _news(*batches):
             + (f'<p class="v10-note">Feed problems: {esc(", ".join(sorted({p.get("error", "") for p in problems})))}.</p>' if problems else ''))
 
 
+def _ladder(e):
+    """One line showing where the stop, your cost, the last close and the best close sit relative to each other."""
+    pts = [('stop', e.get('guard_stop'), 'stop'), ('cost', e.get('average_cost'), 'cost'), ('peak', e.get('high_since_entry'), 'peak'),
+           ('last', e.get('last_close'), 'last')]
+    vals = [v for _, v, _ in pts if isinstance(v, (int, float))]
+    if len(vals) < 2:
+        return ''
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1.0
+    lo, hi = lo - span * .12, hi + span * .12
+    x = lambda v: 16 + (v - lo) / (hi - lo) * 328
+    rows = {'last': (14, True), 'peak': (28, True), 'cost': (66, False), 'stop': (80, False)}   # label rows never collide
+    marks = ''
+    for name, v, cls in pts:
+        if not isinstance(v, (int, float)):
+            continue
+        ty, up = rows[name]
+        anchor = 'start' if x(v) < 70 else 'end' if x(v) > 290 else 'middle'
+        marks += (f'<g class="ld-{cls}"><line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="{ty + 3 if up else 44}" y2="{44 if up else ty - 11}"/>'
+                  f'<circle cx="{x(v):.1f}" cy="44" r="{5.5 if name == "last" else 4}"/>'
+                  f'<text x="{x(v):.1f}" y="{ty}" text-anchor="{anchor}">{name} ${v:,.2f}</text></g>')
+    return (f'<svg class="an-ladder" viewBox="0 0 360 86" role="img" aria-label="Stop, cost, last close and best close for {esc(e.get("ticker"))}">'
+            f'<line class="ld-axis" x1="16" x2="344" y1="44" y2="44"/>{marks}</svg>')
+
+
+def _guard_cards(g):
+    if not g:
+        return '<p class="v10-empty">No exit-guard check yet. It runs after the close, with the regime model.</p>'
+    cards = ''
+    for e in g.get('exits') or []:
+        if e.get('status') != 'OK':
+            continue
+        lane, _, track = (e.get('account') or '').partition(':')
+        sell = e.get('verdict') == 'WOULD_SELL'
+        first = e.get('first_would_sell') or {}
+        cards += (f'<section class="v10-panel an-guard {"is-sell" if sell else "is-hold"}"><header><div><b>{esc(e.get("ticker"))}</b>'
+                  f'<small>{esc(ACCOUNTS.get(track, track))} · lane {esc(lane)}</small></div>'
+                  f'<span class="an-sent {"neg" if sell else "pos"}">{"would sell" if sell else "hold"}</span></header>{_ladder(e)}'
+                  f'<dl class="v10-stats"><div><dt>Gain now</dt><dd class="{"pos" if (e.get("gain_pct") or 0) > 0 else "neg"}">{pct(e.get("gain_pct"))}</dd></div>'
+                  f'<div><dt>Best gain so far</dt><dd>{pct(e.get("peak_gain_pct"))}</dd></div>'
+                  f'<div><dt>Room before the stop</dt><dd>{pct(e.get("distance_to_guard_pct"))}</dd></div>'
+                  f'<div><dt>Active stop rule</dt><dd>{esc(e.get("guard_stop_rule"))}</dd></div></dl>'
+                  + (f'<p class="an-flag">Why: {esc("; ".join(e.get("triggers") or []))}</p>' if sell else '')
+                  + (f'<p class="v10-note">First flagged {esc(first.get("day"))} at ${first.get("price"):,.2f}. The record will show whether selling there beat holding.</p>'
+                     if first.get('price') else '') + '</section>')
+    gate = ''.join(f'<li><b>{esc(x.get("ticker"))}</b>: tape was {esc((x.get("label") or "unknown").replace("_", " ").lower())}, so a chop gate would have '
+                   f'{"<b>blocked</b>" if x.get("would_block") else "allowed"} today’s official entry.</li>' for x in g.get('entry_gate') or [])
+    return ((f'<div class="an-guards">{cards}</div>' if cards else '<p class="v10-empty">No holdings to guard.</p>')
+            + (f'<ul class="v10-list">{gate}</ul>' if gate else ''))
+
+
+def _tape(g, a):
+    chop, auc = (g or {}).get('chop') or {}, (a or {}).get('tickers') or {}
+    names = sorted(set(chop) | set(auc), key=lambda t: -abs((auc.get(t) or {}).get('change_pct') or 0))
+    if not names:
+        return '<p class="v10-empty">No tape read yet. It is written after the close.</p>'
+    rows = ''
+    for t in names:
+        c, v = chop.get(t) or {}, auc.get(t) or {}
+        label = c.get('label')
+        rows += (f'<tr><td><b>{esc(t)}</b></td><td><span class="an-sent {CHOP_CLS.get(label, "")}">{esc((label or "—").replace("_", " ").lower())}</span></td>'
+                 f'<td class="num">{pct(v.get("change_pct"))}</td><td>{esc(v.get("day_type") or "—")}</td><td class="num">{c.get("adx14", "—")}</td>'
+                 f'<td class="num">{v.get("range_vs_atr20", "—")}×</td><td class="num">{v.get("close_location", "—")}</td>'
+                 f'<td class="num">{v.get("volume_vs_avg20", "—")}×</td></tr>')
+    trending = sum(1 for c in chop.values() if c.get('label') == 'TRENDING')
+    return (f'<p class="an-lead">{trending} of {len(chop)} names are trending tonight. Only trending names would pass a chop gate.</p>'
+            '<div class="table-wrap"><table class="mini"><thead><tr><th>Name</th><th>Tape</th><th>Today</th><th>Day type</th><th>Trend strength (ADX)</th>'
+            f'<th>Range vs normal</th><th>Closed near (−1 low, +1 high)</th><th>Volume vs normal</th></tr></thead><tbody>{rows}</tbody></table></div>')
+
+
+def _sizing(k, held):
+    if not k:
+        return '<p class="v10-empty">No Kelly sizes yet. They are computed after the close.</p>'
+    def f(x):
+        return '—' if x is None else f'{x * 100:.1f}%'
+    def row(t, v):
+        reg, al = v.get('regime') or {}, v.get('all') or {}
+        return (f'<tr class="{"an-held" if t in held else ""}"><td><b>{esc(t)}</b>{" <small>held</small>" if t in held else ""}</td>'
+                f'<td class="num">{f(v.get("risk_engine_fraction"))}</td><td class="num"><b>{f(reg.get("kelly_disciplined"))}</b></td>'
+                f'<td class="num">{f(reg.get("kelly_half"))}</td><td class="num">{reg.get("t_stat", "—")}</td><td class="num">{al.get("t_stat", "—")}</td></tr>')
+    items = sorted((k.get('tickers') or {}).items(), key=lambda kv: (kv[0] not in held, -((kv[1].get('regime') or {}).get('kelly_disciplined') or 0), kv[0]))
+    top = [x for x in items if x[0] in held or ((x[1].get('regime') or {}).get('kelly_disciplined') or 0) > 0]
+    rest = [x for x in items if x not in top]
+    head = ('<thead><tr><th>Name</th><th>Size actually used</th><th>Disciplined Kelly</th><th>Half-Kelly (raw idea)</th>'
+            '<th>Edge strength in this regime (t)</th><th>Edge strength, all history (t)</th></tr></thead>')
+    out = (f'<p class="an-lead">Regime tonight: {esc(k.get("regime"))}. Disciplined Kelly is zero unless the edge is statistically real '
+           'both in this regime and over all history.</p>'
+           f'<div class="table-wrap"><table class="mini">{head}<tbody>{"".join(row(t, v) for t, v in top) or "<tr><td colspan=6>Nothing held and no name has a proven edge tonight.</td></tr>"}</tbody></table></div>')
+    if rest:
+        out += (f'<details class="an-more"><summary>All other names ({len(rest)}), disciplined size 0%</summary><div class="table-wrap"><table class="mini">{head}'
+                f'<tbody>{"".join(row(t, v) for t, v in rest)}</tbody></table></div></details>')
+    return out
+
+
+def _kpis(a):
+    r, g, sp = a.get('regime') or {}, a.get('guard') or {}, a.get('spent') or {}
+    exits = [e for e in g.get('exits') or [] if e.get('status') == 'OK']
+    sells = sum(1 for e in exits if e.get('verdict') == 'WOULD_SELL')
+    chop = g.get('chop') or {}
+    trending = sum(1 for c in chop.values() if c.get('label') == 'TRENDING')
+    written = sum(1 for k in ('morning', 'close') if a.get(k)) + len(a.get('team') or {})
+    tiles = (('Market regime', (r.get('current') or 'not fitted yet').capitalize() if r.get('status') == 'OK' else 'Not fitted yet',
+              f'{(r.get("current_probabilities") or {}).get(r.get("current"), 0) * 100:.0f}% confident' if r.get('status') == 'OK' else 'first fit after the close'),
+             ('Exit guard', f'{len(exits) - sells} hold · {sells} would sell' if exits else 'No holdings checked', 'shadow only, nothing is sold'),
+             ('Trending names', f'{trending} of {len(chop)}' if chop else '—', 'the rest would sit out'),
+             ('Team notes', str(written) if written else 'None yet', 'latest from each agent'),
+             ('AI spend today', f'${float(sp.get("usd") or 0):.3f}', 'cap $1.00 a day'))
+    return '<div class="an-kpis">' + ''.join(f'<div class="an-kpi"><span>{esc(t)}</span><b>{esc(v)}</b><small>{esc(n)}</small></div>' for t, v, n in tiles) + '</div>'
+
+
+TABS = (('an-brief', 'Brief', 'The note you read'), ('an-team', 'Team', 'What each agent said'), ('an-guard', 'Exit guard', 'Protect gains, stop losses'),
+        ('an-regime', 'Regime', 'Calm, normal or stressed'), ('an-sizing', 'Sizing', 'Kelly vs actual'), ('an-tape', 'Tape', 'Trend or chop, per name'),
+        ('an-news', 'News', 'Headlines the team read'))
+
+
+def _panel(tab_id, what, body, active=False):
+    return (f'<div class="v10-tabpanel an-tab" id="{tab_id}" data-tabpanel{" data-active" if active else ""}>'
+            f'<p class="an-what">{what}</p>{body}</div>')
+
+
 def render(state):
     a = state.get('analyst') or {}
-    head = ('<div class="room-head"><div><h1>Analyst desk</h1><p>AI off the trading path: language models write commentary and news notes; '
-            'code computes the market regime and shadow Kelly sizes after the close. Nothing here can place, size or block a trade.</p></div></div>')
+    head = ('<div class="room-head"><div><h1>Analyst desk</h1><p>The team’s daily read on the market and your book. They explain and warn; '
+            'they never place, size or block a trade.</p></div></div>')
     if not a.get('exists'):
-        return head + ('<section class="v10-panel"><h3>Not set up yet</h3><p>Install release G, then run '
+        return head + ('<section class="v10-panel"><h3>Not set up yet</h3><p>Install the latest release, then run '
                        '<code>python -m agents.analyst.cli init --official-database …/data/agent.db</code>. The first morning note follows the next '
                        'official run; the first regime fit runs after the close.</p></section>')
     if a.get('error'):
         return head + f'<p class="v10-empty">Analyst records unavailable ({esc(a["error"])}). No status is assumed.</p>'
-    held = {h for h in ((state.get('portfolio') or {}).get('fills') and [f.get('ticker') for f in state['portfolio']['fills']] or [])}
-    spent = a.get('spent') or {}
-    meta = a.get('meta') or {}
-    status = ('paused' if meta.get('paused') == '1' else 'running') + (f' · AI spend {esc(spent.get("day"))}: ${float(spent.get("usd") or 0):.4f} of $1.00' if spent else ' · no AI spend yet')
-    news_all = ((a.get('news_morning') or {}).get('items') or []) + ((a.get('news_close') or {}).get('items') or [])
-    return ''.join([head, f'<p class="capital-note is-live"><strong>Status:</strong> {status}. Model gpt-5.4-mini (dated), strict JSON, no tools.</p>',
-                    '<h2 class="an-h2">The team today</h2><p class="v10-note">Every named agent writes each trading day in advisory mode. '
-                    'Prof. X (safety rules) is code and runs inside every trade check. Bubbles writes the summary notes below, last, from the others.</p>',
-                    _team(a.get('team')),
-                    '<div class="v10-grid an-notes">', _note(a.get('morning'), (a.get('news_morning') or {}).get('items'), 'Morning note'),
-                    _note(a.get('close'), (a.get('news_close') or {}).get('items') or news_all, 'After-close note'), '</div>',
-                    f'<section class="v10-panel"><h3>Market regime <small>3-state hidden Markov model on VTI, retrained after every close</small></h3>{_regime(a.get("regime"))}</section>',
-                    f'<section class="v10-panel"><h3>Exit guard <small>protect gains, stop losses: what adaptive exits would do with each holding</small></h3>{_guard(a.get("guard"))}</section>',
-                    f'<section class="v10-panel"><h3>Chop gate <small>trend or chop, per name: when a gate would sit out</small></h3>{_chop(a.get("guard"))}</section>',
-                    f'<section class="v10-panel"><h3>Shadow Kelly sizes <small>what Kelly would say, next to what the risk engine actually uses</small></h3>{_kelly(a.get("kelly"), held)}</section>',
-                    f'<section class="v10-panel"><h3>Daily auction read</h3>{_auction(a.get("auction"))}</section>',
-                    f'<section class="v10-panel"><h3>Headlines <small>untrusted text, stored with links; the AI only summarises them</small></h3>'
-                    f'{_news(a.get("news_morning"), a.get("news_close"))}</section>'])
+    held = {f.get('ticker') for f in (state.get('portfolio') or {}).get('fills') or []}
+    news_m, news_c = a.get('news_morning') or {}, a.get('news_close') or {}
+    tabs = ''.join(f'<a role="tab" href="#{i}" data-tab="{i}" aria-selected="{"true" if n == 0 else "false"}">{esc(t)}<small>{esc(sub)}</small></a>'
+                   for n, (i, t, sub) in enumerate(TABS))
+    brief = ('<div class="v10-grid an-notes">' + _note(a.get('morning'), news_m.get('items'), 'Morning note')
+             + _note(a.get('close'), news_c.get('items') or news_m.get('items'), 'After-close note') + '</div>')
+    return ''.join([
+        head, _kpis(a), f'<nav class="v10-tabs an-tabs" role="tablist" aria-label="Analyst desk sections">{tabs}</nav>',
+        _panel('an-brief', 'Bubbles writes two short notes a day from everything the team produced: one after the 10:00 run, one after the close.', brief, True),
+        _panel('an-team', 'Each agent has one job and writes every trading day. Mojo Jojo’s job is to find fault with the others.', _team(a.get('team'))),
+        _panel('an-guard', 'For each holding: where a volatility-aware stop would sit tonight and whether it would sell. The stop only ever moves up. '
+               'Shadow only; it becomes real only if you sign it in.', _guard_cards(a.get('guard'))),
+        _panel('an-regime', 'A statistical model labels the whole market from VTI’s daily moves and is refitted every night.', _regime(a.get('regime'))),
+        _panel('an-sizing', 'What the Kelly formula would bet, next to what the risk engine actually uses. Raw Kelly trusts history too much, '
+               'so only the disciplined column is worth reading.', _sizing(a.get('kelly'), held)),
+        _panel('an-tape', 'How each name traded today and whether it is trending or just chopping around.', _tape(a.get('guard'), a.get('auction'))),
+        _panel('an-news', 'Free headlines and filings the team read. They are untrusted text: stored with links, summarised, never acted on.',
+               _news(news_m, news_c)),
+    ])

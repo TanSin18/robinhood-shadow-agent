@@ -1,6 +1,6 @@
 /* Agent Desk v10: Portfolio (paper + real tabs), Rule book and Architecture.
    Uses the desk tokens (--bg --card --border --text --text-3 --cyan --violet --amber --green --red). */
-:root{--v10-up:#3fd08f;--v10-down:#ff7a5c;--v10-flat:#b8b5af;--v10-s0:#5accd8;--v10-s1:#fb3751;--v10-s2:#f5b64a;--v10-s3:#ff8fb3;--v10-s4:#7fe0c4;--v10-s5:#c9d36b;--v10-cash:#716f6a}
+:root{--v10-up:#3fd08f;--v10-down:#ff7a5c;--v10-flat:#b8b5af;--v10-s0:#5accd8;--v10-s1:#c7cad1;--v10-s2:#f5b64a;--v10-s3:#ff8fb3;--v10-s4:#7fe0c4;--v10-s5:#c9d36b;--v10-cash:#716f6a}
 .v10-js [data-tabpanel]:not([data-active]),.v10-js [data-acct]:not([data-active]),.v10-js [data-range-panel]:not([data-active]){display:none}
 html:not(.v10-js) .v10-range-bar{display:none}
 .v10-note{font-size:13px;color:var(--text-3);margin:8px 0 0;max-width:90ch;line-height:1.55}
@@ -279,3 +279,41 @@ tr.an-sell td{background:rgba(255,122,92,.08)}
 .an-seat p{font-size:14px;line-height:1.55;margin:6px 0}
 
 
+
+/* ---------------- Analyst desk, reorganised: KPI strip + sub-tabs ---------------- */
+.an-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0 4px}
+.an-kpi{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-kpi span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.an-kpi b{font-size:19px;letter-spacing:-.01em}
+.an-kpi small{font-size:12px}
+.an-tabs a{padding:10px 16px;font-size:14px}
+.an-what{font-size:14px;color:var(--text-3);max-width:90ch;margin:0 0 14px}
+.an-lead{font-size:14px;margin:0 0 10px}
+.an-tab .v10-panel{margin-bottom:14px}
+.an-guards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+.an-guard header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
+.an-guard header b{font-size:18px;display:block}.an-guard header small{font-size:12px}
+.an-guard.is-sell{border-color:rgba(255,143,90,.5)}
+.an-ladder{display:block;width:100%;height:auto;margin:6px 0 10px}
+.an-ladder .ld-axis{stroke:var(--border);stroke-width:2}
+.an-ladder line{stroke:var(--text-3);stroke-width:1.4}
+.an-ladder text{font-size:10.5px;fill:var(--text-3)}
+.an-ladder circle{fill:var(--text-3)}
+.an-ladder .ld-stop line,.an-ladder .ld-stop circle{stroke:var(--v10-down);fill:var(--v10-down)}.an-ladder .ld-stop text{fill:var(--v10-down)}
+.an-ladder .ld-last circle{fill:var(--v10-up)}.an-ladder .ld-last text{fill:var(--text);font-weight:600}
+.an-ladder .ld-peak circle{fill:none;stroke:var(--text-3);stroke-width:1.5}
+.an-more{margin-top:10px}.an-more summary{cursor:pointer;font-size:13px;color:var(--text-3)}
+
+/* Decision room: the whole team */
+.team-strip{margin:12px 0 16px}
+.team-strip .card-head a{font-size:13px}
+.team-seats{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.team-seat{display:flex;gap:10px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--bg);min-width:0}
+.team-seat img{border-radius:50%;flex:none}
+.team-seat b{display:block;font-size:14px}.team-seat span{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+.team-seat p{font-size:13px;line-height:1.45;margin:4px 0 2px}.team-seat small{font-size:11px}
+.team-seat.is-decides{border-color:var(--cyan)}
+.an-ladder text{font-size:11.5px}
+.an-guard .v10-stats{grid-template-columns:1fr 1fr}
+.an-guards{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+@media (min-width:1100px){.team-seats{grid-template-columns:repeat(3,minmax(0,1fr))}.an-team{grid-template-columns:repeat(3,minmax(0,1fr))}}

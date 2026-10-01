@@ -402,7 +402,7 @@ def scene(review, index, rows):
 <section class="room-card log-card"><div class="card-head"><h3>Run log</h3><span class="muted small">{len(log)} recorded events · times ET</span></div>{no_handoff}{filters}<div class="log-scroll">{log_rows(log)}</div>
 <details class="sub"><summary>Technical event names</summary><p class="code">{esc(tech)}</p></details></section></div>
 {ideas(review)}
-<aside class="scene-bench" aria-label="Future team members"><span>On the bench</span><div>{portrait('filings_news', 28)}<p><strong>Buttercup</strong> <small>joins in Phase 1</small></p></div><div>{portrait('explainer', 28)}<p><strong>Bubbles</strong> <small>Ask arrives after the gate</small></p></div></aside>
+
 </section>'''
 
 
@@ -411,5 +411,38 @@ def render(state):
     choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="scene-heading room-head"><div><h1>Decision room</h1><p>Every step of a run, straight from its saved records.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
-    if not reviews: return html + '<p>No saved review yet.</p>'
-    return html + ''.join(scene(r, i, state.get('handoffs', [])) for i, r in enumerate(reviews))
+    if not reviews: return html + team_strip(state) + '<p>No saved review yet.</p>'
+    return html + team_strip(state) + ''.join(scene(r, i, state.get('handoffs', [])) for i, r in enumerate(reviews))
+
+
+def _short(text, n=150):
+    text = str(text or '').strip()
+    return text if len(text) <= n else text[:n - 1].rstrip() + '…'
+
+
+def team_strip(state):
+    """The whole team around a run: Prof. X decides inside the run; the others write advisory notes every trading day."""
+    a = state.get('analyst') or {}
+    team = a.get('team') or {}
+    pip, bis, map_, pic = team.get('pip') or {}, team.get('biscuit') or {}, team.get('maple') or {}, team.get('pickle') or {}
+    verdict = next((v for v in pic.get('verdicts') or [] if v.get('target') == 'official_decision'), None)
+    note = a.get('close') or a.get('morning') or {}
+    waiting = 'Writes after the next official run.'
+    seats = (('risk', 'decides', 'Checks every order in the run: size, cash, limits, losses, stop flags.', None),
+             ('research', 'advisory', _short(pip.get('base_rate')) or waiting, pip.get('at')),
+             ('filings_news', 'advisory', _short(bis.get('summary')) or waiting, bis.get('at')),
+             ('portfolio', 'advisory', _short(map_.get('portfolio_read')) or waiting, map_.get('at')),
+             ('critic', 'advisory', (f'Official decision: {verdict.get("verdict")}. ' + _short('; '.join(verdict.get('reasons') or []), 110)) if verdict else waiting,
+              pic.get('at')),
+             ('explainer', 'advisory', _short(note.get('headline')) or waiting, note.get('at')))
+    cards = ''
+    for key, mode, text, at in seats:
+        name, role, asset, _ = TEAM[key]
+        cards += (f'<li class="team-seat is-{mode}"><img src="/assets/avatars/{asset}" width="40" height="40" alt="">'
+                  f'<div><b>{esc(name)}</b><span>{esc(role.split(" · ")[0])} · {mode}</span><p>{esc(text)}</p>'
+                  + (f'<small>{esc(date_label(at))}</small>' if at else '') + '</div></li>')
+    return ('<section class="room-card team-strip"><div class="card-head"><h3>The team around this desk</h3>'
+            '<a href="/analyst">Open the Analyst desk →</a></div>'
+            '<p class="muted small">Prof. X runs inside every decision. The other five write every trading day in advisory mode: no trade reads '
+            'their notes. Blossom, Mayor and Mojo Jojo also appear in the flow below whenever a single-stock idea needs them.</p>'
+            f'<ul class="team-seats">{cards}</ul></section>')

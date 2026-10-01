@@ -12,15 +12,15 @@
 .team-date{font-size:14px;color:var(--text-3)}
 .team-preview .team-outcome h2{font-size:32px;letter-spacing:-.025em;margin:12px 0;max-width:30ch}
 .team-outcome>p{color:#dad7d2;font-size:17px;margin:12px 0}
-.team-preview summary{cursor:pointer;align-content:center;color:#fc9ca9;line-height:1.5}
+.team-preview summary{cursor:pointer;align-content:center;color:#e6e7ea;line-height:1.5}
 .team-outcome details{max-width:72ch}.team-outcome details p{font-size:15px;color:var(--text-3)}
 .team-heading{display:flex;align-items:baseline;gap:20px;margin-top:24px}.team-heading h2{margin:0}.team-heading p{color:var(--text-3);font-size:14px}
 .team-flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));list-style:none;padding:0;gap:18px;margin:18px 0}
 .team-flow>li{position:relative;min-width:0}.team-flow>li:not(:last-child)::after{content:'→';position:absolute;right:-16px;top:51px;color:#afada7;pointer-events:none}
 .team-preview .team-node{display:flex;flex-direction:column;align-items:center;width:100%;min-height:236px;border:1px solid var(--border);background:var(--card);border-radius:18px;padding:18px 12px;color:var(--text);font-family:inherit;cursor:pointer;text-align:center;transition:background .15s,border-color .15s}
-.team-node:hover,.team-node[aria-expanded=true]{background:#2f2d29;border-color:#fc9ca9}
+.team-node:hover,.team-node[aria-expanded=true]{background:#2f2d29;border-color:#e6e7ea}
 .team-node img,.team-code-icon{height:64px;width:64px;background:#2d2b29;border-radius:50%;margin-bottom:12px}
-.team-code-icon{display:grid;place-items:center;font-size:34px;color:#fc9ca9}
+.team-code-icon{display:grid;place-items:center;font-size:34px;color:#e6e7ea}
 .team-job{font-size:17px;font-weight:650}.team-name{font-size:13px;color:var(--text-3);margin:4px 0 12px}
 .team-status{font-size:12px;padding:4px 8px;border-radius:20px;background:#2c2b28;color:#e5e4e1}
 .completed .team-status{color:#b4f0d3;background:#233e36}.blocked .team-status{color:#ffd2b5;background:#51352c}
@@ -41,10 +41,10 @@
 @media(prefers-reduced-motion:reduce){.team-node{transition:none}}
 .agent-desk .desk-preview{max-width:none;margin:0;padding:12px 24px;text-align:center;background:#392b12;color:#ffdda1;border-bottom:1px solid #80612b;font-weight:600}
 @font-face{font-family:'Geist Mono';src:url('/assets/fonts/GeistMono.woff2') format('woff2');font-display:swap;font-weight:100 900}
-.agent-desk{--bg:#0c0c0b;--card:#121211;--card-2:#171716;--border:#21201f;--border-soft:#1c1b1a;--text:#f4f4f3;--text-2:#d6d5d3;--text-3:#abaaa6;--text-4:#95938e;--cyan:#5accd8;--violet:#fb3751;--green:#3fd08f;--red:#ff8a6b;--amber:#f5b64a;--stop:#ff5c3a;background:var(--bg);color:var(--text);font-family:Geist,system-ui,sans-serif;margin:0}
+.agent-desk{--bg:#0c0c0b;--card:#121211;--card-2:#171716;--border:#21201f;--border-soft:#1c1b1a;--text:#f4f4f3;--text-2:#d6d5d3;--text-3:#abaaa6;--text-4:#95938e;--cyan:#5accd8;--violet:#c7cad1;--green:#3fd08f;--red:#ff8a6b;--amber:#f5b64a;--stop:#ff5c3a;background:var(--bg);color:var(--text);font-family:Geist,system-ui,sans-serif;margin:0}
 .agent-desk *{box-sizing:border-box}.agent-desk main{max-width:1440px;margin:auto;padding:32px 48px}.agent-desk h1{font-size:34px;letter-spacing:-.02em}.agent-desk h2{font-size:19px;margin:0 0 16px}.agent-desk p{line-height:1.65;max-width:78ch}.agent-desk a{color:var(--cyan)}.agent-desk footer{padding:24px 48px;color:var(--text-3)}.agent-desk button,.agent-desk .button,.agent-desk select,.agent-desk input,.agent-desk summary{min-height:44px}.agent-desk :focus-visible{outline:3px solid var(--cyan);outline-offset:4px}
 .desk-header{padding:24px 48px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:20px}.desk-brand{font-size:22px;font-weight:700;text-decoration:none;white-space:nowrap}.desk-header nav{display:flex;flex-wrap:wrap;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px}.desk-header nav a{padding:12px;color:var(--text-3);font-size:14px;text-decoration:none;border-radius:7px}.desk-header nav a[aria-current]{background:#1f1e1d;color:var(--text)}.desk-safety,.desk-chip{border:1px solid var(--border);border-radius:999px;padding:8px 12px;font-size:13px}.desk-safety{color:var(--green)}.desk-safety.stopped{color:var(--red);background:#2a1f1b}.desk-mode{color:var(--amber)}.desk-muted{color:var(--text-3)}
-.desk-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin:20px 0}.desk-today{display:grid;grid-template-columns:2fr 1fr;gap:20px}.desk-today .desk-card{margin-bottom:0}.desk-money{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.desk-number,.agent-desk time,.agent-desk pre{font-family:'Geist Mono',monospace}.desk-number{font-size:22px}.desk-identity{display:flex;align-items:center;gap:12px}.desk-identity strong,.desk-identity small{display:block}.desk-identity small{font-size:13px;color:var(--text-3);margin-top:4px}.desk-identity img,.desk-symbol{border-radius:50%;background:#2e191c;flex-shrink:0}.desk-symbol{padding:15px;background:#1d1c1a}.desk-identity.ai strong{color:var(--violet)}.desk-identity.code strong{color:var(--cyan)}.desk-inactive{background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:20px;margin:24px 0;color:var(--text-3)}
+.desk-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin:20px 0}.desk-today{display:grid;grid-template-columns:2fr 1fr;gap:20px}.desk-today .desk-card{margin-bottom:0}.desk-money{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.desk-number,.agent-desk time,.agent-desk pre{font-family:'Geist Mono',monospace}.desk-number{font-size:22px}.desk-identity{display:flex;align-items:center;gap:12px}.desk-identity strong,.desk-identity small{display:block}.desk-identity small{font-size:13px;color:var(--text-3);margin-top:4px}.desk-identity img,.desk-symbol{border-radius:50%;background:#212226;flex-shrink:0}.desk-symbol{padding:15px;background:#1d1c1a}.desk-identity.ai strong{color:var(--violet)}.desk-identity.code strong{color:var(--cyan)}.desk-inactive{background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:20px;margin:24px 0;color:var(--text-3)}
 .desk-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:0;list-style:none}.desk-stage{border:1px solid var(--border);background:var(--card);border-radius:16px;padding:24px;min-width:0}.desk-stage summary{display:flex;flex-direction:column;align-items:start;gap:12px;cursor:pointer}.desk-stage dt{color:var(--text-3);margin-top:16px}.desk-stage dd{margin:6px 0;overflow-wrap:anywhere}.desk-stage ul{padding-left:20px}.desk-run{margin:32px 0}.agent-desk pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .desk-stage summary,.desk-chip{color:var(--text-2)}.agent-desk select,.agent-desk input{background:var(--card-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;margin:0 8px}.desk-symbol{color:var(--cyan)}
 @media(max-width:1100px){.desk-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.desk-money{grid-template-columns:repeat(2,minmax(0,1fr))}.desk-header{padding:20px}}
@@ -57,10 +57,10 @@
 .day-clock-svg{display:block;width:100%;height:auto;margin-top:8px;overflow:visible}
 .day-clock-svg .track{stroke:var(--border,#21201f);stroke-width:6;stroke-linecap:round}
 .day-clock-svg .open{stroke:var(--cyan,#5accd8);stroke-opacity:.5;stroke-width:6;stroke-linecap:round}
-.day-clock-svg .approvals{stroke:var(--violet,#fb3751);stroke-width:6;stroke-linecap:round}
+.day-clock-svg .approvals{stroke:var(--violet,#c7cad1);stroke-width:6;stroke-linecap:round}
 .day-clock-svg .tick{fill:var(--card,#121211);stroke-width:3}.day-clock-svg .tick.minor{stroke:#888681}
-.day-clock-svg .tick.market{stroke:var(--cyan,#5accd8)}.day-clock-svg .tick.approval{stroke:var(--violet,#fb3751)}
-.day-clock-svg .tick.key{stroke:var(--violet,#fb3751);fill:var(--violet,#fb3751)}
+.day-clock-svg .tick.market{stroke:var(--cyan,#5accd8)}.day-clock-svg .tick.approval{stroke:var(--violet,#c7cad1)}
+.day-clock-svg .tick.key{stroke:var(--violet,#c7cad1);fill:var(--violet,#c7cad1)}
 .day-clock-svg text{font-family:Geist,system-ui,sans-serif;fill:#cbcac7}
 .day-clock-svg .t-time{font-family:ui-monospace,monospace;font-size:12px}
 .day-clock-svg .t-label{font-size:12.5px;fill:#abaaa6}.day-clock-svg .t-label.key{fill:#f4f4f3;font-weight:700}
