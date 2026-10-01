@@ -1,5 +1,5 @@
 {
-  "source_commit": "8cd953614739508e311e095e7e3a3d4fac844bb7",
+  "source_commit": "8cd0e50863d5dcd6b31261798bb3853605e61363",
   "installed_base_commit": "c36f4ad",
   "before_source_fingerprint": "5a4419569a83cdcc12f62d4babff5bd8a4d71141e1bce8c04bf5882e56a4a378",
   "expected_after_source_fingerprint": null,
@@ -19,11 +19,11 @@
     },
     "agents/ai_trader/cycle.py": {
       "before_sha256": null,
-      "after_sha256": "fb65b2cd40aebd6dcc0372477a356962b17d07580318f5c227a66dde5555ab9a"
+      "after_sha256": "0786fd7c12d08a39e6775696970d796372ae3f25697d50e1bca1c8239dc1f1f8"
     },
     "agents/ai_trader/hook.py": {
       "before_sha256": null,
-      "after_sha256": "2ab2ee6e7157854ff8ec64ce0d2c04d11010b37fe32504318f07d71b2edb631f"
+      "after_sha256": "bfe57766c6279272d1265a34bda4579a4d2173fb640ee5c13d4d1b1728a2a889"
     },
     "agents/ai_trader/model.py": {
       "before_sha256": null,
@@ -39,7 +39,7 @@
     },
     "agents/ai_trader/seats.py": {
       "before_sha256": null,
-      "after_sha256": "96ea8a1cbc51b45f216ca7ea70801c7e47b2e6bd4171bc5b13cf81dc52846734"
+      "after_sha256": "a12cc82a6b5fb01483e0b2aa6a089d1ffb83dc65b8525a81dfa45dfaf8570d1a"
     },
     "agents/ai_trader/spec.py": {
       "before_sha256": null,
@@ -47,11 +47,11 @@
     },
     "agents/ai_trader/store.py": {
       "before_sha256": null,
-      "after_sha256": "3a1a0d851857139ef45e6dff4bc62dcbcd2b3b79fd9cc5200f5fbc5ebb03efa4"
+      "after_sha256": "ce5199e5b042766a6d36b22087bc32538f74a5b54289c83c954f9d931a4b86b7"
     },
     "agents/ai_trader/tools.py": {
       "before_sha256": null,
-      "after_sha256": "d42a0e60164887a2edc7640daac71eb1e970a60a4d25f1a234b22faf32185edc"
+      "after_sha256": "b2b81470af213abf3ae11854c4612ffccbc5e11b5c90135272b86af0bb447117"
     },
     "agents/daily_cycle.py": {
       "before_sha256": "054c6933dfc71d88f8f965495d230c9463e30d7c10328f6d592808537aacc94d",
@@ -75,7 +75,7 @@
     },
     "tests/test_ai_trader.py": {
       "before_sha256": null,
-      "after_sha256": "7a315d1575f65c63ac7bf3a7df1ee49adf2dd653c793eb9e75c33bca2c7e6b1e"
+      "after_sha256": "a7d673c7b524ec4183a22aa50ffa9a8fb97b6bf921e687e23df84f6fe4f090d9"
     },
     "tests/test_backtest_etf_rule.py": {
       "before_sha256": "8a17387bb4016bc1e36b1074e672e79c6b0d58917552c1fd16bf20627e892946",

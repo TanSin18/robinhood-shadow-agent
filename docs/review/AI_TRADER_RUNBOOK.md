@@ -15,7 +15,7 @@ A paper trading firm, scored only going forward (models can't be backtested hone
   entries only), entries before 15:30 ET. Exits: the ticket's invalidation price and time stop (≤20 sessions),
   two sessions without a management card, and at 15:50 the v1.6 protective rule (8% under cost or under the
   200-day average). Stops are checked at the morning run and 15:50 only; gaps fill at the next check.
-- **Budget:** $2/day, no rollover; each call reserves its registered worst case first; Critic only runs on
+- **Budget:** $2/day, no rollover; each call reserves its registered worst case first; no new model call starts after six minutes of a morning run; Critic only runs on
   tickets that pass code checks; "nothing today" is a normal answer.
 - **Scoring:** A/B/C vs VTI, Official lane A, random C and cash, after spreads, AI bill (A and B) and an
   estimated 35% tax on gains. Verdict: TOO_EARLY until 200 closed trades or 252 sessions; then PASS only if
