@@ -1,0 +1,212 @@
+{
+ "trial_id": 14,
+ "dataset": {
+  "bars_sha256": "57f6fab28109eafb8f4525f253a07c5cf2453ecc2d27c4d81a638e5cbadbcdcc",
+  "bars_file": "bars.csv",
+  "symbols": {
+   "GLD": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "QQQ": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "SOXX": {
+    "first_session": "2010-10-15",
+    "last_session": "2026-09-29",
+    "sessions": 4011
+   },
+   "SPY": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "TLT": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "VTI": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLB": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLC": {
+    "first_session": "2018-06-19",
+    "last_session": "2026-09-29",
+    "sessions": 2081
+   },
+   "XLE": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLF": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLI": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLK": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLP": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLRE": {
+    "first_session": "2015-10-08",
+    "last_session": "2026-09-29",
+    "sessions": 2759
+   },
+   "XLU": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLV": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLY": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   }
+  },
+  "missing_symbols": [],
+  "first_session": "2005-01-03",
+  "last_session": "2026-09-29",
+  "span_years": 21.74,
+  "session_labels_shifted_plus_one_day": true,
+  "adjustment": "split_only_price_return_no_dividends",
+  "label": "CERTIFIED_ETF_HISTORY"
+ },
+ "recipe": {
+  "id": "registered_momentum_126_200_top1",
+  "version": 1,
+  "sha256": "e0f092593039cdf41a5d41597d7d70a70973ce0e93b9a7362381b5896827d268"
+ },
+ "capital": 25000.0,
+ "start_session": "2006-01-04",
+ "end_session": "2026-09-29",
+ "strategy": {
+  "cagr_after_all_tax": 0.0039,
+  "cagr_pre_liquidation": 0.0039,
+  "ann_vol": 0.0367,
+  "sharpe_rf0": 0.123,
+  "max_drawdown": 0.1057,
+  "trades": 170,
+  "invested_share_of_days": 0.285,
+  "tax_paid": 666.64,
+  "cost_paid": 210.09,
+  "drawdown_latch_on": "2010-07-08",
+  "calendar_returns": {
+   "2006": 0.0131,
+   "2007": 0.0451,
+   "2008": 0.0044,
+   "2009": 0.026,
+   "2010": -0.019,
+   "2011": 0.0118,
+   "2012": 0.0,
+   "2013": 0.0,
+   "2014": 0.0,
+   "2015": 0.0,
+   "2016": 0.0,
+   "2017": 0.0,
+   "2018": 0.0,
+   "2019": 0.0,
+   "2020": 0.0,
+   "2021": 0.0,
+   "2022": 0.0,
+   "2023": 0.0,
+   "2024": 0.0,
+   "2025": 0.0,
+   "2026": 0.0
+  }
+ },
+ "vti": {
+  "cagr_after_all_tax": 0.0831,
+  "cagr_pre_liquidation": 0.0901,
+  "ann_vol": 0.1979,
+  "sharpe_rf0": 0.535,
+  "max_drawdown": 0.5665
+ },
+ "excess_vs_vti": {
+  "annual_excess_log_growth": -0.0824,
+  "ci90": [
+   -0.1421,
+   -0.0222
+  ],
+  "share_of_draws_above_zero": 0.013,
+  "block_days": 21,
+  "draws": 2000,
+  "note": "pre-tax daily equity, so tax timing is excluded",
+  "daily_information_ratio": -0.02677,
+  "annualized_information_ratio": -0.425
+ },
+ "walk_forward": {
+  "folds": 249,
+  "share_positive": 0.365,
+  "mean_monthly_excess_log": -0.00684,
+  "worst_month": {
+   "month": "2020-04",
+   "strategy": 0.0,
+   "vti": 0.13133,
+   "excess_log": -0.1234
+  },
+  "best_month": {
+   "month": "2008-10",
+   "strategy": -0.00252,
+   "vti": -0.17478,
+   "excess_log": 0.18958
+  },
+  "by_year": {
+   "2006": -0.0934,
+   "2007": 0.0095,
+   "2008": 0.4882,
+   "2009": -0.2054,
+   "2010": -0.1604,
+   "2011": 0.0213,
+   "2012": -0.1307,
+   "2013": -0.2692,
+   "2014": -0.0999,
+   "2015": 0.0162,
+   "2016": -0.1004,
+   "2017": -0.1741,
+   "2018": 0.0727,
+   "2019": -0.2484,
+   "2020": -0.1736,
+   "2021": -0.2155,
+   "2022": 0.2334,
+   "2023": -0.2157,
+   "2024": -0.2002,
+   "2025": -0.1457,
+   "2026": -0.1127
+  }
+ },
+ "deflated_sharpe": {
+  "probability": 0.0001,
+  "benchmark_sr_daily": 0.02408,
+  "trials_counted": 14
+ },
+ "verdict": "NOT_PROVEN",
+ "pass_rule": "certified dataset AND 90% interval of excess > 0 AND deflated Sharpe probability >= 0.95 AND after-tax CAGR above VTI",
+ "promotion": "never automatic: a PASS only allows a shadow (Adventure) run; Official needs a signed amendment"
+}

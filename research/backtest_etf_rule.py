@@ -72,6 +72,8 @@ class Params:
     guards: bool = True
     capital: float = 500.0
     full_invest: bool = False   # economic test of the signal: 100% in the top pick, rotate on change
+    latch_reset_drawdown: float | None = None   # draft v1.6.1: clear the 10% latch once drawdown <= this
+    latch_rebase_sessions: int | None = None    # draft v1.6.1 option B: after N latched sessions, reset the peak to today
 
 
 def load_bars(path):
@@ -241,7 +243,7 @@ def simulate(panel, p: Params, feats=None, start_index=None):
     start = start_index if start_index is not None else first_decision_index(panel, feats, p)
     book = Book(settled=p.capital)
     curve, trades, peak, locked, prev_equity = [], [], p.capital, False, p.capital
-    latched_on, week, week_start = None, None, p.capital
+    latched_on, week, week_start, latched_days = None, None, p.capital, 0
     invested_days = 0
     for i in range(start, len(days)):
         day = days[i]
@@ -277,6 +279,11 @@ def simulate(panel, p: Params, feats=None, start_index=None):
         if iso_week != week:
             week, week_start = iso_week, prev_equity
         weekly_loss = 1 - equity_open / week_start if week_start > 0 else 0
+        if locked and p.latch_reset_drawdown is not None and drawdown <= p.latch_reset_drawdown:
+            locked = False            # draft v1.6.1 reset (research only)
+        if locked and p.latch_rebase_sessions is not None and latched_days >= p.latch_rebase_sessions:
+            locked, peak, drawdown, latched_days = False, equity_open, 0.0, 0   # option B: new high-water mark
+        latched_days = latched_days + 1 if locked else 0
         if p.guards and drawdown >= 0.10 and not locked:
             # Live: peak_breaker_latched is set at a 10% drawdown and nothing clears it.
             locked, latched_on = True, day

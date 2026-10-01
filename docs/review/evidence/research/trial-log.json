@@ -1,0 +1,511 @@
+{
+ "log": "research trial log (exported); every trial ever taken, failures included",
+ "trials": [
+  {
+   "id": 1,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:registered_rule",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 2,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:registered_rule_no_guards",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 3,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:registered_rule_v142_8etfs",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 4,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:signal_full_invest_top3",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 5,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom63_ma100",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 6,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom63_ma150",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 7,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom63_ma200",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 8,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom126_ma100",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 9,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom126_ma150",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 10,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom126_ma200",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 11,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom252_ma100",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 12,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom252_ma150",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 13,
+   "created_at": "2026-09-30T23:45:00+00:00",
+   "kind": "exploratory_prior",
+   "recipe_id": "backtest_2026-09-30:sensitivity_mom252_ma200",
+   "recipe_sha256": null,
+   "code_commit": null,
+   "status": "COUNTED_NOT_PROMOTABLE",
+   "result": {
+    "note": "looked at before the harness existed; counts as a trial"
+   }
+  },
+  {
+   "id": 14,
+   "created_at": "2026-10-01T01:47:32.689355+00:00",
+   "kind": "harness_run",
+   "recipe_id": "registered_momentum_126_200_top1",
+   "recipe_sha256": "e0f092593039cdf41a5d41597d7d70a70973ce0e93b9a7362381b5896827d268",
+   "code_commit": "fa4fe66530e9e9f1d0f3d6a60718bee0a438d377",
+   "status": "NOT_PROVEN",
+   "dataset": {
+    "bars_sha256": "57f6fab28109eafb8f4525f253a07c5cf2453ecc2d27c4d81a638e5cbadbcdcc",
+    "bars_file": "bars.csv",
+    "symbols": {
+     "GLD": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "QQQ": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "SOXX": {
+      "first_session": "2010-10-15",
+      "last_session": "2026-09-29",
+      "sessions": 4011
+     },
+     "SPY": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "TLT": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "VTI": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLB": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLC": {
+      "first_session": "2018-06-19",
+      "last_session": "2026-09-29",
+      "sessions": 2081
+     },
+     "XLE": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLF": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLI": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLK": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLP": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLRE": {
+      "first_session": "2015-10-08",
+      "last_session": "2026-09-29",
+      "sessions": 2759
+     },
+     "XLU": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLV": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLY": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     }
+    },
+    "missing_symbols": [],
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "span_years": 21.74,
+    "session_labels_shifted_plus_one_day": true,
+    "adjustment": "split_only_price_return_no_dividends",
+    "label": "CERTIFIED_ETF_HISTORY"
+   },
+   "result": {
+    "recipe": {
+     "id": "registered_momentum_126_200_top1",
+     "version": 1,
+     "sha256": "e0f092593039cdf41a5d41597d7d70a70973ce0e93b9a7362381b5896827d268"
+    },
+    "verdict": "NOT_PROVEN",
+    "excess_vs_vti": {
+     "annual_excess_log_growth": -0.0824,
+     "ci90": [
+      -0.1421,
+      -0.0222
+     ],
+     "share_of_draws_above_zero": 0.013,
+     "block_days": 21,
+     "draws": 2000,
+     "note": "pre-tax daily equity, so tax timing is excluded",
+     "daily_information_ratio": -0.02677,
+     "annualized_information_ratio": -0.425
+    },
+    "deflated_sharpe": {
+     "probability": 0.0001,
+     "benchmark_sr_daily": 0.02408,
+     "trials_counted": 14
+    },
+    "strategy": {
+     "cagr_after_all_tax": 0.0039,
+     "cagr_pre_liquidation": 0.0039,
+     "ann_vol": 0.0367,
+     "sharpe_rf0": 0.123,
+     "max_drawdown": 0.1057,
+     "trades": 170,
+     "invested_share_of_days": 0.285,
+     "tax_paid": 666.64,
+     "cost_paid": 210.09,
+     "drawdown_latch_on": "2010-07-08",
+     "calendar_returns": {
+      "2006": 0.0131,
+      "2007": 0.0451,
+      "2008": 0.0044,
+      "2009": 0.026,
+      "2010": -0.019,
+      "2011": 0.0118,
+      "2012": 0.0,
+      "2013": 0.0,
+      "2014": 0.0,
+      "2015": 0.0,
+      "2016": 0.0,
+      "2017": 0.0,
+      "2018": 0.0,
+      "2019": 0.0,
+      "2020": 0.0,
+      "2021": 0.0,
+      "2022": 0.0,
+      "2023": 0.0,
+      "2024": 0.0,
+      "2025": 0.0,
+      "2026": 0.0
+     }
+    },
+    "vti": {
+     "cagr_after_all_tax": 0.0831,
+     "cagr_pre_liquidation": 0.0901,
+     "ann_vol": 0.1979,
+     "sharpe_rf0": 0.535,
+     "max_drawdown": 0.5665
+    }
+   }
+  },
+  {
+   "id": 15,
+   "created_at": "2026-10-01T01:47:34.425397+00:00",
+   "kind": "harness_run",
+   "recipe_id": "dual_trend_vol_target_etf17",
+   "recipe_sha256": "54b30010f1b8a8b92ce3d8c09eb45924f5e3d6440e3a3e8c65fdabdedbeefe22",
+   "code_commit": "fa4fe66530e9e9f1d0f3d6a60718bee0a438d377",
+   "status": "NOT_PROVEN",
+   "dataset": {
+    "bars_sha256": "57f6fab28109eafb8f4525f253a07c5cf2453ecc2d27c4d81a638e5cbadbcdcc",
+    "bars_file": "bars.csv",
+    "symbols": {
+     "GLD": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "QQQ": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "SOXX": {
+      "first_session": "2010-10-15",
+      "last_session": "2026-09-29",
+      "sessions": 4011
+     },
+     "SPY": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "TLT": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "VTI": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLB": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLC": {
+      "first_session": "2018-06-19",
+      "last_session": "2026-09-29",
+      "sessions": 2081
+     },
+     "XLE": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLF": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLI": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLK": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLP": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLRE": {
+      "first_session": "2015-10-08",
+      "last_session": "2026-09-29",
+      "sessions": 2759
+     },
+     "XLU": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLV": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     },
+     "XLY": {
+      "first_session": "2005-01-03",
+      "last_session": "2026-09-29",
+      "sessions": 5468
+     }
+    },
+    "missing_symbols": [],
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "span_years": 21.74,
+    "session_labels_shifted_plus_one_day": true,
+    "adjustment": "split_only_price_return_no_dividends",
+    "label": "CERTIFIED_ETF_HISTORY"
+   },
+   "result": {
+    "recipe": {
+     "id": "dual_trend_vol_target_etf17",
+     "version": 1,
+     "sha256": "54b30010f1b8a8b92ce3d8c09eb45924f5e3d6440e3a3e8c65fdabdedbeefe22"
+    },
+    "verdict": "NOT_PROVEN",
+    "excess_vs_vti": {
+     "annual_excess_log_growth": -0.05,
+     "ci90": [
+      -0.0966,
+      -0.0043
+     ],
+     "share_of_draws_above_zero": 0.038,
+     "block_days": 21,
+     "draws": 2000,
+     "note": "pre-tax daily equity, so tax timing is excluded",
+     "daily_information_ratio": -0.02021,
+     "annualized_information_ratio": -0.321
+    },
+    "deflated_sharpe": {
+     "probability": 0.0197,
+     "benchmark_sr_daily": 0.00821,
+     "trials_counted": 15
+    },
+    "strategy": {
+     "cagr_after_all_tax": 0.0365,
+     "cagr_pre_liquidation": 0.0369,
+     "ann_vol": 0.0845,
+     "sharpe_rf0": 0.471,
+     "max_drawdown": 0.1783,
+     "trades": 1680,
+     "invested_share_of_days": 0.984,
+     "tax_paid": 8094.21,
+     "cost_paid": 2225.81,
+     "drawdown_latch_on": null,
+     "calendar_returns": {
+      "2006": 0.066,
+      "2007": 0.0552,
+      "2008": -0.0752,
+      "2009": 0.0427,
+      "2010": 0.0185,
+      "2011": 0.0046,
+      "2012": 0.0264,
+      "2013": 0.1883,
+      "2014": 0.0857,
+      "2015": -0.068,
+      "2016": 0.0508,
+      "2017": 0.1559,
+      "2018": -0.0896,
+      "2019": 0.0843,
+      "2020": 0.0223,
+      "2021": 0.1132,
+      "2022": -0.0905,
+      "2023": 0.0533,
+      "2024": 0.0899,
+      "2025": 0.0697,
+      "2026": 0.0139
+     }
+    },
+    "vti": {
+     "cagr_after_all_tax": 0.0831,
+     "cagr_pre_liquidation": 0.0901,
+     "ann_vol": 0.1979,
+     "sharpe_rf0": 0.535,
+     "max_drawdown": 0.5665
+    }
+   }
+  }
+ ]
+}

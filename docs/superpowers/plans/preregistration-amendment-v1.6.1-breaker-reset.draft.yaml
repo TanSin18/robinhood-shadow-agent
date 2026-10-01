@@ -1,0 +1,52 @@
+# DRAFT — NOT SIGNED, NOT INSTALLED, NOT ACTIVE. Operator signs or edits; nothing changes until then.
+# v1.6.1 amendment layer: a reset for the 10% peak-drawdown buy latch.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.6.1
+  kind: scoped_amendment_layer
+  base_version: 1.6.0
+  requires_active: preregistration-amendment-v1.6.0.yaml
+  effective_from_et: TO_BE_SET_BY_OPERATOR_AT_SIGNING
+  operator_signature:
+    status: DRAFT_UNSIGNED
+  problem: >-
+    agents/inbox.py sets peak_breaker_latched when an arm's value falls 10% below its recorded peak,
+    and nothing ever clears it. The latched arm can still sell but can never buy again. In the
+    2005-2026 backtest of the registered rule the latch fired in July 2010 and the book stayed
+    frozen for 16 years (0.4%/yr after tax). The $25,000 v1.6 book will freeze the same way at
+    its first 10% drawdown.
+peak_drawdown_latch:
+  trigger: unchanged_value_at_or_below_0.90_of_recorded_peak
+  proposed_reset:
+    clause_A: >-
+      The latch clears at the first valuation, with no missing marks, at which the arm's value is
+      at or above 95% of its recorded peak (drawdown 5% or less). The peak itself is not lowered.
+      Each clear is recorded as a breaker event with the value, peak and timestamp.
+  applies_to: each_lane_A_paper_arm_separately
+  unchanged:
+    - daily_loss_breaker_3pct
+    - weekly_loss_breaker_5pct
+    - kill_switch_at_15pct_drawdown_requires_operator
+    - closing_sells_always_allowed
+    - real_execution_blocked
+operator_decision_needed:
+  finding: >-
+    Clause A alone does not fix the frozen book. Once a latched arm has sold its positions it holds
+    only cash, its value stops moving, and it can never climb back to 95% of the peak. Backtest
+    (research/backtest_etf_rule.py, latch_reset_drawdown=0.05): 0.2%/yr after tax, invested on 32%
+    of days, frozen again from April 2012. These are research looks, not alpha trials.
+  option_B_for_review: >-
+    Clause A, plus: after 20 consecutive sessions latched, the arm's recorded peak is re-based to
+    its current value (a new high-water mark, recorded as a breaker event) and the latch clears.
+    Backtest (latch_reset_drawdown=0.05, latch_rebase_sessions=20): 4.35%/yr after tax, max drawdown
+    14.3%, invested 99% of days — the same as having no peak latch, because re-basing after a pause
+    removes the long-run bite of the 10% breaker. Neither option makes the rule beat VTI.
+  choices:
+    - sign_clause_A_only (does not unfreeze an all-cash arm)
+    - sign_clause_A_plus_option_B
+    - edit_the_numbers (recovery level, pause length)
+    - keep_the_latch_and_reset_it_by_hand_when_reviewed
+implementation_when_signed:
+  files: [agents/inbox.py (mark_accounts), agents/v16_policy.py (pin), tests/test_breaker_reset.py]
+  pin: byte_pinned_and_time_gated_like_v1.5_and_v1.6
+  release: after_close_release_with_operator_install
