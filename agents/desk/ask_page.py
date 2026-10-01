@@ -58,6 +58,24 @@ NOTICES = {
     'INVALID_REQUEST': 'The question could not be read. Try again.',
     'RECORDS_UNAVAILABLE': 'The records could not be read just now, so nothing was asked. Try again in a minute.',
 }
+HOW_IT_WORKS = (
+    'This is paper trading only: simulated money, real quotes read through a read-only connection. Real orders cannot be placed.',
+    'ETFs are bought and sold by fixed, registered desk rules with no AI involved (momentum rule: only the strongest qualifying ETF; exits at the '
+    '10:00 run and the 15:50 protective check).',
+    'The AI stages inside the official run (Blossom research, Mayor portfolio, Mojo Jojo critic) are called only when a single stock qualifies or a '
+    'holding needs a qualitative review. When the only signal is an ETF, the AI gate stays closed (recorded as AI_NOT_NEEDED) and AI cost is $0. That is the design, not a fault.',
+    'Prof. X is the safety rule engine (code, not a model): it checks every order for size, cash, limits, loss breakers and stop flags.',
+    'Separately, an advisory team (Blossom, Buttercup, Mayor, Mojo Jojo, Bubbles) writes notes every trading day after the 10:00 run and after the close. '
+    'Their notes are never read by the trading rules. They carry memory forward: calls are scored at the next close and lessons are kept for five sessions.',
+    'Two lanes are kept separate so results never mix: Lane A is stocks and ETFs with $25,000 of paper cash per account (since the v1.6 rules, Oct 1); '
+    'Lane B is options with $500 per account, and new option buys are paused because one contract usually costs more than the lane holds.',
+    'Each lane has three accounts trading the same signals so their gaps can be measured: AI alone (takes every pick at once), AI + your approval '
+    '(fills only when the operator answers YES on a card), and Rules only (no AI at all, the control).',
+    'The trading rules are pre-registered and signed. They do not change day to day; a change needs a new signed amendment, so results stay honest.',
+    'Position size comes from the risk engine: at most 25% of an account in one position, sized down for volatility; at most 5 positions; new buys '
+    'stop after a 3% daily loss or a 10% drawdown from the peak.',
+)
+STOCK_TICKERS = {'AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA'}
 TOKEN_BUDGET_CHARS = 52000        # about 13,000 tokens of packet; the model's registered input cap is 18,000
 
 
@@ -209,6 +227,7 @@ def build_packet(state, question, context='', run=None, step=None, now=None):
                        'safety': 'A safety stop or pause is ACTIVE' if state.get('paused') else 'paper only; real orders are blocked'},
            'schedule': {'id': 'schedule', 'every_trading_day': [{'time': label, 'what': what} for _, label, what in SCHEDULE], 'weekly': WEEKLY},
            'limits': {'id': 'limits', 'items': [{'value': v, 'meaning': m} for v, m in LIMITS]},
+           'how_it_works': {'id': 'how_it_works', 'facts': list(HOW_IT_WORKS)},
            'activity_today': {'id': 'activity_today', 'events': _activity(state, now)}}
     runs = state.get('decision_room') or []
     review = next((r for r in runs if run and r.get('review_id') == run), None) or (runs[0] if runs else None)
@@ -223,7 +242,7 @@ def build_packet(state, question, context='', run=None, step=None, now=None):
         f = feats.get(t)
         if f:
             price, ma, mom, day = _num(f.get('price')), _num(f.get('ma200')), _num(f.get('momentum_126d')), _num(f.get('one_day_return'))
-            pkt[f'feature:{t}'] = {'id': f'feature:{t}', 'price': price, 'ma200': ma,
+            pkt[f'feature:{t}'] = {'id': f'feature:{t}', 'asset_class': 'single stock' if t in STOCK_TICKERS else 'ETF', 'price': price, 'ma200': ma,
                                    'pct_vs_ma200': round((price / ma - 1) * 100, 2) if price and ma else None,
                                    'momentum_126d_pct': round(mom * 100, 2) if mom is not None else None,
                                    'one_day_pct': round(day * 100, 2) if day is not None else None}
