@@ -83,3 +83,9 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - Retry INSTALLED 14:34:21 UTC: 828 passed, 0 failed; backup `release-rollback.633ig_5n`; after_source_fingerprint `c1644558970ba0d9bd3ce0cdd45c1865bf00a110dcb250c22474d34ddf89acb8`; `/firm` returns 200.
 - Dashboard overlay v9 deployed (backup `agent-desk.3K4Fam.v8-20261001`): routes include `/inbox` and `/firm`.
 - AI trader stays DISABLED until operator runs `python -m agents.ai_trader.cli init --official-database <primary>/data/agent.db` (→ WATCH_ONLY). Paper start no earlier than Mon 2026-10-05 via `cli start-paper`.
+
+## 2026-10-01 10:45 ET — AI trader init + first watch-only morning
+- Operator ran `cli init` 14:37 UTC → WATCH_ONLY; spec a5e85e29…acc83, prompts c90e6f03…1077 (match).
+- First morning 14:38 UTC: Scout (nano) SETTLED $0.0021, named QQQ/MSFT/NVDA (trimmed to the per-day entry cap). PM stopped `PM_ModelError`; reservation $0.01725 kept as UNCERTAIN. No tickets, no fills. morning_done set → no retry today.
+- Diagnosis: the PM got the full 23-name packet (same as the Scout's, ~7–8k tokens) against its 8,000-token input envelope; most likely INPUT_TOKEN_CAP, which the wrapper masked as the class name.
+- Fix = release F (`claude/ai-trader` 70a32cd; manifest `docs/review/release-2026-10-02f-manifest.json`, base 8ac562f, 4 files): PM sees only its candidate + VTI + risk:book; Critic only its tickets' names; citations still checked against the full packet; every seat failure journals `seat_error {seat, error, reason}`. Spec/prompt hashes unchanged. Cloud suite 834 passed. Friday's watch-only morning is the verification.
