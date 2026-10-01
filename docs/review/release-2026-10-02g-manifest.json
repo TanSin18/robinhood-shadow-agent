@@ -1,0 +1,54 @@
+{
+  "source_commit": "a490c875ab94e959a3a70bbc984e4b2323305e4c",
+  "installed_base_commit": "70a32cd",
+  "before_source_fingerprint": "996dab8f8354bd2195b26a734c3a7679c90bc46f502d982a55739c9723ff4d18",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/analyst/__init__.py": {
+      "before_sha256": null,
+      "after_sha256": "5ee3cb57bf3920fe8bedd87e1bcaa664359fde3ae29a639f7f04c37764fc8513"
+    },
+    "agents/analyst/auction.py": {
+      "before_sha256": null,
+      "after_sha256": "182e3ef69e8449261a364fb32d3e329dc658fb53c9c2bb71f3fc3c0d66581a59"
+    },
+    "agents/analyst/cli.py": {
+      "before_sha256": null,
+      "after_sha256": "6b917f698041c9145085ad79ed0664c96e3ca15fa22bd42ab21e9e3a168b5095"
+    },
+    "agents/analyst/commentary.py": {
+      "before_sha256": null,
+      "after_sha256": "1acc8add915100b602c74e3ffbc4b776b8a49223caf37162ce38af4e593222bc"
+    },
+    "agents/analyst/hook.py": {
+      "before_sha256": null,
+      "after_sha256": "15f599236b97eb6db3ef95dd12c4e155596314e17f2acdb524f64800c6358536"
+    },
+    "agents/analyst/kelly.py": {
+      "before_sha256": null,
+      "after_sha256": "97a44ebc2efc31303c7b97324532ad9f66fbebc217aeb5f535eeed3aa061ae7d"
+    },
+    "agents/analyst/news.py": {
+      "before_sha256": null,
+      "after_sha256": "112b31af2b49b66abbacee72925b775bf8e78e0b51839af06c84e3523b1388bf"
+    },
+    "agents/analyst/regime.py": {
+      "before_sha256": null,
+      "after_sha256": "908d5894513f41e6fb9df3b12d62344185eb3d4c220ec990b4d9faac7da547e4"
+    },
+    "agents/analyst/store.py": {
+      "before_sha256": null,
+      "after_sha256": "3bdc0f350ae32be9ae7a9c780ec2428df9e4699edff0cc6eea3a322440c3cf6d"
+    },
+    "agents/daily_cycle.py": {
+      "before_sha256": "08d73df9b5ec8befc113d2eb270d348f675b5e96acf8bfee67a2a3e4a9429f0d",
+      "after_sha256": "0adee4583b3d797209dd88a78b8f8642c30907698a120d49a82dacfdf43220bf"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": null,
+      "after_sha256": "3613cd1c716e6d79b09edcd85ac3ee60216c08140e62f77ba42d41a785679a73"
+    }
+  },
+  "root_files": {}
+}
