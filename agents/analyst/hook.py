@@ -24,7 +24,9 @@ from .store import AnalystStore, default_path
 
 ET = ZoneInfo('America/New_York')
 MORNING_FROM, MORNING_UNTIL = time(10, 5), time(12, 0)
-CLOSE_FROM, CLOSE_UNTIL = time(16, 15), time(18, 0)
+CLOSE_FROM, CLOSE_UNTIL = time(16, 15), time(21, 0)
+BARS_WAIT_UNTIL = time(19, 30)      # wait this long for today's daily bar before running on yesterday's
+BARS_RECHECK_MINUTES = 10
 MAX_ATTEMPTS = 2
 UNIVERSE = ('AAPL', 'AMZN', 'GLD', 'GOOGL', 'META', 'MSFT', 'NVDA', 'QQQ', 'SOXX', 'SPY', 'TLT', 'VTI', 'XLB', 'XLC', 'XLE',
             'XLF', 'XLI', 'XLK', 'XLP', 'XLRE', 'XLU', 'XLV', 'XLY')
@@ -232,11 +234,32 @@ def close(store, official_db, config, now, client, *, reader_factory=None, opene
     tickers = list(dict.fromkeys(sorted({h['ticker'] for h in view['holdings']}) + [t for t, _ in movers] + ['SPY', 'QQQ']))
     items, problems = news.collect(tickers, now, contact=contact, opener=opener)
     store.add('news', day, {'items': items, 'problems': problems}, now, kind='close')
+    bars_through = max((b[-1]['day'] for b in bars.values() if b), default=None)
+    store.set_meta('bars_through', bars_through or '')
     pkt = commentary.packet('close', decision=view['decision'], regime=fit, kelly=sizes, guard=exits, chop=chop,
                             auction={t: a for t, a in reads.items() if t in tickers or t in ('VTI', 'SPY', 'QQQ')},
                             holdings=view['holdings'], headlines=items)
-    return {'regime': fit.get('current'), 'regime_status': fit.get('status'), 'bars': {t: len(b) for t, b in bars.items() if len(b) < 200},
+    pkt['as_of'] = {'id': 'as_of', 'note_written_on': day, 'daily_bars_through': bars_through,
+                    'stale': bars_through != day}        # the model must say so when the bars are a session behind
+    return {'regime': fit.get('current'), 'regime_status': fit.get('status'), 'bars_through': bars_through, 'bars': {t: len(b) for t, b in bars.items() if len(b) < 200},
             'news_items': len(items), 'note': _note(store, 'close', pkt, client, day, now, prices)}
+
+
+def _todays_bar_ready(store, reader_factory, path, config, now):
+    """One VTI-only read at most every BARS_RECHECK_MINUTES: has today's completed daily bar been published?"""
+    last = store.meta('bars_check_at')
+    try:
+        if last and (now - datetime.fromisoformat(last)) < timedelta(minutes=BARS_RECHECK_MINUTES):
+            return False
+    except ValueError:
+        pass
+    store.set_meta('bars_check_at', now.isoformat())
+    try:
+        bars = read_bars(reader_factory, path, config, now, symbols=('VTI',)).get('VTI') or []
+    except Exception as error:
+        store.journal('bars_check_failed', {'error_type': type(error).__name__}, now)
+        return False
+    return bool(bars) and bars[-1]['day'] == now.astimezone(ET).date().isoformat()
 
 
 def tick(inbox, config, now, *, reader_factory=None, client_factory=None, path=None, opener=None):
@@ -265,6 +288,10 @@ def tick(inbox, config, now, *, reader_factory=None, client_factory=None, path=N
         return None
     out = {}
     contact = _contact(path)
+    if 'close' in jobs and t < BARS_WAIT_UNTIL and not _todays_bar_ready(store, reader_factory, path, config, now):
+        jobs.remove('close')                      # the broker has not published today's daily bar yet; look again later
+        if not jobs:
+            return None
     for job in jobs:
         key = f'{job}_attempts:{day}'
         store.set_meta(key, str(int(store.meta(key, '0')) + 1))   # counted first: a failing feed can't cause endless retries

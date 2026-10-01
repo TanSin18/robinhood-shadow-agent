@@ -187,7 +187,7 @@ class _Reader:
         assert tool == 'get_equity_historicals' and args['interval'] == 'day'
         self.calls.append(args['symbols'][0])
         closes = _series(380, seed=len(self.calls))
-        start = datetime(2025, 3, 20, tzinfo=timezone.utc)
+        start = datetime(2026, 10, 5, tzinfo=timezone.utc) - timedelta(days=379)     # last bar is the test's "today"
         bars = [{'begins_at': (start + timedelta(days=i)).isoformat().replace('+00:00', 'Z'), 'open_price': c, 'high_price': c * 1.01,
                  'low_price': c * 0.99, 'close_price': c, 'volume': 1000} for i, (_, c) in enumerate(closes)]
         return {'data': {'results': [{'bars': bars}]}}
@@ -228,7 +228,7 @@ def test_morning_and_close_write_notes_and_never_touch_the_official_db(tmp_path)
     out = hook.tick(_Inbox(official), _Config(), NOW_PM, path=path, client_factory=lambda: client, opener=_no_net,
                     reader_factory=lambda: reader)
     assert out['close']['note']['status'] == 'WRITTEN' and out['close']['regime_status'] == 'OK'
-    assert len(reader.calls) == len(hook.UNIVERSE)
+    assert len(reader.calls) == len(hook.UNIVERSE) + 1          # one VTI-only check that today's bar is published
     assert store.latest("regimes")["status"] == "OK" and "_labels" not in store.latest("regimes")
     g = store.latest("guard")
     assert g["exits"][0]["ticker"] == "SOXX" and g["exits"][0]["status"] == "OK" and "SOXX" in g["chop"]
@@ -245,8 +245,9 @@ def test_a_failing_job_is_contained_and_retries_are_capped(tmp_path):
 
     def broken():
         raise RuntimeError('reader down')
+    late = datetime(2026, 10, 5, 23, 40, tzinfo=timezone.utc)       # after the wait-for-today's-bar period
     for i in range(4):
-        out = hook.tick(_Inbox(official), _Config(), NOW_PM + timedelta(minutes=i), path=path, client_factory=_Client,
+        out = hook.tick(_Inbox(official), _Config(), late + timedelta(minutes=i), path=path, client_factory=_Client,
                         opener=_no_net, reader_factory=broken)
         if i < 2:
             assert out['close']['status'] == 'ANALYST_JOB_FAILED'
@@ -367,3 +368,33 @@ def test_a_failing_seat_does_not_stop_the_team(tmp_path):
     out = hook.tick(_Inbox(official), _Config(), NOW_AM, path=path, client_factory=lambda: flaky, opener=_no_net)
     team = out['morning']['note']['team']
     assert team['maple']['status'] == 'ModelError' and team['bubbles']['status'] == 'WRITTEN'
+
+
+def test_close_waits_for_todays_bar_then_runs(tmp_path):
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    store = AnalystStore(path, official)
+
+    class Yesterday(_Reader):                      # the broker has only published bars through the previous session
+        def call(self, tool, args):
+            self.calls.append(args['symbols'][0])
+            bars = [{'begins_at': f'2026-10-0{d}T00:00:00Z', 'open_price': 1, 'high_price': 1, 'low_price': 1, 'close_price': 1, 'volume': 1}
+                    for d in (1, 2)]
+            return {'data': {'results': [{'bars': bars}]}}
+    reader = Yesterday()
+    out = hook.tick(_Inbox(official), _Config(), NOW_PM, path=path, client_factory=_Client, opener=_no_net, reader_factory=lambda: reader)
+    assert out is None and reader.calls == ['VTI'] and store.meta('close_done') is None
+    assert store.meta('close_attempts:2026-10-05') is None                     # waiting costs no attempt
+    again = hook.tick(_Inbox(official), _Config(), NOW_PM + timedelta(minutes=2), path=path, client_factory=_Client, opener=_no_net,
+                      reader_factory=lambda: reader)
+    assert again is None and reader.calls == ['VTI']                           # no second read inside 10 minutes
+    late = datetime(2026, 10, 5, 23, 35, tzinfo=timezone.utc)                  # 19:35 ET: stop waiting, run and say the bars are stale
+    client = _Client()
+
+    class Stale(_Reader):
+        def call(self, tool, args):
+            read = super().call(tool, args)
+            read['data']['results'][0]['bars'].pop()        # today's bar never arrived
+            return read
+    out = hook.tick(_Inbox(official), _Config(), late, path=path, client_factory=lambda: client, opener=_no_net, reader_factory=lambda: Stale())
+    assert out['close']['bars_through'] == '2026-10-04' and '"stale": true' in client.prompts[-1]

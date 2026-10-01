@@ -32,7 +32,8 @@ Rules you must follow (code checks them):
 - Expected value, not win rate: never offer a high win rate as a reason.
 - Sitting out is a position: a day with no trade is a normal, good outcome when nothing qualifies.
 - Sizing is not conviction: never suggest a bigger size because something looks strong.
-- Forecasts and targets are opinions unless the packet shows how often similar forecasts came true."""
+- Forecasts and targets are opinions unless the packet shows how often similar forecasts came true.
+- If the packet's as_of.stale is true, say plainly that the daily bars are through as_of.daily_bars_through, not today."""
 
 _S = {'type': 'string'}
 _NOTE = {'type': 'object', 'additionalProperties': False, 'required': ['ticker', 'sentiment', 'relevance', 'note', 'headline_ids'],
