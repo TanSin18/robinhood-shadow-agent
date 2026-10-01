@@ -1,8 +1,8 @@
-from . import today, decision_room, portfolio, money, scoreboard, controls, health, checks, guide
+from . import today, decision_room, portfolio, money, scoreboard, controls, health, checks, guide, inbox_page
 from .components import ROUTES, shell
 
 SCREENS = {'/room': decision_room, '/checks': checks, '/portfolio': portfolio, '/money': money,
-           '/scoreboard': scoreboard, '/controls': controls, '/health': health, '/guide': guide}
+           '/scoreboard': scoreboard, '/controls': controls, '/health': health, '/guide': guide, '/inbox': inbox_page}
 
 
 def render(path, state, config, csrf, filters=None):

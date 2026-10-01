@@ -143,7 +143,12 @@ def snapshot(path,*,now=None):
             research['rebase']={k:v.get(k) for k in ('timestamp','capital','lane','version')}
     research.update(_research_files(path))
     research['promotion']=_promotion(path)
-    return {'preview':True,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
+    try:
+        from agents.cards import default_path, read_view
+        card_inbox=read_view(default_path(path))
+    except Exception as error:
+        card_inbox={'cards':[],'journal':[],'acks':[],'error':type(error).__name__}
+    return {'preview':True,'card_inbox':card_inbox,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
         'decision_room':rooms,'paused':(Path(path).parent/'STOP_TRADING').exists(),
         'accounts':[], 'reports':[], 'tripwire':[],
         'handoffs':[public(json.loads(r['payload_json'])) for r in handoff_rows]}
