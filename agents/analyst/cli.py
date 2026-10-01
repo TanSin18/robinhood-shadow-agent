@@ -4,8 +4,11 @@
     python -m agents.analyst.cli status --official-database <agent.db>
     python -m agents.analyst.cli pause  --official-database <agent.db>
     python -m agents.analyst.cli resume --official-database <agent.db>
+    python -m agents.analyst.cli rerun  --official-database <agent.db> --job close     (or --job morning)
     python -m agents.analyst.cli ask    --official-database <agent.db>   < {"question": "...", "context": "...", "packet": {...}}
 
+`rerun` lets today's morning or after-close job run once more at the service's next tick inside that job's
+time window (for example after a release that added seats was installed later than the job ran).
 `ask` is what the dashboard runs when the operator asks Bubbles a question: it reads one JSON object from
 standard input, answers from that packet only (no tools, budgeted, numbers checked) and stores the answer.
 
@@ -45,9 +48,10 @@ def _ask(store, raw, now, client):
 
 def main(argv=None, *, stdin=None, client=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('command', choices=['init', 'status', 'pause', 'resume', 'ask'])
+    p.add_argument('command', choices=['init', 'status', 'pause', 'resume', 'rerun', 'ask'])
     p.add_argument('--official-database', required=True)
     p.add_argument('--path')
+    p.add_argument('--job', choices=['morning', 'close'])
     a = p.parse_args(argv)
     official = Path(a.official_database)
     path = Path(a.path) if a.path else default_path(official)
@@ -63,6 +67,15 @@ def main(argv=None, *, stdin=None, client=None):
         store.set_meta('initialized_at', now.isoformat())
         store.set_meta('prompt_sha256', commentary.prompt_sha256())
         store.journal('initialized', {'prompt_sha256': commentary.prompt_sha256()}, now)
+    if a.command == 'rerun':
+        from zoneinfo import ZoneInfo
+        if not a.job:
+            raise SystemExit('rerun needs --job morning or --job close')
+        day = now.astimezone(ZoneInfo('America/New_York')).date().isoformat()
+        if store.meta(f'{a.job}_done') == day:
+            store.set_meta(f'{a.job}_done', f'rerun-requested:{day}')
+        store.set_meta(f'{a.job}_attempts:{day}', '0')
+        store.journal('rerun_requested', {'job': a.job, 'day': day}, now)
     if a.command in ('pause', 'resume'):
         store.set_meta('paused', '1' if a.command == 'pause' else '0')
         store.journal(a.command, {}, now)

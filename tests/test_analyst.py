@@ -450,7 +450,12 @@ def test_ask_accepts_numbers_from_rule_text_and_refers_to_earlier_questions(tmp_
                  'sources': ['rule_book_matches'], 'follow_ups': [], 'cited_numbers': []}, 900, 120)
     pkt = {'rule_book_matches': [{'name': 'Protective stop', 'condition': '8% below cost, or at/below the 200-day average', 'when': '15:50 ET'}]}
     out = ask.answer(store, 'When do we sell?', pkt, NOW_AM, client, day='2026-10-05')
-    assert out['checks']['flags'] == ['UNCITED_NUMBER:77.5']          # numbers written in the rule text are known; the invented one is not
+    assert out['checks']['flags'] == ['NUMBER_NOT_IN_RECORDS:77.5']   # numbers written in the rule text are known; the invented one is not
+    nested = {'run': {'id': 'run', 'fills': [{'ticker': 'SOXX', 'price': '566.640000'}]}}
+    good = {'answer': 'SOXX filled at 566.64.', 'cited_numbers': [{'source_id': 'run', 'field': 'fills.price', 'value': 566.64}]}
+    assert ask.check(good, nested) == {'ok': True, 'flags': []}
+    bad = {'answer': 'SOXX filled at 570.10.', 'cited_numbers': [{'source_id': 'run', 'field': 'fills.price', 'value': 570.1}]}
+    assert ask.check(bad, nested)['flags'] == ['CITATION_NOT_IN_RECORDS:run.fills.price', 'NUMBER_NOT_IN_RECORDS:570.10']
     ask.answer(store, 'And why?', pkt, NOW_AM, client, day='2026-10-05')
     assert '"EARLIER_QUESTIONS"' in prompts[1] and 'When do we sell?' in prompts[1] and '"EARLIER_QUESTIONS"' not in prompts[0]
 
@@ -489,3 +494,19 @@ def test_cli_ask_reads_one_json_request_and_respects_pause(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)['status'] == 'ANALYST_PAUSED'
     with store.connect() as db:
         assert db.execute('SELECT COUNT(*) FROM qa').fetchone()[0] == 1
+
+
+def test_cli_rerun_lets_todays_job_run_once_more(tmp_path, capsys):
+    from agents.analyst import cli
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    store = AnalystStore(path, official)
+    day = datetime.now(timezone.utc).astimezone(hook.ET).date().isoformat()
+    store.set_meta('close_done', day)
+    store.set_meta(f'close_attempts:{day}', '2')
+    store.set_meta('morning_done', day)
+    assert cli.main(['rerun', '--official-database', str(official), '--path', str(path), '--job', 'close']) == 0
+    capsys.readouterr()
+    assert store.meta('close_done') != day and store.meta(f'close_attempts:{day}') == '0' and store.meta('morning_done') == day
+    with pytest.raises(SystemExit):
+        cli.main(['rerun', '--official-database', str(official), '--path', str(path)])

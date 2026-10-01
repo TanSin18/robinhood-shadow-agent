@@ -79,22 +79,32 @@ def _deep_numbers(value, out):
     return out
 
 
+def _near(v, known):
+    return any(abs(v - k) <= max(0.06, abs(k) * 0.005) or abs(v - k * 100) <= max(0.06, abs(k * 100) * 0.005) for k in known)
+
+
 def check(out, packet):
-    """The commentary checks, except a number counts as known when it appears anywhere in the packet
-    (nested records, rule text, the schedule), not only in a top-level field."""
-    base = commentary.check_any(out, packet)
+    """Every number in the answer must be in the records. A number counts as known when it appears anywhere
+    in the packet (nested records, rule text, the schedule); the hype, order-language and outcome-talk checks
+    are the commentary desk's."""
     known = _deep_numbers(packet, [])
     flags = []
-    for flag in base['flags']:
+    for c in out.get('cited_numbers') or []:
+        try:
+            if not _near(float(c.get('value')), known):
+                flags.append(f'CITATION_NOT_IN_RECORDS:{c.get("source_id")}.{c.get("field")}')
+        except (TypeError, ValueError):
+            flags.append(f'CITATION_NOT_IN_RECORDS:{c.get("source_id")}.{c.get("field")}')
+    for flag in commentary.check_any({**out, 'cited_numbers': []}, packet)['flags']:
         if flag.startswith('UNCITED_NUMBER:'):
             try:
-                v = float(flag.split(':', 1)[1].rstrip('%').replace(',', ''))
+                if _near(float(flag.split(':', 1)[1].rstrip('%').replace(',', '')), known):
+                    continue
             except ValueError:
-                v = None
-            if v is not None and any(abs(v - k) <= max(0.06, abs(k) * 0.01) for k in known):
-                continue
+                pass
+            flag = 'NUMBER_NOT_IN_RECORDS:' + flag.split(':', 1)[1]
         flags.append(flag)
-    return {'ok': not flags, 'flags': flags}
+    return {'ok': not flags, 'flags': flags[:30]}
 
 
 def recent(store, day, limit=3):
