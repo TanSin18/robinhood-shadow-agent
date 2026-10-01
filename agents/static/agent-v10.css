@@ -277,3 +277,13 @@ tr.an-sell td{background:rgba(255,122,92,.08)}
 .an-seat header img{border-radius:50%;background:var(--bg);flex:none}
 .an-seat header div{display:flex;flex-direction:column;flex:1}.an-seat header span{font-size:12px;color:var(--text-3)}
 .an-seat p{font-size:14px;line-height:1.55;margin:6px 0}
+
+/* ---------------- Botfolio brand: rounded display face for names and headings ---------------- */
+@font-face{font-family:Fredoka;src:url('/assets/fonts/Fredoka-600.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:Fredoka;src:url('/assets/fonts/Fredoka-500.woff2') format('woff2');font-weight:500;font-display:swap}
+:root{--bf-display:Fredoka,'Geist',ui-rounded,system-ui,sans-serif}
+.bf-brand{display:inline-flex;align-items:center;gap:10px;font-family:var(--bf-display);font-weight:600;font-size:22px;letter-spacing:.01em;color:var(--text);text-decoration:none}
+.bf-brand img{flex:none;filter:drop-shadow(0 2px 6px rgba(155,134,240,.35))}
+.agent-desk h1,.agent-desk h2,.agent-desk h3,.gd h1,.gd h2,.rb h1,.ar h1,.v10-big b,.an-state,.v10-tabs a,.v10-acct-chip,.desk-header nav a{font-family:var(--bf-display);font-weight:600;letter-spacing:0}
+.agent-desk h1{letter-spacing:-.005em}
+.an-seat header b,.ar-seat b,.desk-identity strong{font-family:var(--bf-display);font-weight:600}

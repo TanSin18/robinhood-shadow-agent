@@ -42,3 +42,5 @@ body.legacy-skin{--canvas:#0f1217;--paper:#161b23;--ink:#e8ecf1;--forest:#c6b7f3
 .legacy-skin .phone-nav a{color:var(--muted)}
 .legacy-skin .capital-note{margin:12px 0;padding:10px 14px;border:1px solid #edca91;border-radius:10px;font-size:14px}
 .legacy-skin .capital-note.is-live{border-color:#a5d9d0}
+@font-face{font-family:Fredoka;src:url('/assets/fonts/Fredoka-600.woff2') format('woff2');font-weight:600;font-display:swap}
+.bf-brand{display:inline-flex;align-items:center;gap:10px;font-family:Fredoka,system-ui,sans-serif;font-weight:600;font-size:21px;text-decoration:none}

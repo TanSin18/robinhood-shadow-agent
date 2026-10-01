@@ -46,12 +46,12 @@ def shell(title, body, path='/', state=None):
     refresh = ''
     body_class = 'agent-desk team-preview' if state.get('preview') else 'agent-desk'
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(title)} · Agent Desk</title><link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/agent-desk.css">
+<title>{esc(title)} · Botfolio</title><link rel="icon" href="/assets/botfolio-logo.svg"><link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/agent-desk.css">
 {'<link rel="stylesheet" href="/assets/agent-polish.css"><link rel="stylesheet" href="/assets/agent-scene.css"><link rel="stylesheet" href="/assets/agent-compact.css">' if state.get('preview') else ''}
 {'<link rel="stylesheet" href="/assets/guide.css"><script src="/assets/guide.js" defer></script>' if path == '/guide' else ''}
 <link rel="stylesheet" href="/assets/agent-v10.css"><script src="/assets/agent-v10.js" defer></script>
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
-<header class="desk-header"><a class="desk-brand" href="/">↗ Agent Desk</a><nav aria-label="Sections">{links}</nav>
+<header class="desk-header"><a class="desk-brand bf-brand" href="/"><img src="/assets/botfolio-logo.svg" width="34" height="34" alt="">Botfolio</a><nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
 <main id="main" tabindex="-1">{body}</main><footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
 

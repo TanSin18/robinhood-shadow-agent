@@ -31,7 +31,7 @@ def make_server(inbox, port=8765, **options):
             if not self.desk_response and content_type.startswith('text/html'):
                 content = content.replace('href="/#', 'href="/legacy#').replace('action="/#', 'action="/legacy#')
                 content = content.replace('action="/"', 'action="/legacy"').replace('href="/"', 'href="/legacy"')
-                content = content.replace('<main ', '<a class="button" href="/">Agent Desk home</a><main ', 1)
+                content = content.replace('<main ', '<a class="button" href="/">Botfolio home</a><main ', 1)
                 # Capital wording follows the ledger (v1.6 Lane A $25,000) instead of the old fixed "$500" text.
                 try:
                     from .components import capital_note
@@ -47,7 +47,7 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('<body ', '<body class="legacy-skin" ', 1)
                 import re
                 content = re.sub(r'<a class="brand" href="/legacy"[^>]*>.*?</a>\s*<p class="rail-caption">[^<]*</p>',
-                                 '<a class="brand desk-brand" href="/">↗ Agent Desk</a>', content, count=1, flags=re.S)
+                                 '<a class="brand desk-brand bf-brand" href="/"><img src="/assets/botfolio-logo.svg" width="30" height="30" alt="">Botfolio</a>', content, count=1, flags=re.S)
                 content = re.sub(r'<nav class="desktop-nav"[^>]*>.*?</nav>',
                                  '<nav class="desktop-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
                 content = re.sub(r'<nav class="phone-nav"[^>]*>.*?</nav>(?=</body>)',
@@ -127,7 +127,7 @@ def make_server(inbox, port=8765, **options):
                     body = body.replace('http://127.0.0.1:8765/#controls', '/legacy#controls')
                     body = body.replace('Open live controls on 8765', 'Open live controls')
                 except Exception:
-                    return self.send(503, 'Agent Desk records unavailable. <a href="/legacy">Open operational dashboard</a>. No healthy status is assumed.')
+                    return self.send(503, 'Botfolio records unavailable. <a href="/legacy">Open operational dashboard</a>. No healthy status is assumed.')
                 return self.send(200, body)
             if path.startswith('/assets/'):
                 asset = (ASSETS / path.removeprefix('/assets/')).resolve()

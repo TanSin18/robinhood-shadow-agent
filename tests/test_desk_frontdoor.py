@@ -21,7 +21,7 @@ def test_frontdoor_preserves_legacy_actions_and_readonly_home(tmp_path, monkeypa
         assert 'name="csrf"' in legacy
         assert 'href="/legacy#decisions"' in legacy
         assert 'action="/legacy#decisions"' in legacy
-        assert 'href="/">Agent Desk home' in legacy
+        assert 'href="/">Botfolio home' in legacy
         assert 'legacy-skin' in legacy and 'Checks &amp; charts' in legacy
         assert 'Confirm pause' in read(url+'/control?action=pause')
         for path in ('/room','/portfolio','/money','/scoreboard','/controls','/health'):

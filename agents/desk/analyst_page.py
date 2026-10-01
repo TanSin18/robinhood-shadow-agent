@@ -25,8 +25,8 @@ ACCOUNTS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', '
 CHOP_CLS = {'TRENDING': 'pos', 'CHOPPY': 'mixed', 'LOW_VOL': 'neutral', 'OVEREXTENDED': 'neg'}
 
 
-SEATS = (('pip', 'Pip', 'Research', 'pip-earnings-analyst.svg'), ('biscuit', 'Biscuit', 'Filings & news', 'biscuit-filings-news.svg'),
-         ('maple', 'Maple', 'Portfolio', 'maple-portfolio.svg'), ('pickle', 'Pickle', 'Critic', 'pickle-critic.svg'))
+SEATS = (('pip', 'Blossom', 'Research', 'blossom-research.svg'), ('biscuit', 'Buttercup', 'Filings & news', 'buttercup-news.svg'),
+         ('maple', 'Mayor', 'Portfolio', 'mayor-portfolio.svg'), ('pickle', 'Mojo Jojo', 'Critic', 'mojojojo-critic.svg'))
 VERDICT_CLS = {'sound': 'pos', 'weak': 'mixed', 'flawed': 'neg'}
 
 
@@ -57,6 +57,13 @@ def _team(team):
         cards += (f'<section class="v10-panel an-seat"><header><img src="/assets/avatars/{avatar}" width="44" height="44" alt="">'
                   f'<div><b>{esc(name)}</b><span>{esc(role)} · advisory</span></div>{when}</header>{body}'
                   + (f'<p class="an-flag">Code flagged: {esc(", ".join(flags))}</p>' if flags else '') + '</section>')
+    cards += ('<section class="v10-panel an-seat"><header><img src="/assets/avatars/profx-safety.svg" width="44" height="44" alt="">'
+              '<div><b>Prof. X</b><span>Safety rules · code · decides</span></div></header>'
+              '<p>Runs inside every order: 26 risk checks, the loss breakers and the account tripwire. Also checks every note on this page '
+              'for uncited numbers, win-rate talk, hype and order-like language.</p></section>'
+              '<section class="v10-panel an-seat"><header><img src="/assets/avatars/bubbles-explainer.svg" width="44" height="44" alt="">'
+              '<div><b>Bubbles</b><span>Explainer · advisory</span></div></header>'
+              '<p>Writes last, from everyone above, the morning and after-close notes just below.</p></section>')
     return f'<div class="an-team">{cards}</div>'
 
 
@@ -263,7 +270,7 @@ def render(state):
     news_all = ((a.get('news_morning') or {}).get('items') or []) + ((a.get('news_close') or {}).get('items') or [])
     return ''.join([head, f'<p class="capital-note is-live"><strong>Status:</strong> {status}. Model gpt-5.4-mini (dated), strict JSON, no tools.</p>',
                     '<h2 class="an-h2">The team today</h2><p class="v10-note">Every named agent writes each trading day in advisory mode. '
-                    'Nugget (safety rules) is code and runs inside every trade check. Bubbles writes the summary notes below, last, from the others.</p>',
+                    'Prof. X (safety rules) is code and runs inside every trade check. Bubbles writes the summary notes below, last, from the others.</p>',
                     _team(a.get('team')),
                     '<div class="v10-grid an-notes">', _note(a.get('morning'), (a.get('news_morning') or {}).get('items'), 'Morning note'),
                     _note(a.get('close'), (a.get('news_close') or {}).get('items') or news_all, 'After-close note'), '</div>',

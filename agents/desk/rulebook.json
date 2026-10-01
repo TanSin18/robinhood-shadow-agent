@@ -2306,9 +2306,9 @@
    "means": "Momentum rotation (ETFs): history >= 253 closes, price above 200-day avg, 126-day momentum > 0, rank #1. Mean reversion (all names): history >= 202 closes, price above 200-day avg, fell >= 3% last session. Recomputed from recorded features; mismatches flagged."
   },
   {
-   "phrase": "Code steps (Scanners, AI gate, Nugget, Outcome) use no AI.",
+   "phrase": "Code steps (Scanners, AI gate, Prof. X, Outcome) use no AI.",
    "where": "agents/desk/checks.py:215",
-   "means": "Scanners = read-only collection + strategy_signals; AI gate = AIInvocationGate; Nugget = risk stage (team.py:8 'Safety rules · Rules, not AI'); Outcome = terminal record."
+   "means": "Scanners = read-only collection + strategy_signals; AI gate = AIInvocationGate; Prof. X = risk stage (team.py:8 'Safety rules · Rules, not AI'); Outcome = terminal record."
   }
  ]
 }

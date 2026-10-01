@@ -18,8 +18,8 @@ ROLES = {'evidence': 'Scanners · market data', 'research': 'Research', 'portfol
          'critic': 'Critic', 'risk': 'Safety rules', 'final': 'Outcome'}
 KIND = {'evidence': ('code', 'Code'), 'research': ('ai', 'AI'), 'portfolio': ('ai', 'AI'),
         'critic': ('ai', 'AI'), 'risk': ('code', 'Rules, not AI'), 'final': ('code', 'Recorded outcome')}
-LOG_NAMES = {'system': 'System', 'evidence': 'Scanners', 'gate': 'AI gate', 'research': 'Pip',
-             'portfolio': 'Maple', 'critic': 'Pickle', 'risk': 'Nugget', 'final': 'Outcome'}
+LOG_NAMES = {'system': 'System', 'evidence': 'Scanners', 'gate': 'AI gate', 'research': 'Blossom',
+             'portfolio': 'Mayor', 'critic': 'Mojo Jojo', 'risk': 'Prof. X', 'final': 'Outcome'}
 X = {'evidence': 80, 'research': 248, 'portfolio': 416, 'critic': 584, 'risk': 752, 'final': 920}
 Y, R, GATE_X = 112, 32, 164
 STATE_WORD = {'carried': 'recorded', 'stopped': 'stopped here', 'skipped': 'not run', 'unknown': 'not recorded'}
@@ -188,7 +188,7 @@ def tools_block(key, stage, review):
     if key == 'evidence':
         rows = [('Kind', 'Code, no AI'), ('Broker tools called (read-only)', ', '.join(d.get('read_tools') or []) or 'Not recorded'),
                 ('Rules applied', 'research/strategy_signals.py · momentum rotation, mean reversion'),
-                ('Hands to', 'AI gate → Pip when a signal needs judgment; otherwise straight to the outcome')]
+                ('Hands to', 'AI gate → Blossom when a signal needs judgment; otherwise straight to the outcome')]
     elif key in ('research', 'portfolio', 'critic'):
         if u:
             tools = u.get('tools')
@@ -402,7 +402,7 @@ def scene(review, index, rows):
 <section class="room-card log-card"><div class="card-head"><h3>Run log</h3><span class="muted small">{len(log)} recorded events · times ET</span></div>{no_handoff}{filters}<div class="log-scroll">{log_rows(log)}</div>
 <details class="sub"><summary>Technical event names</summary><p class="code">{esc(tech)}</p></details></section></div>
 {ideas(review)}
-<aside class="scene-bench" aria-label="Future team members"><span>On the bench</span><div>{portrait('filings_news', 28)}<p><strong>Biscuit</strong> <small>joins in Phase 1</small></p></div><div>{portrait('explainer', 28)}<p><strong>Bubbles</strong> <small>Ask arrives after the gate</small></p></div></aside>
+<aside class="scene-bench" aria-label="Future team members"><span>On the bench</span><div>{portrait('filings_news', 28)}<p><strong>Buttercup</strong> <small>joins in Phase 1</small></p></div><div>{portrait('explainer', 28)}<p><strong>Bubbles</strong> <small>Ask arrives after the gate</small></p></div></aside>
 </section>'''
 
 

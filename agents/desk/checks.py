@@ -201,7 +201,7 @@ def options_section(opt):
 def usage_table(review):
     u = review.get('agent_usage') or {}
     stages = {s.get('key'): s for s in review.get('stages', [])}
-    names = (('research', 'Pip · Research'), ('portfolio', 'Maple · Portfolio'), ('critic', 'Pickle · Critic'))
+    names = (('research', 'Blossom · Research'), ('portfolio', 'Mayor · Portfolio'), ('critic', 'Mojo Jojo · Critic'))
     rows = ''
     for key, label in names:
         x = u.get(key)
@@ -212,7 +212,7 @@ def usage_table(review):
         else:
             rows += f'<tr><td>{esc(label)}</td><td colspan="5" class="muted">{esc("Not called" if stages.get(key, {}).get("status") == "skipped" else "Not recorded")}</td></tr>'
     return ('<div class="table-wrap"><table class="mini"><thead><tr><th>AI step</th><th>Model</th><th>Tools it could call</th><th>Tokens in</th><th>Tokens out</th><th>Cost reserved</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table></div><p class="muted small">Code steps (Scanners, AI gate, Nugget, Outcome) use no AI. Scanners call only read-only broker tools, listed under System checks.</p>')
+            f'<tbody>{rows}</tbody></table></div><p class="muted small">Code steps (Scanners, AI gate, Prof. X, Outcome) use no AI. Scanners call only read-only broker tools, listed under System checks.</p>')
 
 
 def run_section(review, index):
@@ -226,8 +226,8 @@ def run_section(review, index):
 <section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
 <section class="room-card"><div class="card-head"><h3>Options screen (Lane B)</h3><span class="muted small">Why contracts were or weren’t considered</span></div>{options_section(c.get("options"))}</section>
 <section class="room-card"><div class="card-head"><h3>Scanners · strategy conditions</h3><span class="muted small">Every ticker × every condition</span></div>{strategy_tables(c.get("strategies", []))}</section>
-<section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Pip’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
-<section class="room-card"><div class="card-head"><h3>Nugget · safety-rule results</h3></div>{risk_table(c.get("risk", []))}</section>
+<section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Blossom’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
+<section class="room-card"><div class="card-head"><h3>Prof. X · safety-rule results</h3></div>{risk_table(c.get("risk", []))}</section>
 <section class="room-card"><details class="sub"><summary>Raw features for every ticker</summary>{feature_table(c.get("features", []))}</details></section>
 </section>'''
 
@@ -235,7 +235,7 @@ def run_section(review, index):
 def render(state):
     if not state.get('preview'):
         from .components import card
-        return '<h1>Checks & charts</h1>' + card('Not available yet', '<p>This screen is part of the Agent Desk preview. No results are assumed.</p>')
+        return '<h1>Checks & charts</h1>' + card('Not available yet', '<p>This screen is part of the Botfolio preview. No results are assumed.</p>')
     reviews = state.get('decision_room', [])
     choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="room-head"><div><h1>Checks &amp; charts</h1><p>Every check each step ran, with the numbers behind it.</p></div>'

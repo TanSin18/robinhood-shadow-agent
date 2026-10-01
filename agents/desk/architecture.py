@@ -147,14 +147,14 @@ QUESTIONS = (
      'trusting it with real money, even small?'),
 )
 ROSTER = (
-    ('Nugget', 'Safety rules (code)', 'active · decides', 'The 26 coded risk checks on every order, the breakers, the tripwire and the checks on every AI note.'),
-    ('Pip', 'Research (gpt-5.4-nano)', 'active · advisory daily', 'Every day: base rate first, then the setup read for signal names and holdings. Also the first '
+    ('Prof. X', 'Safety rules (code)', 'active · decides', 'The 26 coded risk checks on every order, the breakers, the tripwire and the checks on every AI note.'),
+    ('Blossom', 'Research (gpt-5.4-nano)', 'active · advisory daily', 'Every day: base rate first, then the setup read for signal names and holdings. Also the first '
      'official AI stage when a stock signal or held stock appears (not triggered yet).'),
-    ('Biscuit', 'Filings & news (gpt-5.4-nano)', 'active · advisory daily', 'Every day: free headlines and SEC filings per ticker, with sentiment. '
+    ('Buttercup', 'Filings & news (gpt-5.4-nano)', 'active · advisory daily', 'Every day: free headlines and SEC filings per ticker, with sentiment. '
      'Never read by a trade decision.'),
-    ('Maple', 'Portfolio (gpt-5.4-mini)', 'active · advisory daily', 'Every day: reviews the whole paper book, cash drag, exit guard, chop and Kelly vs actual. '
+    ('Mayor', 'Portfolio (gpt-5.4-mini)', 'active · advisory daily', 'Every day: reviews the whole paper book, cash drag, exit guard, chop and Kelly vs actual. '
      'Also the official Portfolio stage for single stocks (not triggered yet).'),
-    ('Pickle', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the official decision and the team’s notes with fixed '
+    ('Mojo Jojo', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the official decision and the team’s notes with fixed '
      'fail codes. Also the official Critic with veto for single stocks (not triggered yet).'),
     ('Bubbles', 'Explainer (gpt-5.4-mini)', 'active · advisory daily', 'Writes the morning and after-close note you read, last, from everyone else.'),
 )
@@ -250,7 +250,7 @@ def render(state):
                  + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and specs are '
                  'hashed; changing either starts a new trial.</p>'),
         _section('roster', 'Agent roster, as it really is today', 'Decides = can stop or allow a trade; advisory = writes every trading day but no trade reads it '
-                 '(AI stays off the trading path). Pip, Maple and Pickle also hold their official single-stock roles, which run only when needed.',
+                 '(AI stays off the trading path). Blossom, Mayor and Mojo Jojo also hold their official single-stock roles, which run only when needed.',
                  '<div class="ar-seats">' + ''.join(f'<div class="ar-seat k-{"code" if "decides" in st else "ai"}">'
                                                     f'<b>{esc(n)} · {esc(r)}</b><span>{esc(st)}</span><p>{esc(d)}</p></div>' for n, r, st, d in ROSTER) + '</div>'),
         _section('safety', 'Safety layers', 'Independent layers. Any one of them is enough to stop a real order.', _cards(LAYERS)),

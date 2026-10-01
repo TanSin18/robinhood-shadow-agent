@@ -16,7 +16,7 @@ def test_historical_scene_without_run_log_shows_unrecorded_edges_bench_and_disab
     assert 'Expected workflow' in html
     assert 'data-replay="play" disabled' in html
     assert 'No recorded handoff messages' in html
-    assert 'Biscuit' in html and 'joins in Phase 1' in html
+    assert 'Buttercup' in html and 'joins in Phase 1' in html
     assert 'data-actor="filings_news"' not in html
     assert 'data-edge=' not in html
     assert 'Original report' in html and '<script>unsafe' not in html
