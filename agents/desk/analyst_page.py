@@ -25,6 +25,41 @@ ACCOUNTS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', '
 CHOP_CLS = {'TRENDING': 'pos', 'CHOPPY': 'mixed', 'LOW_VOL': 'neutral', 'OVEREXTENDED': 'neg'}
 
 
+SEATS = (('pip', 'Pip', 'Research', 'pip-earnings-analyst.svg'), ('biscuit', 'Biscuit', 'Filings & news', 'biscuit-filings-news.svg'),
+         ('maple', 'Maple', 'Portfolio', 'maple-portfolio.svg'), ('pickle', 'Pickle', 'Critic', 'pickle-critic.svg'))
+VERDICT_CLS = {'sound': 'pos', 'weak': 'mixed', 'flawed': 'neg'}
+
+
+def _team(team):
+    cards = ''
+    for key, name, role, avatar in SEATS:
+        n = (team or {}).get(key)
+        if not n:
+            body = '<p class="v10-empty">No note yet. Writes after the official run and after the close.</p>'
+        elif key == 'pip':
+            body = (f'<p><b>Base rate:</b> {esc(n.get("base_rate"))}</p><ul class="v10-list">'
+                    + ''.join(f'<li><b>{esc(x.get("ticker"))}</b> {esc(x.get("read"))} <small>Wrong if: {esc(x.get("wrong_if"))}</small></li>'
+                              for x in n.get('setups') or []) + '</ul>')
+        elif key == 'biscuit':
+            body = (f'<p>{esc(n.get("summary"))}</p><ul class="an-news">'
+                    + ''.join(f'<li><span class="an-sent {SENT_CLS.get(x.get("sentiment"), "")}">{esc(x.get("sentiment"))}</span><b>{esc(x.get("ticker"))}</b>'
+                              f'<p>{esc(x.get("note"))}</p></li>' for x in n.get('news') or []) + '</ul>')
+        elif key == 'maple':
+            body = (f'<p>{esc(n.get("portfolio_read"))}</p><ul class="v10-list">'
+                    + ''.join(f'<li><b>{esc(x.get("topic"))}</b> {esc(x.get("note"))}</li>' for x in n.get('points') or []) + '</ul>')
+        else:
+            body = '<ul class="v10-list">' + ''.join(
+                f'<li><span class="an-sent {VERDICT_CLS.get(v.get("verdict"), "")}">{esc(v.get("verdict"))}</span><b>{esc((v.get("target") or "").replace("_", " "))}</b> '
+                f'{esc("; ".join(v.get("reasons") or []))}' + (f' <small>{esc(", ".join(v.get("fail_codes") or []))}</small>' if v.get('fail_codes') else '')
+                + '</li>' for v in n.get('verdicts') or []) + '</ul>'
+        flags = ((n or {}).get('_checks') or {}).get('flags') or []
+        when = f'<small>{esc(short_time(n.get("at")))}</small>' if n else ''
+        cards += (f'<section class="v10-panel an-seat"><header><img src="/assets/avatars/{avatar}" width="44" height="44" alt="">'
+                  f'<div><b>{esc(name)}</b><span>{esc(role)} · advisory</span></div>{when}</header>{body}'
+                  + (f'<p class="an-flag">Code flagged: {esc(", ".join(flags))}</p>' if flags else '') + '</section>')
+    return f'<div class="an-team">{cards}</div>'
+
+
 def _guard(g):
     if not g:
         return '<p class="v10-empty">No exit-guard check yet; it runs after the close with the regime model.</p>'
@@ -87,9 +122,15 @@ def load(official_db):
                 out['_checks'] = json.loads(row[3] or '{}')
             return out
         meta = dict(db.execute('SELECT key, value FROM meta').fetchall())
+        team = {}
+        for job in ('morning', 'close'):
+            for seat in ('pip', 'biscuit', 'maple', 'pickle'):
+                n = latest('notes', f'{job}:{seat}')
+                if n and (seat not in team or n['at'] > team[seat]['at']):
+                    team[seat] = n
         spent = db.execute("SELECT day, SUM(COALESCE(actual, reserved)) FROM budget GROUP BY day ORDER BY day DESC LIMIT 1").fetchone()
         return {'exists': True, 'meta': {k: v for k, v in meta.items() if not k.endswith(('_attempts', 'attempts'))},
-                'morning': latest('notes', 'morning'), 'close': latest('notes', 'close'), 'regime': latest('regimes'),
+                'team': team, 'morning': latest('notes', 'morning'), 'close': latest('notes', 'close'), 'regime': latest('regimes'),
                 'kelly': latest('kelly'), 'auction': latest('auction'), 'guard': latest('guard') if _has(db, 'guard') else None, 'news_morning': latest('news', 'morning'),
                 'news_close': latest('news', 'close'), 'spent': {'day': spent[0], 'usd': spent[1]} if spent and spent[0] else None}
     except sqlite3.Error as error:
@@ -221,6 +262,9 @@ def render(state):
     status = ('paused' if meta.get('paused') == '1' else 'running') + (f' · AI spend {esc(spent.get("day"))}: ${float(spent.get("usd") or 0):.4f} of $1.00' if spent else ' · no AI spend yet')
     news_all = ((a.get('news_morning') or {}).get('items') or []) + ((a.get('news_close') or {}).get('items') or [])
     return ''.join([head, f'<p class="capital-note is-live"><strong>Status:</strong> {status}. Model gpt-5.4-mini (dated), strict JSON, no tools.</p>',
+                    '<h2 class="an-h2">The team today</h2><p class="v10-note">Every named agent writes each trading day in advisory mode. '
+                    'Nugget (safety rules) is code and runs inside every trade check. Bubbles writes the summary notes below, last, from the others.</p>',
+                    _team(a.get('team')),
                     '<div class="v10-grid an-notes">', _note(a.get('morning'), (a.get('news_morning') or {}).get('items'), 'Morning note'),
                     _note(a.get('close'), (a.get('news_close') or {}).get('items') or news_all, 'After-close note'), '</div>',
                     f'<section class="v10-panel"><h3>Market regime <small>3-state hidden Markov model on VTI, retrained after every close</small></h3>{_regime(a.get("regime"))}</section>',

@@ -147,13 +147,16 @@ QUESTIONS = (
      'trusting it with real money, even small?'),
 )
 ROSTER = (
-    ('Nugget', 'Safety rules', 'active', 'The 26 coded risk checks on every order, the breakers and the tripwire. Code, not a model.'),
-    ('Maple', 'Portfolio (gpt-5.4-mini)', 'standby', 'Runs only when a stock signal or a held stock needs review. Not called yet: every day so far was ETF-only.'),
-    ('Pickle', 'Critic (gpt-5.4)', 'standby', 'Reviews Maple’s idea with a blind packet and can reject it. Not called yet, for the same reason.'),
-    ('Biscuit', 'Filings and news', 'advisory', 'Since Oct 1 reads free headlines and SEC filings and writes per-ticker notes. Never used in a trade decision.'),
-    ('Bubbles', 'Explainer', 'advisory', 'Since Oct 1 writes the morning and after-close commentary. Checked for uncited numbers and order-like language.'),
-    ('Pip', 'Research / earnings analyst (gpt-5.4-nano)', 'standby', 'First AI stage when a stock signal or held stock appears; summarises the evidence packet. '
-     'Not called yet. No earnings calendar is wired; that part is planned.'),
+    ('Nugget', 'Safety rules (code)', 'active · decides', 'The 26 coded risk checks on every order, the breakers, the tripwire and the checks on every AI note.'),
+    ('Pip', 'Research (gpt-5.4-nano)', 'active · advisory daily', 'Every day: base rate first, then the setup read for signal names and holdings. Also the first '
+     'official AI stage when a stock signal or held stock appears (not triggered yet).'),
+    ('Biscuit', 'Filings & news (gpt-5.4-nano)', 'active · advisory daily', 'Every day: free headlines and SEC filings per ticker, with sentiment. '
+     'Never read by a trade decision.'),
+    ('Maple', 'Portfolio (gpt-5.4-mini)', 'active · advisory daily', 'Every day: reviews the whole paper book, cash drag, exit guard, chop and Kelly vs actual. '
+     'Also the official Portfolio stage for single stocks (not triggered yet).'),
+    ('Pickle', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the official decision and the team’s notes with fixed '
+     'fail codes. Also the official Critic with veto for single stocks (not triggered yet).'),
+    ('Bubbles', 'Explainer (gpt-5.4-mini)', 'active · advisory daily', 'Writes the morning and after-close note you read, last, from everyone else.'),
 )
 FILES = (
     ('agents/daily_cycle.py', 'The 10:00 official run and the 15:50 protective check'),
@@ -246,9 +249,9 @@ def render(state):
                  '<h3>Official desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>Analyst desk (AI off the trading path)</h3>' + _seats(SEATS_TRADER)
                  + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and specs are '
                  'hashed; changing either starts a new trial.</p>'),
-        _section('roster', 'Agent roster, as it really is today', 'Active = runs every day; standby = wired but not yet triggered; advisory = writes notes '
-                 'that no trade reads; planned = not built.',
-                 '<div class="ar-seats">' + ''.join(f'<div class="ar-seat k-{"code" if st == "active" else "ai" if st in ("standby", "advisory") else "you"}">'
+        _section('roster', 'Agent roster, as it really is today', 'Decides = can stop or allow a trade; advisory = writes every trading day but no trade reads it '
+                 '(AI stays off the trading path). Pip, Maple and Pickle also hold their official single-stock roles, which run only when needed.',
+                 '<div class="ar-seats">' + ''.join(f'<div class="ar-seat k-{"code" if "decides" in st else "ai"}">'
                                                     f'<b>{esc(n)} · {esc(r)}</b><span>{esc(st)}</span><p>{esc(d)}</p></div>' for n, r, st, d in ROSTER) + '</div>'),
         _section('safety', 'Safety layers', 'Independent layers. Any one of them is enough to stop a real order.', _cards(LAYERS)),
         _section('evidence', 'How results are judged', 'Designed so a lucky streak or a tuned backtest cannot be mistaken for skill.', _cards(EVIDENCE)),

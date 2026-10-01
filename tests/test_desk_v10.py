@@ -132,4 +132,5 @@ def test_analyst_page_empty_and_with_records(tmp_path):
     html = render('/analyst', state, None, '')
     assert 'Chips &lt;lead&gt;' in html and 'href="https://example.com/a"' in html and 'Code checks passed' in html
     assert 'an-strip' in html and 'calm' in html and '$0.0040 of $1.00' in html
+    assert 'The team today' in html and 'Pickle' in html and 'No note yet' in html
     assert 'style=' not in html and '<script>' not in html and '<form' not in html
