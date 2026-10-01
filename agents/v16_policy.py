@@ -197,6 +197,9 @@ def protective_reason(position, bid, feats, is_etf, stop_fraction):
     return None
 
 
+QUOTE_LEAD_SECONDS = 180      # a quote may be this much newer than the tick's start time (reader preflight + reads)
+
+
 def protective_check(inbox, config, gateway_call, now, *, root=None, refresh=None):
     """Run once per session inside the window. ``gateway_call`` is the read gateway's call."""
     from agents.etf_exit import _sell
@@ -219,8 +222,14 @@ def protective_check(inbox, config, gateway_call, now, *, root=None, refresh=Non
         quotes = quotes_from_reads(reads)
     for ticker, by_arm in sorted(held.items()):
         quote = quotes.get(ticker)
-        if quote is None or quote.halted or not quote.bid > 0 or not 0 <= (now - quote.timestamp).total_seconds() <= config.risk.max_quote_age_seconds:
-            results.append({'instrument': ticker, 'status': 'HOLD', 'reason': 'FRESH_QUOTE_REQUIRED'})
+        # `now` is when this service tick began; the quote is fetched after the reader's preflight, so it is
+        # normally a few seconds NEWER than `now`. Judge it at its own time (bounded) instead of calling it stale.
+        lead = (quote.timestamp - now).total_seconds() if quote is not None else 0
+        at = quote.timestamp if quote is not None and 0 < lead <= QUOTE_LEAD_SECONDS else now
+        if quote is None or quote.halted or not quote.bid > 0 or lead > QUOTE_LEAD_SECONDS \
+                or not 0 <= (at - quote.timestamp).total_seconds() <= config.risk.max_quote_age_seconds:
+            results.append({'instrument': ticker, 'status': 'HOLD', 'reason': 'FRESH_QUOTE_REQUIRED',
+                            'quote_seconds_after_tick_start': round(lead, 1) if quote is not None else None})
             continue
         try:
             hist = gateway_call('get_equity_historicals', {'symbols': [ticker], 'start_time': (now - timedelta(days=400)).isoformat(),
@@ -243,7 +252,7 @@ def protective_check(inbox, config, gateway_call, now, *, root=None, refresh=Non
                 if not claim.owns(db, claim.cycle_id):
                     raise ValueError('Protective check ownership is required')
                 if arm in IMMEDIATE_ARMS:
-                    fill = inbox._execute(db, 'A', arm, proposal, quote, None, None, now)
+                    fill = inbox._execute(db, 'A', arm, proposal, quote, None, None, at)
                     db.execute('INSERT INTO decision_records(created_at,payload_json) VALUES (?,?)', (now.isoformat(), json.dumps({
                         'proposal_id': proposal.proposal_id, 'lane': 'A', 'track': arm, 'status': fill['status'],
                         'reasons': fill.get('reasons', []), 'author': 'Protective exit (no AI)', 'origin': 'v16_protective_exit',

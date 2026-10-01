@@ -111,3 +111,31 @@ def test_window():
     assert not in_window(datetime(2026, 10, 1, 19, 45, tzinfo=timezone.utc))
     assert not in_window(datetime(2026, 10, 1, 19, 58, tzinfo=timezone.utc))
     assert not in_window(datetime(2026, 10, 3, 19, 52, tzinfo=timezone.utc))   # Saturday
+
+
+def test_a_quote_fetched_after_the_tick_started_is_fresh_not_stale(tmp_path):
+    # Oct 1 2026, 15:50: the live check returned FRESH_QUOTE_REQUIRED because the quote was a few seconds
+    # newer than the tick's start time. The stop must be evaluated (and fire) in that case.
+    inbox, config = setup_runtime(tmp_path)
+    seed(inbox, ('agent_alone',))
+
+    def late_quote(tool, args):
+        out = _gateway('450')(tool, args)
+        if tool == 'get_equity_quotes':
+            out['data']['results'][0]['quote']['updated_at'] = (NOW + timedelta(seconds=40)).isoformat()
+        return out
+    out = protective_check(inbox, config, late_quote, NOW, root=ROOT)
+    assert out['results'][0]['status'] == 'filled' and out['results'][0]['exit_reason'] == 'PROTECTIVE_STOP_BELOW_AVERAGE_COST'
+
+
+def test_a_quote_far_in_the_future_is_still_refused(tmp_path):
+    inbox, config = setup_runtime(tmp_path)
+    seed(inbox, ('agent_alone',))
+
+    def skewed(tool, args):
+        out = _gateway('450')(tool, args)
+        if tool == 'get_equity_quotes':
+            out['data']['results'][0]['quote']['updated_at'] = (NOW + timedelta(minutes=10)).isoformat()
+        return out
+    out = protective_check(inbox, config, skewed, NOW, root=ROOT)
+    assert out['results'][0]['reason'] == 'FRESH_QUOTE_REQUIRED' and 'SOXX' in inbox.state('A', 'agent_alone')['positions']
