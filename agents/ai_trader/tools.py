@@ -25,7 +25,7 @@ def get_quote(snapshot, ticker, now: datetime):
     mid = (bid + ask) / 2
     return {'id': f'quote:{ticker}', 'available': True, 'bid': _r(bid, 4), 'ask': _r(ask, 4), 'mid': _r(mid, 4),
             'spread_pct': _r((ask - bid) / mid * 100, 3) if mid > 0 else None, 'age_seconds': round(age, 1),
-            'fresh': 0 <= age <= 60}
+            'fresh': -5 <= age <= 60}
 
 
 def get_features(snapshot, ticker):

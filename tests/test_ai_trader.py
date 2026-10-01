@@ -235,10 +235,13 @@ def test_invalidation_exit_in_A_and_C_mirrors(tmp_path):
 def test_two_sessions_without_a_card_exit(tmp_path):
     s = store_at(tmp_path)
     morning(s, FakeClient())
-    for k, day in ((1, '2026-10-06'), (2, '2026-10-07'), (3, '2026-10-08')):
+    actions = []
+    for k, day in ((1, '2026-10-06'), (2, '2026-10-07')):
         when = ET_OPEN + timedelta(days=k)
-        r = cycle.morning(s, SPEC, snapshot(now=when, session=day, next_session='2026-10-09'), FakeClient(scout_names=[]), when, prices=PRICES)
-    assert any(e.get('reason') == 'TWO_SESSIONS_WITHOUT_A_CARD' for e in r['exits'])
+        r = cycle.morning(s, SPEC, snapshot(now=when, session=day, next_session='2026-10-08'), FakeClient(scout_names=[]), when, prices=PRICES)
+        actions += [m['action'] for m in r['management'] if m['book'] == 'A']
+    assert actions == ['UNREVIEWED', 'EXIT_TWO_SESSIONS_WITHOUT_A_CARD']
+    assert not s.book('A').positions and not s.book('C').positions
 
 
 def test_management_trim_and_exit(tmp_path):
@@ -345,13 +348,13 @@ def test_hook_runs_morning_once_after_official_then_protective(tmp_path):
     s.set_mode('PAPER', at=ET_OPEN, by='operator', spec=SPEC, official_first_run_completed=True)
     now = datetime(2026, 10, 5, 14, 7, tzinfo=timezone.utc)
     reader = _Reader(snapshot(now=now))
-    out = hook.tick(_Inbox(official), _Config(), now, path=trader, reader_factory=lambda: reader, client_factory=FakeClient)
+    out = hook.tick(_Inbox(official), _Config(), now, path=trader, clock=lambda: now, reader_factory=lambda: reader, client_factory=FakeClient)
     assert out['morning']['fills'] and 'SOXX' in s.book('A').positions and s.meta('morning_done') == '2026-10-05'
     again = hook.tick(_Inbox(official), _Config(), now + timedelta(minutes=1), path=trader,
                       reader_factory=lambda: _Reader(snapshot(now=now)), client_factory=FakeClient)
     assert again is None
     late = datetime(2026, 10, 5, 19, 51, tzinfo=timezone.utc)
-    out = hook.tick(_Inbox(official), _Config(), late, path=trader,
+    out = hook.tick(_Inbox(official), _Config(), late, path=trader, clock=lambda: late,
                     reader_factory=lambda: _Reader(snapshot(now=late, shock={'SOXX': 0.85})), client_factory=FakeClient)
     assert out['protective'] and not s.book('A').positions
 
@@ -381,3 +384,63 @@ def test_cli_init_status_and_start_paper_guard(tmp_path, capsys):
             raise StoreError('PAPER_NOT_BEFORE_skip')
         cli.main(['start-paper', '--official-database', str(official), '--path', str(trader)])
 
+
+# ---------------------------------------------------------------- regressions from the independent review
+def test_daily_stop_counts_an_overnight_gap(tmp_path):
+    s = store_at(tmp_path)
+    morning(s, FakeClient())
+    when = ET_OPEN + timedelta(days=1)
+    gap = snapshot(now=when, session='2026-10-06', shock={t: 0.3 for t in SPEC.universe})   # everything -70%
+    client = FakeClient(scout_names=['XLE'])
+    r = cycle.morning(s, SPEC, gap, client, when, prices=PRICES)
+    assert r['stopped'] in ('DAILY_LOSS_HIT', 'WEEKLY_LOSS_HIT') and 'scout' not in client.calls
+
+
+def test_retry_does_not_double_trim_and_duplicates_do_not_crash(tmp_path):
+    s = store_at(tmp_path)
+    morning(s, FakeClient())
+    q0 = D(s.book('A').positions['SOXX']['quantity'])
+    when = ET_OPEN + timedelta(days=1)
+    trim = lambda p: [{'ticker': 'SOXX', 'action': 'trim', 'trim_fraction': 0.5, 'reason': 'Partial.'}]
+    snap = snapshot(now=when, session='2026-10-06')
+    r = cycle.morning(s, SPEC, snap, FakeClient(scout_names=['XLE', 'XLE'], manage=trim), when, prices=PRICES)
+    cycle.morning(s, SPEC, snap, FakeClient(scout_names=['XLE'], manage=trim), when + timedelta(minutes=1), prices=PRICES)
+    assert D(s.book('A').positions['SOXX']['quantity']) == pytest.approx(q0 / 2, rel=1e-6)
+    assert [t['ticker'] for t in r['tickets']] == ['XLE']
+
+
+def test_max_names_rechecked_at_fill(tmp_path):
+    s = store_at(tmp_path)
+    a = s.book('A')
+    for i, t in enumerate(['XLB', 'XLF', 'XLI', 'XLK']):
+        a.buy(t, D('1'), D('100'), '2026-10-02', {'ticket_id': f'old{i}', 'invalidation_price': '1', 'time_stop_sessions': 20, 'thesis': 'x'})
+    s.save_book(a)
+    r = morning(s, FakeClient(scout_names=['SOXX', 'XLE']))
+    assert len(s.book('A').positions) == 5
+    assert sorted(t['status'] for t in r['tickets']) == ['APPROVED_RISK_BLOCKED', 'FILLED']
+
+
+def test_c_is_closed_later_when_its_quote_was_stale_at_the_mirror(tmp_path):
+    s = store_at(tmp_path)
+    morning(s, FakeClient())
+    (c_pick,) = s.book('C').positions
+    when = ET_OPEN + timedelta(days=1)
+    snap = snapshot(now=when, session='2026-10-06', shock={'SOXX': 0.90})
+    snap['quotes'][c_pick]['ts'] = when - timedelta(minutes=10)            # stale at the moment A exits
+    cycle.morning(s, SPEC, snap, FakeClient(scout_names=[]), when, prices=PRICES)
+    assert not s.book('A').positions and c_pick in s.book('C').positions
+    later = datetime(2026, 10, 6, 19, 51, tzinfo=timezone.utc)
+    out = cycle.protective(s, SPEC, snapshot(now=later, session='2026-10-06'), later)
+    assert {'book': 'C', 'ticker': c_pick, 'action': 'EXIT', 'reason': 'MIRROR_SWEEP'} in out and not s.book('C').positions
+
+
+def test_sessions_held_counts_market_sessions_not_runs():
+    assert cycle.sessions_between('2026-10-05', '2026-10-08') == 3
+    assert cycle.sessions_between('2026-10-09', '2026-10-13') == 2      # weekend skipped
+
+
+def test_watch_only_days_are_not_scored(tmp_path):
+    s = store_at(tmp_path, 'WATCH_ONLY')
+    morning(s, FakeClient())
+    with s.connect() as db:
+        assert db.execute('SELECT count(*) FROM book_values').fetchone()[0] == 0

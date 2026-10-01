@@ -49,20 +49,25 @@ class Book:
     week_start_value: Decimal = D(0)
     realized: Decimal = D(0)
     closed_trades: int = 0
+    last_value: Decimal | None = None      # last recorded value (morning or 15:50), the baseline for the stops
+    last_value_day: str = ''
 
     def to_json(self):
         return json.dumps({'name': self.name, 'start': str(self.start), 'settled': str(self.settled),
                            'unsettled': [[str(a), d] for a, d in self.unsettled], 'positions': self.positions,
                            'peak': str(self.peak), 'day': self.day, 'day_start_value': str(self.day_start_value),
                            'week': self.week, 'week_start_value': str(self.week_start_value),
-                           'realized': str(self.realized), 'closed_trades': self.closed_trades})
+                           'realized': str(self.realized), 'closed_trades': self.closed_trades,
+                           'last_value': None if self.last_value is None else str(self.last_value),
+                           'last_value_day': self.last_value_day})
 
     @classmethod
     def from_json(cls, text):
         r = json.loads(text)
         return cls(r['name'], D(r['start']), D(r['settled']), [[D(a), d] for a, d in r['unsettled']], r['positions'],
                    D(r['peak']), r['day'], D(r['day_start_value']), r['week'], D(r['week_start_value']),
-                   D(r['realized']), r['closed_trades'])
+                   D(r['realized']), r['closed_trades'],
+                   None if r.get('last_value') is None else D(r['last_value']), r.get('last_value_day', ''))
 
     # ---------------------------------------------------------------- accounting
     def settle(self, today: str):
@@ -82,13 +87,19 @@ class Book:
         return total
 
     def roll(self, today: str, value: Decimal):
-        """Start-of-session bookkeeping for the daily and weekly loss stops."""
+        """Start-of-session bookkeeping. The daily stop is measured from the last value recorded in an
+        earlier session (yesterday's 15:50 or morning value), the weekly stop from the last value of the
+        previous week, so an overnight gap counts."""
         week = date.fromisoformat(today).strftime('%G-W%V')
+        prior = self.last_value if (self.last_value is not None and self.last_value_day < today) else value
         if self.day != today:
-            self.day, self.day_start_value = today, value
+            self.day, self.day_start_value = today, prior
         if self.week != week:
-            self.week, self.week_start_value = week, value
+            self.week, self.week_start_value = week, prior
         self.peak = max(self.peak, value)
+
+    def mark(self, today: str, value: Decimal):
+        self.last_value, self.last_value_day = value, today
 
     def buy(self, ticker, quantity: Decimal, price: Decimal, today: str, extra: dict):
         cost = quantity * price
@@ -174,6 +185,8 @@ class TraderStore:
             if not official_first_run_completed:
                 raise StoreError('START_CONDITION_OFFICIAL_RUN_NOT_CONFIRMED')
         self.set_meta('mode', mode)
+        if mode == 'PAPER' and not self.meta('paper_started_at'):
+            self.set_meta('paper_started_at', at.isoformat())
         self.journal('mode_changed', {'mode': mode, 'by': by}, at)
 
     # ---------------------------------------------------------------- books
@@ -217,10 +230,14 @@ class TraderStore:
                        (at.isoformat(), day, book, str(value), str(api_cost_cum), None if vti is None else str(vti),
                         None if official is None else str(official)))
 
-    def spent(self, day=None):
+    def spent(self, day=None, since=None):
         with self.connect() as db:
-            q = "SELECT actual, reserved, status FROM budget" + (' WHERE day=?' if day else '')
-            rows = db.execute(q, (day,) if day else ()).fetchall()
+            if day:
+                rows = db.execute("SELECT actual, reserved, status FROM budget WHERE day=?", (day,)).fetchall()
+            elif since:
+                rows = db.execute("SELECT actual, reserved, status FROM budget WHERE at>=?", (since,)).fetchall()
+            else:
+                rows = db.execute("SELECT actual, reserved, status FROM budget").fetchall()
         total = D(0)
         for actual, reserved, status in rows:
             total += D(actual) if actual is not None else (D(reserved) if status == 'RESERVED' else D(0))
