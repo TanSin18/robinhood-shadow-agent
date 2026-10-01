@@ -91,7 +91,7 @@ def check_ticket(ticket, *, spec, tools, book, entries_today, now_quote, weekly_
     q = now_quote or {}
     try:
         inv = D(str(ticket.get('invalidation_price')))
-        if not q.get('available') or not q.get('fresh') or not (D(0) < inv < D(str(q['ask']))):
+        if not q.get('available') or not q.get('fresh') or not (D(0) < inv < D(str(q['bid']))):
             fails.append('NO_INVALIDATION')
     except Exception:
         fails.append('NO_INVALIDATION')

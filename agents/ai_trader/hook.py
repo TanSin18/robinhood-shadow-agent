@@ -33,6 +33,23 @@ def official_completed_today(official_db, day: str) -> bool:
     return bool(row) and row[0] == 'COMPLETED'
 
 
+def official_lane_a_value(official_db):
+    """Latest Official lane-A rules-only paper value, for the scoreboard's Official line (read-only)."""
+    import sqlite3
+    db = sqlite3.connect(f'file:{Path(official_db).resolve()}?mode=ro', uri=True)
+    try:
+        for (payload,) in db.execute("SELECT payload_json FROM daily_values ORDER BY id DESC LIMIT 400"):
+            v = json.loads(payload)
+            if (v.get('kind') == 'paper_valuation' and v.get('lane') == 'A' and v.get('track') == 'deterministic_no_ai'
+                    and v.get('value') is not None and not v.get('comparison')):
+                return Decimal(str(v['value']))
+    except sqlite3.Error:
+        return None
+    finally:
+        db.close()
+    return None
+
+
 def parse_quotes(reads):
     out = {}
     for read in reads:
@@ -43,7 +60,8 @@ def parse_quotes(reads):
                 stamp = datetime.fromisoformat(q.get('updated_at') or min(q['venue_ask_time'], q['venue_bid_time']))
             except (KeyError, TypeError, ValueError):
                 continue
-            if q.get('symbol') and bid > 0 and ask > 0 and stamp.tzinfo is not None:
+            halted = q.get('state', 'active') != 'active' or q.get('has_traded', True) is False
+            if q.get('symbol') and bid > 0 and ask > 0 and stamp.tzinfo is not None and not halted:
                 out[q['symbol']] = {'bid': bid, 'ask': ask, 'ts': stamp}
     return out
 
@@ -89,7 +107,7 @@ def _next_session(day):
     return (d + timedelta(days=1)).isoformat()
 
 
-def tick(inbox, config, now, *, reader_factory=None, client_factory=None, path=None):
+def tick(inbox, config, now, *, reader_factory=None, client_factory=None, path=None, clock=None):
     from agents.ai_trader import cycle
     from agents.ai_trader.spec import load_spec
     from agents.ai_trader.store import TraderStore
@@ -133,7 +151,10 @@ def tick(inbox, config, now, *, reader_factory=None, client_factory=None, path=N
             quotes, closes, volumes = collect(reader.gateway.call, symbols, now, history=want_morning or want_protect)
         finally:
             reader.close()
-        snap = {'session': day, 'next_session': _next_session(day), 'quotes': quotes, 'closes': closes, 'volumes': volumes}
+        # Judge freshness against the time the quotes arrived, not the tick's start.
+        now = clock() if clock else max(now, datetime.now(now.tzinfo))
+        snap = {'session': day, 'next_session': _next_session(day), 'quotes': quotes, 'closes': closes, 'volumes': volumes,
+                'official_value': official_lane_a_value(inbox.path)}
         out = {}
         if want_fill:
             out['b_fills'] = cycle.fill_pending(store, spec, snap, now)

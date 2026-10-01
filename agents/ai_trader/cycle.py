@@ -5,11 +5,12 @@ All functions take a ``snapshot`` built read-only from the Official reads:
    'quotes': {T: {'bid','ask','ts'}}, 'closes': {T: [(day, close)]}, 'volumes': {T: [(day, vol)]},
    'screen': {T: row} (optional), 'official_value': Decimal (optional)}
 Nothing here talks to a broker. In WATCH_ONLY mode the seats run and tickets are recorded, but no
-book is filled.
+book is filled and no value is scored.
 """
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+import time as _time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -20,6 +21,8 @@ from agents.ai_trader.store import BOOKS, StoreError
 D = Decimal
 ET = ZoneInfo('America/New_York')
 ENTRY_DEADLINE = time(15, 30)
+QUOTE_CLOCK_SKEW_SECONDS = 5
+MORNING_TIME_BUDGET_SECONDS = 360   # stop starting new model calls after six minutes
 
 
 class CycleError(RuntimeError):
@@ -33,12 +36,29 @@ def _marks(snapshot):
 
 def _fresh(snapshot, t, now):
     q = snapshot['quotes'].get(t)
-    return bool(q) and 0 <= (now - q['ts']).total_seconds() <= 60 and q.get('bid') and q.get('ask') and 0 < q['bid'] <= q['ask']
+    if not q or not q.get('bid') or not q.get('ask') or not 0 < q['bid'] <= q['ask']:
+        return False
+    age = (now - q['ts']).total_seconds()
+    return -QUOTE_CLOCK_SKEW_SECONDS <= age <= 60
 
 
 def _ma200(snapshot, t):
     rows = [c for _, c in sorted(snapshot['closes'].get(t, []))]
     return D(str(sum(rows[-200:]) / 200)) if len(rows) >= 200 else None
+
+
+def sessions_between(entry_day: str, today: str, sessions=None) -> int:
+    """Market sessions after the entry day up to and including today."""
+    if sessions is not None:
+        return sum(1 for d in sessions if entry_day < d <= today)
+    from agents.operator import MarketSchedule
+    schedule = MarketSchedule()
+    d, end, n = date.fromisoformat(entry_day) + timedelta(days=1), date.fromisoformat(today), 0
+    while d <= end:
+        if schedule.should_run(datetime.combine(d, time(10, 0), ET), asset_class='stock', stage=1):
+            n += 1
+        d += timedelta(days=1)
+    return n
 
 
 def _prepare(store, spec, snapshot):
@@ -60,20 +80,43 @@ def _sell(store, book, t, qty, snapshot, now, ticket_id, reason, settle_day):
     store.record_fill(now, book.name, t, 'sell', qty, price, price, ticket_id, reason, realized)
 
 
-def _exit_linked_c(store, a_ticket, snapshot, now, reason, fraction=None):
-    """Book C mirrors book A's exit day (and trim fraction) for the matched trade."""
+def _mirror_c(store, a_ticket, snapshot, now, reason, fraction=None):
+    """Book C mirrors book A's exit day (and trim fraction). If C's quote is unusable now, the order is
+    parked on the position and the C sweep completes it at the next check."""
     c = store.book('C')
     for t, p in list(c.positions.items()):
-        if p.get('a_ticket') == a_ticket and _fresh(snapshot, t, now):
+        if p.get('a_ticket') != a_ticket:
+            continue
+        if _fresh(snapshot, t, now):
             qty = D(p['quantity']) * (D(str(fraction)) if fraction else 1)
-            _sell(store, c, t, qty, snapshot, now, a_ticket, 'mirror_' + reason, snapshot['next_session'])
+            _sell(store, c, t, qty, snapshot, now, a_ticket, 'MIRROR_' + reason, snapshot['next_session'])
+        else:
+            p['pending_mirror'] = 'exit' if not fraction else str(fraction)
     store.save_book(c)
+
+
+def _sweep_c(store, snapshot, now):
+    """Close C positions whose A trade is gone, and complete parked mirror orders."""
+    a_tickets = {p['ticket_id'] for p in store.book('A').positions.values()}
+    c, out = store.book('C'), []
+    for t, p in list(c.positions.items()):
+        pending = p.get('pending_mirror')
+        if (p['a_ticket'] not in a_tickets or pending) and _fresh(snapshot, t, now):
+            if p['a_ticket'] not in a_tickets or pending == 'exit':
+                qty = D(p['quantity'])
+            else:
+                qty = D(p['quantity']) * D(pending)
+            p.pop('pending_mirror', None)
+            _sell(store, c, t, qty, snapshot, now, p['a_ticket'], 'MIRROR_SWEEP', snapshot['next_session'])
+            out.append({'book': 'C', 'ticker': t, 'action': 'EXIT', 'reason': 'MIRROR_SWEEP'})
+    store.save_book(c)
+    return out
 
 
 # ---------------------------------------------------------------- code-owned exits
 def code_exits(store, spec, snapshot, now, *, protective=False):
-    """Invalidation price, time stop, two unreviewed sessions, and (at 15:50) the v1.6 protective rule.
-    Applies to books A and B; book C only mirrors A. Missing or stale quotes hold and are recorded."""
+    """The ticket's invalidation price and time stop, and (at 15:50) the v1.6 protective rule.
+    Books A and B; book C only mirrors A. Missing or stale quotes hold and are recorded."""
     out = []
     for name in ('A', 'B'):
         book = store.book(name)
@@ -87,8 +130,6 @@ def code_exits(store, spec, snapshot, now, *, protective=False):
                 reason = 'INVALIDATION_PRICE'
             elif not protective and int(p['sessions_held']) >= int(p['time_stop_sessions']):
                 reason = 'TIME_STOP'
-            elif not protective and int(p.get('unreviewed_days', 0)) >= 2:
-                reason = 'TWO_SESSIONS_WITHOUT_A_CARD'
             elif protective:
                 ma = _ma200(snapshot, t)
                 if bid <= D(p['average_cost']) * (1 - spec.protective_stop):
@@ -100,39 +141,45 @@ def code_exits(store, spec, snapshot, now, *, protective=False):
                 out.append({'book': name, 'ticker': t, 'action': 'EXIT', 'reason': reason})
                 if name == 'A':
                     store.save_book(book)
-                    _exit_linked_c(store, p['ticket_id'], snapshot, now, reason)
+                    _mirror_c(store, p['ticket_id'], snapshot, now, reason)
                     book = store.book('A')
         store.save_book(book)
+    out += _sweep_c(store, snapshot, now)
     return out
 
 
 # ---------------------------------------------------------------- morning run
-def morning(store, spec, snapshot, client, now, *, prices=None):
+def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, started=None):
     _prepare(store, spec, snapshot)
+    started = started if started is not None else _time.monotonic()
     day, marks, mode = snapshot['session'], _marks(snapshot), store.mode()
     report = {'day': day, 'mode': mode, 'exits': [], 'management': [], 'tickets': [], 'fills': [], 'stopped': None}
-    for name in BOOKS:   # settle T+1, roll daily/weekly marks, count sessions once per day
+    for name in BOOKS:   # settle T+1, roll the stop baselines, count market sessions held
         book = store.book(name)
         book.settle(day)
-        if book.day != day:
-            for p in book.positions.values():
-                if p['entry_day'] < day:
-                    p['sessions_held'] = int(p['sessions_held']) + 1
+        for p in book.positions.values():
+            p['sessions_held'] = sessions_between(p['entry_day'], day, sessions)
         book.roll(day, book.value(marks))
         store.save_book(book)
     if mode == 'PAPER':
         report['exits'] = code_exits(store, spec, snapshot, now)
     models = BudgetedModels(store, spec, client, day=day, now=now, prices=prices)
 
-    # Management cards for every holding (no silent holds).
+    def time_left():
+        return _time.monotonic() - started < MORNING_TIME_BUDGET_SECONDS
+
+    # Management cards, once per day, for every holding (no silent holds).
     held = sorted(set(store.book('A').positions) | set(store.book('B').positions)) if mode == 'PAPER' else []
-    if held:
+    if held and store.meta(f'manage_done:{day}') != '1':
+        store.set_meta(f'manage_done:{day}', '1')     # before acting, so a retry can't trim twice
         a = store.book('A')
         pack = tools.packet(snapshot, held, a, marks, spec, store, now)
         positions = {t: {k: v for k, v in (a.positions.get(t) or store.book('B').positions.get(t)).items()
                          if k in ('average_cost', 'entry_day', 'sessions_held', 'invalidation_price', 'time_stop_sessions', 'thesis')}
                      for t in held}
         try:
+            if not time_left():
+                raise BudgetExhausted('time')
             cards = models.run('manage', seats.build('manage', spec=spec, tools=pack, extra={'holdings': positions}),
                                seats.SCHEMAS['manage'])['cards']
         except (BudgetExhausted, ModelError) as error:
@@ -142,19 +189,26 @@ def morning(store, spec, snapshot, client, now, *, prices=None):
             book = store.book(name)
             for t, p in list(book.positions.items()):
                 card = by_ticker.get(t)
+                frac = None
                 if card is None:
                     p['unreviewed_days'] = int(p.get('unreviewed_days', 0)) + 1
                     action = 'UNREVIEWED'
+                    if p['unreviewed_days'] >= 2:
+                        action, frac = 'EXIT_TWO_SESSIONS_WITHOUT_A_CARD', D(1)
                 else:
                     p['unreviewed_days'] = 0
                     action = card['action']
-                    frac = D(1) if action == 'exit' else (D(str(min(max(card.get('trim_fraction') or 0, 0.1), 0.9))) if action == 'trim' else None)
-                    if frac is not None and _fresh(snapshot, t, now):
-                        _sell(store, book, t, D(p['quantity']) * frac, snapshot, now, p['ticket_id'], 'AI_' + action.upper(), snapshot['next_session'])
-                        if name == 'A':
-                            store.save_book(book)
-                            _exit_linked_c(store, p['ticket_id'], snapshot, now, 'AI_' + action.upper(), None if action == 'exit' else frac)
-                            book = store.book('A')
+                    if action == 'exit':
+                        frac = D(1)
+                    elif action == 'trim':
+                        frac = D(str(min(max(card.get('trim_fraction') or 0, 0.1), 0.9)))
+                if frac is not None and _fresh(snapshot, t, now):
+                    reason = action if action.startswith('EXIT_') else 'AI_' + action.upper()
+                    _sell(store, book, t, D(p['quantity']) * frac, snapshot, now, p['ticket_id'], reason, snapshot['next_session'])
+                    if name == 'A':
+                        store.save_book(book)
+                        _mirror_c(store, p['ticket_id'], snapshot, now, reason, None if frac == 1 else frac)
+                        book = store.book('A')
                 with store.connect() as db:
                     db.execute('INSERT INTO management (at,day,book,ticker,action,reason) VALUES (?,?,?,?,?,?)',
                                (now.isoformat(), day, name, t, action, (card or {}).get('reason', 'no card')))
@@ -165,26 +219,35 @@ def morning(store, spec, snapshot, client, now, *, prices=None):
     a = store.book('A')
     entries_today = len([t for t in store.tickets(day) if t['status'] in ('FILLED', 'WATCH_APPROVED')])
     allowed, why = risk.can_enter(a, spec, entries_today, a.value(marks))
-    local = now.astimezone(ET)
-    if local.time() >= ENTRY_DEADLINE:
+    if now.astimezone(ET).time() >= ENTRY_DEADLINE:
         allowed, why = False, 'AFTER_ENTRY_DEADLINE'
     if not allowed:
         report['stopped'] = report['stopped'] or why
         return _close_day(store, spec, snapshot, now, report)
     pack = tools.packet(snapshot, list(spec.universe), a, marks, spec, store, now)
     try:
+        if not time_left():
+            raise BudgetExhausted('time')
         scout = models.run('scout', seats.build('scout', spec=spec, tools=pack, extra={}), seats.SCHEMAS['scout'])
     except (BudgetExhausted, ModelError) as error:
         report['stopped'] = f'SCOUT_{type(error).__name__}'
         return _close_day(store, spec, snapshot, now, report)
-    candidates = [c for c in scout['candidates'] if c['ticker'] in spec.universe][: spec.entries_per_day - entries_today]
+    seen, candidates = set(), []
+    for cand in scout['candidates']:
+        if cand['ticker'] in spec.universe and cand['ticker'] not in seen:
+            seen.add(cand['ticker'])
+            candidates.append(cand)
+    candidates = candidates[: max(0, spec.entries_per_day - entries_today)]
     if len(candidates) < len(scout['candidates']):
-        store.journal('scout_named_off_list_or_extra', {'names': [c['ticker'] for c in scout['candidates']]}, now)
+        store.journal('scout_names_dropped', {'names': [c['ticker'] for c in scout['candidates']]}, now)
     tickets = []
     for n, cand in enumerate(candidates):
         tid = f"{day}-{cand['ticker']}-{n}"
-        if any(t['ticker'] == cand['ticker'] and t['status'] in ('CRITIC_FAILED', 'CODE_FAILED') for t in store.tickets(day)):
-            continue   # no retry after a fail, same day, same ticker
+        if any(t['ticker'] == cand['ticker'] for t in store.tickets(day)):
+            continue   # one ticket per name per day: no retry after a fail, no duplicate after a crash
+        if not time_left():
+            report['stopped'] = 'PM_TIME_BUDGET'
+            break
         try:
             ticket = models.run('pm', seats.build('pm', spec=spec, tools=pack, extra={'candidate': cand}), seats.SCHEMAS['pm'])
         except (BudgetExhausted, ModelError) as error:
@@ -201,6 +264,8 @@ def morning(store, spec, snapshot, client, now, *, prices=None):
             tickets.append((tid, ticket))
     if tickets:
         try:
+            if not time_left():
+                raise BudgetExhausted('time')
             verdicts = models.run('critic', seats.build('critic', spec=spec, tools=pack, extra={
                 'tickets': [{'ticket_id': tid, **tk} for tid, tk in tickets]}), seats.SCHEMAS['critic'])['tickets']
         except (BudgetExhausted, ModelError) as error:
@@ -212,7 +277,11 @@ def morning(store, spec, snapshot, client, now, *, prices=None):
                 store.save_ticket(tid, day, now, tk['ticker'], 'CRITIC_FAILED', tk, {'fails': []}, v)
                 _set_report(report, tid, 'CRITIC_FAILED')
                 continue
-            status = _approve(store, spec, snapshot, now, tid, tk, marks, mode, report)
+            try:
+                status = _approve(store, spec, snapshot, now, tid, tk, marks, mode, report)
+            except StoreError as error:
+                status = 'APPROVED_RISK_BLOCKED'
+                store.journal('approve_blocked', {'ticket': tid, 'error': str(error)}, now)
             store.save_ticket(tid, day, now, tk['ticker'], status, tk, {'fails': []}, v)
             _set_report(report, tid, status)
     return _close_day(store, spec, snapshot, now, report)
@@ -228,25 +297,27 @@ def _approve(store, spec, snapshot, now, tid, tk, marks, mode, report):
     t = tk['ticker']
     if mode != 'PAPER':
         return 'WATCH_APPROVED'
-    q = snapshot['quotes'][t]
-    ask = D(str(q['ask']))
-    a = store.book('A')
+    a = store.book('A')            # reload: earlier fills today count against the caps
+    entries_today = len([x for x in store.tickets(snapshot['session']) if x['status'] == 'FILLED'])
+    allowed, _ = risk.can_enter(a, spec, entries_today, a.value(marks))
+    if not allowed or t in a.positions or not _fresh(snapshot, t, now):
+        return 'APPROVED_RISK_BLOCKED'
+    ask = D(str(snapshot['quotes'][t]['ask']))
     qty, fill = risk.size(a, spec, marks, ask)
     if qty is None:
         return 'APPROVED_NOT_SIZED'
-    extra = {'ticket_id': tid, 'invalidation_price': str(tk['invalidation_price']), 'time_stop_sessions': tk['time_stop_sessions'],
-             'thesis': tk['thesis'], 'reference_ask': str(ask)}
     fraction = qty * fill / a.value(marks)
+    tk['a_fraction'] = str(fraction)      # book B sizes from this, not from A's starting capital
+    extra = {'ticket_id': tid, 'invalidation_price': str(tk['invalidation_price']), 'time_stop_sessions': tk['time_stop_sessions'],
+             'thesis': tk['thesis'], 'reference_ask': str(ask), 'a_fraction': str(fraction)}
     a.buy(t, qty, fill, snapshot['session'], extra)
     store.save_book(a)
     store.record_fill(now, 'A', t, 'buy', qty, fill, ask, tid, 'AI_ENTRY')
     report['fills'].append({'book': 'A', 'ticker': t, 'quantity': str(qty)})
-    # Book B: a card for the operator, expiring at the entry deadline.
     deadline = datetime.combine(now.astimezone(ET).date(), ENTRY_DEADLINE, ET)
     with store.connect() as db:
         db.execute('INSERT OR IGNORE INTO operator_cards (id,ticket_id,issued_at,expires_at) VALUES (?,?,?,?)',
                    ('B-' + tid, tid, now.isoformat(), deadline.isoformat()))
-    # Book C: the matched random trade, same notional fraction, seeded draw.
     c = store.book('C')
     eligible = [s for s in spec.universe if s not in c.positions and _fresh(snapshot, s, now)]
     pick = control.draw(spec, tid, eligible)
@@ -263,13 +334,18 @@ def _approve(store, spec, snapshot, now, tid, tk, marks, mode, report):
 
 
 def _close_day(store, spec, snapshot, now, report):
+    """Score only paper days, and charge the AI bill from the paper start."""
     marks = _marks(snapshot)
-    spent = store.spent()
-    vti = snapshot['quotes'].get('VTI', {}).get('bid')
-    for name in BOOKS:
-        book = store.book(name)
-        store.record_value(now, snapshot['session'], name, book.value(marks), spent if name in ('A', 'B') else D(0), vti,
-                           snapshot.get('official_value'))
+    if store.mode() == 'PAPER':
+        spent = store.spent(since=store.meta('paper_started_at'))
+        vti = snapshot['quotes'].get('VTI', {}).get('bid')
+        for name in BOOKS:
+            book = store.book(name)
+            value = book.value(marks)
+            book.mark(snapshot['session'], value)
+            store.save_book(book)
+            store.record_value(now, snapshot['session'], name, value, spent if name in ('A', 'B') else D(0), vti,
+                               snapshot.get('official_value'))
     store.journal('morning', report, now)
     return report
 
@@ -321,9 +397,12 @@ def fill_pending(store, spec, snapshot, now):
         b = store.book('B')
         b.settle(snapshot['session'])
         frac = D(card['cut_fraction'])
-        a_fraction = D(a_fill['quantity']) * D(a_fill['price']) / store.book('A').start
-        qty, fill = risk.size(b, spec, _marks(snapshot), ask, fraction=min(a_fraction, spec.max_fraction) * frac)
-        if qty is None or t in b.positions or len(b.positions) >= spec.max_names:
+        a_fraction = D(tk['a_fraction']) if tk.get('a_fraction') else D(a_fill['quantity']) * D(a_fill['price']) / store.book('A').start
+        marks = _marks(snapshot)
+        b_entries = len([f for f in _fills(store, 'B') if f['side'] == 'buy' and f['at'][:10] == now.date().isoformat()])
+        allowed, _ = risk.can_enter(b, spec, b_entries, b.value(marks))
+        qty, fill = risk.size(b, spec, marks, ask, fraction=min(a_fraction, spec.max_fraction) * frac)
+        if qty is None or t in b.positions or not allowed:
             out.append((card['id'], _resolve(store, card['id'], 'APPROVED_RISK_BLOCKED', now, frac)))
             continue
         b.buy(t, qty, fill, snapshot['session'], {'ticket_id': card['ticket_id'], 'invalidation_price': str(tk['invalidation_price']),
@@ -364,5 +443,10 @@ def protective(store, spec, snapshot, now):
         return []
     expire_cards(store, now)
     out = code_exits(store, spec, snapshot, now, protective=True)
+    marks = _marks(snapshot)
+    for name in BOOKS:      # end-of-day baseline for tomorrow's daily stop
+        book = store.book(name)
+        book.mark(snapshot['session'], book.value(marks))
+        store.save_book(book)
     store.journal('protective', out, now)
     return out
