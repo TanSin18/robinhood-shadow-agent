@@ -398,3 +398,41 @@ def test_close_waits_for_todays_bar_then_runs(tmp_path):
             return read
     out = hook.tick(_Inbox(official), _Config(), late, path=path, client_factory=lambda: client, opener=_no_net, reader_factory=lambda: Stale())
     assert out['close']['bars_through'] == '2026-10-04' and '"stale": true' in client.prompts[-1]
+
+
+def test_ask_answers_from_the_packet_checks_numbers_and_stores(tmp_path):
+    from agents.analyst import ask
+    official = _official(tmp_path)
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', official)
+    seen = {}
+
+    def client(model, prompt, schema, envelope):
+        seen['prompt'] = prompt
+        assert model == ask.MODEL and envelope == ask.ENVELOPE
+        return ({'answer': 'The desk rule bought SOXX because it ranked first; it sits 25.72% above its average.', 'missing': '',
+                 'sources': ['decision', 'feature:SOXX'], 'follow_ups': ['What would make it sell?'],
+                 'cited_numbers': [{'source_id': 'feature:SOXX', 'field': 'pct_vs_ma200', 'value': 25.72}]}, 1200, 200)
+    pkt = {'decision': {'id': 'decision', 'type': 'DESK_ENTRY'}, 'feature:SOXX': {'id': 'feature:SOXX', 'pct_vs_ma200': 25.72}}
+    out = ask.answer(store, '  Why did we buy   SOXX today? ', pkt, NOW_AM, client, day='2026-10-05', context='room')
+    assert out['status'] == 'ANSWERED' and out['checks']['ok'] and '"Why did we buy SOXX today?"' in seen['prompt']
+    with store.connect() as db:
+        row = db.execute('SELECT question, status, context FROM qa').fetchone()
+    assert row == ('Why did we buy SOXX today?', 'ANSWERED', 'room') and 0 < store.spent('2026-10-05') < 1
+    with pytest.raises(ask.AskError):
+        ask.answer(store, 'x' * 501, pkt, NOW_AM, client, day='2026-10-05')
+    with pytest.raises(ask.AskError):
+        ask.answer(store, '   ', pkt, NOW_AM, client, day='2026-10-05')
+
+
+def test_ask_records_a_model_failure_and_stops_at_the_daily_limit(tmp_path, monkeypatch):
+    from agents.analyst import ask
+    from agents.ai_trader.model import ModelError
+    official = _official(tmp_path)
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', official)
+
+    def broken(model, prompt, schema, envelope):
+        raise ModelError('OUTPUT_TRUNCATED')
+    out = ask.answer(store, 'What happened?', {}, NOW_AM, broken, day='2026-10-05')
+    assert out['status'] == 'FAILED_ModelError'
+    monkeypatch.setattr(ask, 'MAX_PER_DAY', 1)
+    assert ask.answer(store, 'Again?', {}, NOW_AM, broken, day='2026-10-05') == {'status': 'DAILY_QUESTION_LIMIT'}
