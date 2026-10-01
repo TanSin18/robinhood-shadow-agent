@@ -906,6 +906,12 @@ def main():
                 except Exception as ai_error:
                     ai_trader={'status':'AI_TRADER_UNAVAILABLE','error_type':type(ai_error).__name__}
                 extra={'ai_trader':ai_trader} if ai_trader is not None else {}
+                try:   # analyst desk: commentary, news, regime and shadow Kelly; never trades
+                    from agents.analyst.hook import tick as analyst_tick
+                    analyst=analyst_tick(inbox,config,now)
+                except Exception as analyst_error:
+                    analyst={'status':'ANALYST_UNAVAILABLE','error_type':type(analyst_error).__name__}
+                if analyst is not None: extra['analyst']=analyst
                 if protective is not None:
                     print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,'protective_check':protective,**extra},default=str));return
                 print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,**extra},default=str));return
