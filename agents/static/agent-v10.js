@@ -10,20 +10,31 @@
     });
   }
 
+  // Tabs come in groups: a tab list may carry data-tabgroup="name" and its panels data-tabpanel="name".
+  // The page's main tabs use the unnamed group. Switching one group never touches another.
   function setupTabs() {
     var tabs = all(document, '[data-tab]');
     if (!tabs.length) return;
     var panels = all(document, '[data-tabpanel]');
+    function groupOfTab(t) { var g = t.closest('[data-tabgroup]'); return g ? g.getAttribute('data-tabgroup') : ''; }
     function show(id, push) {
-      tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('data-tab') === id ? 'true' : 'false'); });
-      panels.forEach(function (p) { if (p.id === id) p.setAttribute('data-active', ''); else p.removeAttribute('data-active'); });
+      var panel = document.getElementById(id);
+      if (!panel || !panel.hasAttribute('data-tabpanel')) return;
+      var group = panel.getAttribute('data-tabpanel') || '';
+      tabs.forEach(function (t) { if (groupOfTab(t) === group) t.setAttribute('aria-selected', t.getAttribute('data-tab') === id ? 'true' : 'false'); });
+      panels.forEach(function (p) {
+        if ((p.getAttribute('data-tabpanel') || '') !== group) return;
+        if (p.id === id) p.setAttribute('data-active', ''); else p.removeAttribute('data-active');
+      });
+      var outer = panel.parentElement && panel.parentElement.closest('[data-tabpanel]');
+      if (outer && !outer.hasAttribute('data-active')) show(outer.id, false);
       if (push && history.replaceState) history.replaceState(null, '', '#' + id);
     }
     tabs.forEach(function (t) {
       t.addEventListener('click', function (e) { e.preventDefault(); show(t.getAttribute('data-tab'), true); });
     });
     var hash = (location.hash || '').slice(1);
-    if (hash && document.getElementById(hash) && document.getElementById(hash).hasAttribute('data-tabpanel')) show(hash, false);
+    if (hash) show(hash, false);
   }
 
   function setupAccounts() {

@@ -23,7 +23,7 @@ def categorize(review, meta=None):
     status = (review.get('status') or '').upper()
     build = when is None or when < OFFICIAL_FROM
     tags.append(('Build phase', 'build', 'Before v1.5 took effect (Oct 1, 9:30 AM ET). The system was still being built; never counted.')
-                if build else ('Official · v1.5', 'official', 'Scheduled experiment run under the registered v1.5 rules.'))
+                if build else ('Official', 'official', 'Scheduled experiment run under the registered rules in force (v1.5 entry and exit rules, v1.6 capital and protective check).'))
     if mode == 'fixture':
         tags.append(('Test data', 'warn', 'Fixture data, not live market data.'))
     elif mode == 'whatif':

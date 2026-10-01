@@ -5,6 +5,7 @@ enhancement: /assets/agent-v10.js shows one range at a time; without it all rang
 """
 from __future__ import annotations
 
+import hashlib
 import math
 from datetime import datetime, timedelta, timezone
 from html import escape
@@ -84,29 +85,31 @@ def line_chart(points, *, label, width=720, height=240, baseline=None, baseline_
     lo, hi = min(vals), max(vals)
     pad = max((hi - lo) * 0.12, abs(hi) * 0.0015, 0.5)
     lo, hi = lo - pad, hi + pad
-    L, R, T, B = 64, 14, 14, 30
+    L, R, T, B = 10, 10, 20, 26          # labels sit inside the plot, so the line runs edge to edge
     X = lambda d: L + ((d - t0).total_seconds() / span) * (width - L - R) if len(pts) > 1 or markers else (L + width - R) / 2
     Y = lambda v: T + (hi - v) / (hi - lo) * (height - T - B)
     if tone is None:
         ref = baseline if baseline is not None else pts[0][1]
         tone = 'up' if pts[-1][1] > ref + 1e-9 else 'down' if pts[-1][1] < ref - 1e-9 else 'flat'
-    parts = [f'<svg class="v10-chart tone-{tone}" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(label)}">']
-    for frac in (0, .5, 1):   # y grid
+    gid = 'g' + hashlib.sha256(f'{label}|{width}|{len(pts)}|{pts[0][0]}|{pts[-1][0]}'.encode()).hexdigest()[:10]
+    parts = [f'<svg class="v10-chart tone-{tone}" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(label)}">'
+             f'<defs><linearGradient id="{gid}" x1="0" x2="0" y1="0" y2="1"><stop class="g0" offset="0"/><stop class="g1" offset="1"/></linearGradient></defs>']
+    for frac in (0, .5, 1):   # y grid, value written just above its line
         v = hi - frac * (hi - lo)
         y = Y(v)
         parts.append(f'<line class="grid" x1="{L}" x2="{width - R}" y1="{y:.1f}" y2="{y:.1f}"/>'
-                     f'<text class="axis" x="{L - 6}" y="{y + 4:.1f}" text-anchor="end">{esc(money(v) if money_axis else f"{v:,.2f}")}</text>')
+                     f'<text class="axis" x="{L + 2}" y="{y - 5:.1f}">{esc(money(v) if money_axis else f"{v:,.2f}")}</text>')
     if baseline is not None:
         y = Y(float(baseline))
         parts.append(f'<line class="base" x1="{L}" x2="{width - R}" y1="{y:.1f}" y2="{y:.1f}"/>'
-                     f'<text class="axis base-label" x="{width - R}" y="{y - 5:.1f}" text-anchor="end">{esc(baseline_label)}</text>')
+                     f'<text class="axis base-label" x="{width - R - 2}" y="{y - 5:.1f}" text-anchor="end">{esc(baseline_label)}</text>')
     for value, text, cls in hlines:
         v = _f(value)
         if v is None:
             continue
         y = Y(v)
         parts.append(f'<g class="hline {esc(cls)}"><line x1="{L}" x2="{width - R}" y1="{y:.1f}" y2="{y:.1f}"/>'
-                     f'<text class="axis" x="{L + 4}" y="{y - 5:.1f}">{esc(text)}</text></g>')
+                     f'<text class="axis" x="{width / 2:.0f}" y="{y - 5:.1f}" text-anchor="middle">{esc(text)}</text></g>')
     for o_pts, cls, text in ov:
         o_pts = [(d, v) for d, v in o_pts if t0 <= d <= t1]
         if len(o_pts) > 1:
@@ -115,11 +118,14 @@ def line_chart(points, *, label, width=720, height=240, baseline=None, baseline_
     if len(pts) > 1:
         d = ' '.join(f'{"M" if i == 0 else "L"}{X(a):.1f} {Y(b):.1f}' for i, (a, b) in enumerate(pts))
         area = d + f' L{X(pts[-1][0]):.1f} {height - B} L{X(pts[0][0]):.1f} {height - B} Z'
-        parts.append(f'<path class="area" d="{area}"/><path class="line" d="{d}"/>')
+        parts.append(f'<path class="area" fill="url(#{gid})" d="{area}"/><path class="line" d="{d}"/>')
     step = max(1, len(pts) // 60)
+    sparse = len(pts) <= 12
     for i, (a, b) in enumerate(pts):
-        if i % step == 0 or i == len(pts) - 1:
-            parts.append(f'<circle class="pt{" solo" if len(pts) == 1 else ""}" cx="{X(a):.1f}" cy="{Y(b):.1f}" r="{4 if len(pts) < 40 else 2.4}">'
+        last = i == len(pts) - 1
+        if i % step == 0 or last:
+            cls = 'pt' + (' solo' if len(pts) == 1 else '') + (' last' if last else '') + ('' if sparse or last else ' quiet')
+            parts.append(f'<circle class="{cls}" cx="{X(a):.1f}" cy="{Y(b):.1f}" r="{4 if last else 3}">'
                          f'<title>{esc(short_time(a, show_dates != "date"))}: {esc(money(b) if money_axis else f"{b:,.2f}")}</title></circle>')
     for d, v, text, cls in markers:
         d, v = _dt(d), _f(v)
@@ -127,14 +133,14 @@ def line_chart(points, *, label, width=720, height=240, baseline=None, baseline_
             continue
         x, y = X(d), Y(v)
         anchor = 'end' if x > width * .7 else 'start'
-        dx = -8 if anchor == 'end' else 8
-        parts.append(f'<g class="marker {esc(cls)}"><circle cx="{x:.1f}" cy="{y:.1f}" r="6"/>'
-                     f'<text x="{x + dx:.1f}" y="{y - 10:.1f}" text-anchor="{anchor}">{esc(text)}</text>'
+        dx = -9 if anchor == 'end' else 9
+        parts.append(f'<g class="marker {esc(cls)}"><circle cx="{x:.1f}" cy="{y:.1f}" r="5"/>'
+                     f'<text x="{x + dx:.1f}" y="{y + 16:.1f}" text-anchor="{anchor}">{esc(text)}</text>'
                      f'<title>{esc(text)} · {esc(short_time(d))}</title></g>')
     if show_dates:
         fmt = (lambda d: short_time(d, False)) if show_dates == 'date' else short_time
-        parts.append(f'<text class="axis" x="{L}" y="{height - 8}">{esc(fmt(t0))}</text>'
-                     f'<text class="axis" x="{width - R}" y="{height - 8}" text-anchor="end">{esc(fmt(t1))}</text>')
+        parts.append(f'<text class="axis date" x="{L + 2}" y="{height - 8}">{esc(fmt(t0))}</text>'
+                     f'<text class="axis date" x="{width - R - 2}" y="{height - 8}" text-anchor="end">{esc(fmt(t1))}</text>')
     parts.append('</svg>')
     return ''.join(parts)
 
@@ -172,26 +178,32 @@ def ranged(points, *, label, now=None, ranges=RANGES, default=None, **kw):
     return f'<div class="v10-ranged"><div class="v10-range-bar" role="group" aria-label="Time range">{bar}</div>{body}</div>'
 
 
-def donut(slices, *, label, size=180):
+def donut(slices, *, label, size=180, center=None):
     """slices: [(text, value, cls)]; values >= 0."""
     data = [(t, _f(v) or 0.0, c) for t, v, c in slices if (_f(v) or 0) > 0]
     total = sum(v for _, v, _ in data)
     if total <= 0:
         return f'<p class="v10-empty">Nothing to show for {esc(label)}.</p>'
-    r, cx, cy, w = size / 2 - 12, size / 2, size / 2, 22
-    parts = [f'<svg class="v10-donut" viewBox="0 0 {size} {size}" role="img" aria-label="{esc(label)}">']
+    r, cx, cy, w = size / 2 - 12, size / 2, size / 2, 12
+    parts = [f'<svg class="v10-donut" viewBox="0 0 {size} {size}" role="img" aria-label="{esc(label)}">'
+             f'<circle class="track" cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke-width="{w}"/>']
     a0 = -math.pi / 2
+    gap = 0.035 if len(data) > 1 else 0          # a hair of space between slices
     for text, v, cls in data:
         frac = v / total
         if frac >= .9999:
             parts.append(f'<circle class="slice {esc(cls)}" cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke-width="{w}"><title>{esc(text)}: 100%</title></circle>')
             continue
         a1 = a0 + frac * 2 * math.pi
-        large = 1 if frac > .5 else 0
-        x0, y0, x1, y1 = cx + r * math.cos(a0), cy + r * math.sin(a0), cx + r * math.cos(a1), cy + r * math.sin(a1)
+        b0, b1 = a0 + gap / 2, max(a0 + gap / 2 + 0.001, a1 - gap / 2)
+        large = 1 if (b1 - b0) > math.pi else 0
+        x0, y0, x1, y1 = cx + r * math.cos(b0), cy + r * math.sin(b0), cx + r * math.cos(b1), cy + r * math.sin(b1)
         parts.append(f'<path class="slice {esc(cls)}" d="M{x0:.2f} {y0:.2f} A{r} {r} 0 {large} 1 {x1:.2f} {y1:.2f}" fill="none" stroke-width="{w}">'
                      f'<title>{esc(text)}: {frac * 100:.1f}%</title></path>')
         a0 = a1
+    if center:
+        parts.append(f'<text class="donut-value" x="{cx}" y="{cy + 2}" text-anchor="middle">{esc(center[0])}</text>'
+                     f'<text class="donut-label" x="{cx}" y="{cy + 20}" text-anchor="middle">{esc(center[1])}</text>')
     parts.append('</svg>')
     legend = ''.join(f'<li><i class="key {esc(c)}"></i><span>{esc(t)}</span><b>{v / total * 100:.1f}%</b><small>{esc(money(v))}</small></li>'
                      for t, v, c in data)

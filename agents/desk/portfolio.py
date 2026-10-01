@@ -229,7 +229,7 @@ def _holding(state, p, x, capsule):
     if cost:
         hlines.append((float(cost), f'your cost {money(cost)}', 'cost'))
         hlines.append((float(cost * (1 - PROTECTIVE_STOP)), f'8% stop {money(cost * (1 - PROTECTIVE_STOP))}', 'stop'))
-    chart = ranged(closes, label=f'{t} price', now=closes[-1][0] if closes else None, default='6M', markers=markers,
+    chart = ranged(closes, label=f'{t} price', now=closes[-1][0] if closes else None, default='6M', markers=markers, width=1040, height=300,
                    overlays=[(ma_line, 'ma200', '200-session average')], hlines=hlines, show_dates='date',
                    ranges=(('1W', 7), ('1M', 31), ('3M', 92), ('6M', 183), ('1Y', 366), ('ALL', None)))
     rows, sizing, vol = _why(state, p, t, fills, capsule)
@@ -265,7 +265,7 @@ def _account_panel(state, p, values, rebase_at, capsule, active, now):
     day_change = total - day0 if day0 is not None else None
     peak = D(p.get('peak')) or start
     dd = (peak - total) / peak if peak else Decimal(0)
-    chart = ranged(pts, label=f'{ARMS.get(track, track)} value', now=now, baseline=float(start), baseline_label=f'start {money(start)}',
+    chart = ranged(pts, label=f'{ARMS.get(track, track)} value', now=now, baseline=float(start), baseline_label=f'start {money(start)}', width=1080, height=300,
                    ranges=(('1D', 1), ('1W', 7), ('1M', 31), ('3M', 92), ('1Y', 366), ('ALL', None)))
     slices = [('Cash', cash, 'cash')]
     for i, x in enumerate(p.get('positions') or []):
@@ -278,13 +278,18 @@ def _account_panel(state, p, values, rebase_at, capsule, active, now):
     fills = sorted(p.get('fills') or [], key=lambda f: str(f.get('timestamp')), reverse=True)
     activity = ''.join(f'<li><time>{esc(short_time(f.get("timestamp")))}</time><b>{esc((f.get("side") or "").upper())} {esc(f.get("ticker"))}</b>'
                        f'<span>{esc(qty_s(f.get("quantity")))} shares @ {money(f.get("price"))} · spread {money(f.get("spread_cost"))}</span></li>' for f in fills)
-    stats = [('Total value', money(total)), ('Buying power (settled cash)', money(p.get('settled_cash'))),
-             ('Unsettled cash (T+1)', money(p.get('unsettled_cash'))), ('Invested, valued at bid', money(invested)),
+    stats = [('Total value', money(total)), ('Invested, valued at bid', money(invested)),
+             ('Buying power (settled cash)', money(p.get('settled_cash'))), ('Unsettled cash (T+1)', money(p.get('unsettled_cash'))),
              ('Return since start', f'<span class="{_cls(total - start)}">{money(total - start, True)} ({pct((total / start - 1) * 100)})</span>'),
-             ('Peak value', money(peak)), ('Drawdown from peak', f'{pct(dd * 100, False)} · new buys stop at 10%'),
-             ('Daily-loss stop', f'new buys stop if today’s loss reaches 3% ({money(total * DAILY_LOSS)})'),
-             ('Open positions', f'{len(p.get("positions") or [])} of max {MAX_POSITIONS}'),
-             ('10% drawdown latch', 'latched: new buys blocked' if p.get('peak_breaker_latched') else 'off')]
+             ('Peak value', money(peak))]
+    latched = bool(p.get('peak_breaker_latched'))
+    limits = [('Drawdown from peak', pct(dd * 100, False), 'new buys stop at 10%', dd < Decimal('0.10') and not latched),
+              ('Loss today', pct((-(day_change / day0) * 100) if day_change is not None and day0 and day_change < 0 else 0, False),
+               f'new buys stop at 3% ({money(total * DAILY_LOSS)})', not (day_change is not None and day0 and -day_change / day0 >= DAILY_LOSS)),
+              ('Open positions', f'{len(p.get("positions") or [])} of {MAX_POSITIONS}', 'most positions allowed at once', len(p.get('positions') or []) < MAX_POSITIONS),
+              ('Drawdown latch', 'On' if latched else 'Off', 'once on, new buys stay blocked until reset', not latched)]
+    limit_rows = ''.join(f'<li class="{"ok" if ok else "hit"}"><span>{esc(k)}</span><b>{v}</b><small>{esc(n)}</small></li>' for k, v, n, ok in limits)
+    inv_pct = f'{float(invested / total * 100):.1f}%' if total else '—'
     return (f'<section class="v10-acct" id="acct-{lane}-{track}" data-acct="{lane}-{track}"{" data-active" if active else ""}>'
             f'<header class="v10-acct-head"><div><p class="v10-eyebrow">{esc(LANES[lane])} · paper</p><h2>{esc(ARMS.get(track, track))}</h2>'
             f'<p class="v10-sub">{esc(ARM_HELP.get(track, ""))}</p></div>'
@@ -295,9 +300,10 @@ def _account_panel(state, p, values, rebase_at, capsule, active, now):
             f'<div class="v10-graph">{chart}<p class="v10-note">Valued at the bid (what you could sell for), so a fresh buy starts slightly '
             'below cost; that gap is the spread paid. Points are the recorded valuations, so the graph grows with every run.</p></div>'
             '<div class="v10-grid">'
-            f'<section class="v10-panel"><h3>Allocation</h3>{donut(slices, label="Allocation")}</section>'
-            '<section class="v10-panel"><h3>Account stats</h3><dl class="v10-stats">'
-            + ''.join(f'<div><dt>{esc(k)}</dt><dd>{v}</dd></div>' for k, v in stats) + '</dl></section></div>'
+            f'<section class="v10-panel"><h3>Allocation</h3>{donut(slices, label="Allocation", center=(inv_pct, "invested"))}</section>'
+            '<section class="v10-panel"><h3>Account</h3><dl class="v10-stats">'
+            + ''.join(f'<div><dt>{esc(k)}</dt><dd>{v}</dd></div>' for k, v in stats) + '</dl>'
+            f'<h4>Safety limits</h4><ul class="v10-limits">{limit_rows}</ul></section></div>'
             '<section class="v10-panel"><h3>Holdings <small>open a row for the chart, the reason and the exit plan</small></h3>'
             f'<div class="v10-hold-head"><span>Name</span><span>Shares</span><span>Price</span><span>Value</span><span>Return</span><span>Weight</span></div>{holdings}</section>'
             '<section class="v10-panel"><h3>Activity</h3>'
@@ -312,8 +318,8 @@ def _compare(paper):
         rows += (f'<tr><td><a href="#acct-{p["lane"]}-{p["track"]}" data-acct-link="{p["lane"]}-{p["track"]}">{esc(ARMS.get(p["track"], p["track"]))}</a></td>'
                  f'<td>{esc(p["lane"])}</td><td class="num">{money(total)}</td><td class="num {_cls(total - start)}">{money(total - start, True)}</td>'
                  f'<td class="num">{money(cash)}</td><td class="num">{len(p.get("positions") or [])}</td></tr>')
-    return ('<div class="table-wrap"><table class="mini v10-compare"><thead><tr><th>Account</th><th>Lane</th><th>Value</th><th>vs start</th>'
-            f'<th>Cash</th><th>Holdings</th></tr></thead><tbody>{rows}</tbody></table></div>')
+    return ('<div class="table-wrap"><table class="mini v10-compare"><thead><tr><th>Account</th><th>Lane</th><th class="num">Value</th><th class="num">vs start</th>'
+            f'<th class="num">Cash</th><th class="num">Holdings</th></tr></thead><tbody>{rows}</tbody></table></div>')
 
 
 def _dip_short(reason):
@@ -327,47 +333,87 @@ def _dip_short(reason):
 
 
 def _screen(capsule):
-    """Why this name and not the others: the latest decision's view of all 23 registered tickers."""
+    """Why this name and not the others: the latest decision's view of every registered ticker, grouped by what happened to it."""
     if not capsule or not capsule.get('features'):
         return ''
     strat = capsule.get('strategies') or {}
     mom, dip = strat.get('momentum_rotation') or {}, strat.get('mean_reversion') or {}
     ranked = list(mom.get('ranked') or [])
     picked = set((capsule.get('decision') or {}).get('signal_instruments') or ranked[:1])
-    rows = []
+    dip_blocked = dip.get('blocked') or {}
+    groups = {'ok': [], 'blocked': [], 'na': []}
     for t, f in capsule['features'].items():
         m = _f(f.get('momentum_126d'))
-        if t in picked:
-            status, cls = 'Picked #1: the desk bought it', 'pick'
-        elif t in ranked:
-            status, cls = f'Qualifies, ranked #{ranked.index(t) + 1}: only #1 is bought', 'ok'
+        if t in picked or t in ranked:
+            key = 'ok'
         elif t in (mom.get('blocked') or {}):
-            status, cls = 'Blocked: ' + mom['blocked'][t].replace('price is not above its 200-session moving average', 'below its 200-session average'), 'blocked'
+            key = 'blocked'
         elif t in STOCKS or t not in (mom.get('evaluated') or [t]):
-            status, cls = 'Single stock: these rules buy ETFs only; stocks need an AI pick', 'na'
+            key = 'na'
         else:
-            status, cls = 'Evaluated, not ranked', 'ok'
-        rows.append((m, t, f, status, cls, (dip.get('blocked') or {}).get(t)))
-    rows.sort(key=lambda r: (r[0] is None, -(r[0] or 0)))
-    top = max((abs(r[0]) for r in rows if r[0] is not None), default=1) or 1
-    body = ''
-    for m, t, f, status, cls, dip_reason in rows:
+            key = 'ok'
+        groups[key].append((m, t, f))
+    for rows in groups.values():
+        rows.sort(key=lambda r: (r[0] is None, -(r[0] or 0)))
+    top = max((abs(r[0]) for rows in groups.values() for r in rows if r[0] is not None), default=1) or 1
+    dip_signals = [t for t in capsule['features'] if dip_blocked and t not in dip_blocked and t in (dip.get('evaluated') or [])]
+
+    def row(m, t, f, badge, cls):
         price, ma = _f(f.get('price')), _f(f.get('ma200'))
         dist = (price / ma - 1) * 100 if price and ma else None
+        day = (_f(f.get('one_day_return')) or 0) * 100
         w = int(round(min(1, abs(m) / top) * 20)) if m is not None else 0
-        body += (f'<tr class="v10-scr-{cls}"><td><b>{esc(t)}</b><small>{esc(NAMES.get(t, ""))}</small></td>'
-                 f'<td class="num">{money(price)}</td><td class="num {_cls(dist)}">{pct(dist)}</td>'
-                 f'<td class="v10-barcell"><span class="v10-bar {"neg" if (m or 0) < 0 else "pos"} w{w}"></span>'
-                 f'<span class="num">{pct(m * 100) if m is not None else "—"}</span></td>'
-                 f'<td class="num">{pct((_f(f.get("one_day_return")) or 0) * 100)}</td>'
-                 f'<td>{esc(status)}</td><td class="small">{esc(_dip_short(dip_reason))}</td></tr>')
-    return ('<details class="v10-panel v10-screen" open><summary><h3>Why this pick and not the others</h3>'
-            f'<small>{esc(short_time(capsule.get("observed_at")))} decision · all 23 registered names, strongest momentum first</small></summary>'
-            '<p class="v10-note">Momentum rule (the 17 ETFs): needs at least 253 daily closes, the last close above its 200-session average and '
-            'positive 126-session momentum; only the single strongest is bought. Dip rule: close above the 200-session average and the last session '
-            'fell 3% or more. Single stocks are bought only through an AI pick that passes the Critic and the risk engine.</p>'
-            '<div class="table-wrap"><table class="mini v10-scr"><thead><tr><th>Name</th><th>Price</th><th>vs 200-day avg</th><th>126-session momentum</th>'
-            f'<th>Last day</th><th>Momentum rule</th><th>Dip rule</th></tr></thead><tbody>{body}</tbody></table></div></details>')
+        return (f'<tr class="pk-{cls}"><td class="pk-rank">{badge}</td><th scope="row"><b>{esc(t)}</b><small>{esc(NAMES.get(t, ""))}</small></th>'
+                f'<td><div class="pk-mom"><span class="pk-track"><span class="v10-bar {"neg" if (m or 0) < 0 else "pos"} w{w}"></span></span>'
+                f'<span class="num {_cls(m)}">{pct(m * 100, digits=1) if m is not None else "—"}</span></div></td>'
+                f'<td class="num {_cls(dist)}">{pct(dist, digits=1)}</td><td class="num {_cls(day)}">{pct(day)}</td><td class="num">{money(price)}</td></tr>')
+
+    def table(rows, badge_for, cls):
+        body = ''.join(row(m, t, f, badge_for(i, t), 'pick' if t in picked else cls) for i, (m, t, f) in enumerate(rows))
+        return ('<div class="table-wrap"><table class="pk-table"><colgroup><col class="c-rank"><col class="c-name"><col class="c-mom"><col class="c-n"><col class="c-n">'
+                '<col class="c-n"></colgroup><thead><tr><th><span class="sr-only">Rank</span></th><th>Name</th><th>126-session momentum</th>'
+                f'<th class="num">vs 200-day avg</th><th class="num">Last day</th><th class="num">Price</th></tr></thead><tbody>{body}</tbody></table></div>')
+
+    def group(title, sub, rows, badge_for, cls, open_=False):
+        if not rows:
+            return ''
+        return (f'<details class="pk-group"{" open" if open_ else ""}><summary><b>{esc(title)}</b><span class="pk-count">{len(rows)}</span>'
+                f'<small>{esc(sub)}</small></summary>{table(rows, badge_for, cls)}</details>')
+
+    etfs = len(groups['ok']) + len(groups['blocked'])
+    hero = ''
+    win = next(((m, t, f) for m, t, f in groups['ok'] if t in picked), None)
+    if win:
+        m, t, f = win
+        price, ma = _f(f.get('price')), _f(f.get('ma200'))
+        dist = (price / ma - 1) * 100 if price and ma else None
+        runner = next((x for x in groups['ok'] if x[1] not in picked), None)
+        versus = (f' The runner-up, {runner[1]}, had {pct(runner[0] * 100, digits=1)}.' if runner and runner[0] is not None else '')
+        hero = (f'<div class="pk-hero"><div class="pk-win"><span class="pk-tag">Picked</span><b>{esc(t)}</b><small>{esc(NAMES.get(t, ""))}</small></div>'
+                f'<p>Strongest 126-session momentum of the {len(groups["ok"])} ETFs that passed both tests, so the desk rule bought it.{esc(versus)}</p>'
+                '<dl class="pk-facts">'
+                f'<div><dt>Momentum</dt><dd class="{_cls(m)}">{pct(m * 100, digits=1) if m is not None else "—"}</dd></div>'
+                f'<div><dt>vs 200-day avg</dt><dd class="{_cls(dist)}">{pct(dist, digits=1)}</dd></div>'
+                f'<div><dt>Price</dt><dd>{money(price)}</dd></div></dl></div>')
+    elif not picked:
+        hero = '<div class="pk-hero"><p>Nothing was picked in this decision: no ETF passed both tests.</p></div>'
+    funnel = (f'<ol class="pk-funnel"><li><b>{etfs}</b><span>ETFs screened</span></li>'
+              f'<li><b>{len(groups["ok"])}</b><span>above their 200-session average with positive momentum</span></li>'
+              f'<li><b>{len([t for _, t, _ in groups["ok"] if t in picked])}</b><span>bought: only the strongest</span></li>'
+              f'<li class="pk-side"><b>{len(dip_signals)}</b><span>dip-rule signals (needs a 3% one-day drop)</span></li></ol>')
+    return ('<section class="v10-panel pk"><header class="pk-head"><h3>Why this pick and not the others</h3>'
+            f'<small>{esc(short_time(capsule.get("observed_at")))} decision · {len(capsule["features"])} registered names</small></header>'
+            + hero + funnel
+            + group('Passed both tests', 'ranked by momentum; only #1 is bought', groups['ok'],
+                    lambda i, t: '<span class="pk-badge win">#1</span>' if t in picked else f'<span class="pk-badge">#{i + 1}</span>', 'ok', True)
+            + group('Blocked', 'ETFs trading below their 200-session average', groups['blocked'], lambda i, t: '<span class="pk-badge off">—</span>', 'blocked')
+            + group('Single stocks', 'these two rules buy ETFs only; a stock needs an AI pick that passes the Critic and the risk engine', groups['na'],
+                    lambda i, t: '<span class="pk-badge off">AI</span>', 'na')
+            + '<details class="pk-rules"><summary>The two rules in plain words</summary>'
+            '<p><b>Momentum rule (ETFs).</b> Needs at least 253 daily closes, the last close above its 200-session average and positive '
+            '126-session momentum. Only the single strongest is bought.</p>'
+            '<p><b>Dip rule.</b> Close above the 200-session average and the last session fell 3% or more.</p>'
+            '<p><b>Single stocks.</b> Bought only through an AI pick that passes the Critic and the risk engine.</p></details></section>')
 
 
 def paper_tab(state, now):
@@ -409,7 +455,7 @@ def real_tab(state):
     pts = [(h['at'], h['cash']) for h in pf.get('real_history') or [] if h.get('cash') is not None]
     pts += [(e['created_at'], base) for e in trip if e.get('status') in ('VERIFIED_UNCHANGED', 'BASELINE_CREATED') and base is not None]
     last = trip[-1] if trip else {}
-    chart = ranged(pts, label='Agentic account cash', now=last.get('created_at'), baseline=base, baseline_label='first snapshot',
+    chart = ranged(pts, label='Agentic account cash', now=last.get('created_at'), baseline=base, baseline_label='first snapshot', width=1080, height=300,
                    ranges=(('1W', 7), ('1M', 31), ('3M', 92), ('ALL', None)))
     orders = real.get('open_orders') or {}
     checks = ''.join(f'<li class="{"ok" if (e.get("status") or "").startswith(("VERIFIED", "BASELINE")) else "hit"}">'

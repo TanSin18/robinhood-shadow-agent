@@ -45,7 +45,8 @@ def test_portfolio_paper_home_explains_each_holding():
     assert html.count('data-acct="A-') == 3
     assert 'Why it was picked' in html and 'Desk rule (no AI): not an AI pick' in html
     assert 'What would make it sell' in html and '8% under your cost ($521.31)' in html
-    assert 'Picked #1: the desk bought it' in html and 'ranked #2' in html and 'below its 200-session average' in html
+    assert 'class="pk-badge win">#1' in html and 'class="pk-badge">#2' in html and 'ETFs trading below their 200-session average' in html
+    assert 'Passed both tests' in html and 'Single stocks' in html and 'class="pk-funnel"' in html
     assert 'Single stock' in html                        # AAPL is not bought by the ETF rules
     assert 'YES at' in html and '19 min 39 s' in html     # your answer on the approval card
     for r in ('1D', '1W', '1M', 'ALL'):

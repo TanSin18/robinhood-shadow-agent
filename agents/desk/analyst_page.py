@@ -146,28 +146,34 @@ def load(official_db):
         db.close()
 
 
-def _note(n, news_items, title):
+def _note(n, news_items, title, when_written=''):
+    """One note, laid out to be read in a minute: the headline, four short reads, news by ticker (headlines folded), what to watch."""
     if not n:
-        return f'<section class="v10-panel"><h3>{esc(title)}</h3><p class="v10-empty">Not written yet.</p></section>'
+        return (f'<article class="nb nb-empty"><p class="nb-meta">{esc(title)}</p><h2>Not written yet</h2>'
+                f'<p class="v10-empty">{esc(when_written)}</p></article>')
     by_id = {i.get('id'): i for i in news_items or []}
     flags = (n.get('_checks') or {}).get('flags') or []
     checks = ('<p class="an-ok">Code checks passed: every number cited matches the records; no order-like or hype language.</p>' if not flags else
               '<p class="an-flag">Code flagged: ' + esc(', '.join(flags)) + '</p>')
-    rows = ''.join(f'<div><dt>{esc(k)}</dt><dd>{esc(n.get(f))}</dd></div>' for k, f in
-                   (('Market', 'market_read'), ('Official decision', 'decision_read'), ('Regime', 'regime_read'), ('Auction', 'auction_read'))
-                   if n.get(f))
+    reads = ''.join(f'<section><h4>{esc(k)}</h4><p>{esc(n.get(f))}</p></section>' for k, f in
+                    (('Market', 'market_read'), ('Official decision', 'decision_read'), ('Regime', 'regime_read'), ('Auction', 'auction_read'))
+                    if n.get(f))
+    order = {'high': 0, 'medium': 1, 'low': 2}
     notes = ''
-    for x in n.get('news') or []:
+    for x in sorted(n.get('news') or [], key=lambda x: order.get(x.get('relevance'), 3)):
         links = ''.join(f'<li><a href="{esc(by_id[h]["url"])}" rel="noreferrer noopener" target="_blank">{esc(by_id[h]["title"])}</a>'
-                        f'<small> · {esc(by_id[h].get("source"))}</small></li>' for h in x.get('headline_ids') or [] if h in by_id)
-        notes += (f'<li><span class="an-sent {SENT_CLS.get(x.get("sentiment"), "")}">{esc(x.get("sentiment"))}</span>'
-                  f'<b>{esc(x.get("ticker"))}</b> <small>{esc(x.get("relevance"))} relevance</small><p>{esc(x.get("note"))}</p>'
-                  + (f'<ul class="an-links">{links}</ul>' if links else '') + '</li>')
+                        f'<small>{esc(by_id[h].get("source"))}</small></li>' for h in x.get('headline_ids') or [] if h in by_id)
+        count = links.count('<li>')
+        head = (f'<span class="an-sent {SENT_CLS.get(x.get("sentiment"), "")}">{esc(x.get("sentiment"))}</span>'
+                f'<b class="nb-tk">{esc(x.get("ticker"))}</b><p>{esc(x.get("note"))}</p>')
+        notes += (f'<li><details><summary>{head}<span class="nb-more">{count} headline{"s" if count != 1 else ""}</span></summary>'
+                  f'<ul class="an-links">{links}</ul></details></li>' if links else f'<li><div class="nb-row">{head}</div></li>')
     watch = ''.join(f'<li>{esc(w)}</li>' for w in n.get('watch') or [])
-    return (f'<section class="v10-panel an-note"><p class="v10-eyebrow">{esc(title)} · {esc(short_time(n.get("at")))}</p>'
-            f'<h3>{esc(n.get("headline"))}</h3><dl class="v10-why">{rows}</dl>'
-            + (f'<h4>News and sentiment</h4><ul class="an-news">{notes}</ul>' if notes else '')
-            + (f'<h4>Watch</h4><ul class="v10-list">{watch}</ul>' if watch else '') + checks + '</section>')
+    return (f'<article class="nb"><p class="nb-meta">{esc(title)} · {esc(short_time(n.get("at")))}</p>'
+            f'<h2>{esc(n.get("headline"))}</h2><div class="nb-reads">{reads}</div>'
+            + (f'<section class="nb-sec"><h3>News and sentiment <small>most relevant first · open a row for the headlines</small></h3>'
+               f'<ul class="nb-news">{notes}</ul></section>' if notes else '')
+            + (f'<section class="nb-sec"><h3>Watch next</h3><ul class="nb-watch">{watch}</ul></section>' if watch else '') + checks + '</article>')
 
 
 def _regime(r):
@@ -356,7 +362,7 @@ def _kpis(a):
     written = sum(1 for k in ('morning', 'close') if a.get(k)) + len(a.get('team') or {})
     tiles = (('Market regime', (r.get('current') or 'not fitted yet').capitalize() if r.get('status') == 'OK' else 'Not fitted yet',
               f'{(r.get("current_probabilities") or {}).get(r.get("current"), 0) * 100:.0f}% confident' if r.get('status') == 'OK' else 'first fit after the close'),
-             ('Exit guard', f'{len(exits) - sells} hold · {sells} would sell' if exits else 'No holdings checked', 'shadow only, nothing is sold'),
+             ('Exit guard', f'{len(exits) - sells} hold · {sells} would sell' if exits else 'Not run yet', 'shadow only, nothing is sold'),
              ('Trending names', f'{trending} of {len(chop)}' if chop else '—', 'the rest would sit out'),
              ('Team notes', str(written) if written else 'None yet', 'latest from each agent'),
              ('AI spend today', f'${float(sp.get("usd") or 0):.3f}', 'cap $1.00 a day'))
@@ -387,8 +393,16 @@ def render(state):
     news_m, news_c = a.get('news_morning') or {}, a.get('news_close') or {}
     tabs = ''.join(f'<a role="tab" href="#{i}" data-tab="{i}" aria-selected="{"true" if n == 0 else "false"}">{esc(t)}<small>{esc(sub)}</small></a>'
                    for n, (i, t, sub) in enumerate(TABS))
-    brief = ('<div class="v10-grid an-notes">' + _note(a.get('morning'), news_m.get('items'), 'Morning note')
-             + _note(a.get('close'), news_c.get('items') or news_m.get('items'), 'After-close note') + '</div>')
+    morning, close = a.get('morning'), a.get('close')
+    latest = 'close' if close and (not morning or str(close.get('at')) >= str(morning.get('at'))) else 'morning'
+    subs = (('close', 'After close', close, 'Written in the after-close job, 4:15 PM ET at the earliest, once the day’s bars are in.'),
+            ('morning', 'Morning', morning, 'Written after the 10:00 AM ET official run completes.'))
+    seg = ''.join(f'<a role="tab" href="#an-brief-{k}" data-tab="an-brief-{k}" aria-selected="{"true" if k == latest else "false"}">{esc(label)}'
+                  f'<small>{esc(short_time(n.get("at"))) if n else "not written yet"}</small></a>' for k, label, n, _ in subs)
+    brief = (f'<nav class="v10-seg" role="tablist" aria-label="Which note" data-tabgroup="brief">{seg}</nav>'
+             + ''.join(f'<div class="v10-subpanel" id="an-brief-{k}" data-tabpanel="brief"{" data-active" if k == latest else ""}>'
+                       + _note(n, (news_c.get('items') or news_m.get('items')) if k == 'close' else news_m.get('items'),
+                               'After-close note' if k == 'close' else 'Morning note', hint) + '</div>' for k, label, n, hint in subs))
     return ''.join([
         head, _kpis(a), f'<nav class="v10-tabs an-tabs" role="tablist" aria-label="Analyst desk sections">{tabs}</nav>',
         _panel('an-brief', 'Bubbles writes two short notes a day from everything the team produced: one after the 10:00 run, one after the close.', brief, True),

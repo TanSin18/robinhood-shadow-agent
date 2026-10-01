@@ -47,10 +47,10 @@ html:not(.v10-js) .v10-tabtitle{position:static;width:auto;height:auto;clip:auto
 .v10-chart .axis{fill:var(--text-3);font-size:11px;font-variant-numeric:tabular-nums}
 .v10-chart .base{stroke:var(--text-3);stroke-dasharray:3 5;opacity:.8}
 .v10-chart .line{fill:none;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
-.v10-chart .area{opacity:.12;stroke:none}
-.v10-chart.tone-up .line{stroke:var(--v10-up)}.v10-chart.tone-up .area,.v10-chart.tone-up .pt{fill:var(--v10-up)}
-.v10-chart.tone-down .line{stroke:var(--v10-down)}.v10-chart.tone-down .area,.v10-chart.tone-down .pt{fill:var(--v10-down)}
-.v10-chart.tone-flat .line{stroke:var(--v10-flat)}.v10-chart.tone-flat .area,.v10-chart.tone-flat .pt{fill:var(--v10-flat)}
+.v10-chart .area{stroke:none}.v10-chart .g0{stop-opacity:.22}.v10-chart .g1{stop-opacity:0}
+.v10-chart.tone-up .line{stroke:var(--v10-up)}.v10-chart.tone-up .pt{fill:var(--v10-up)}.v10-chart.tone-up stop{stop-color:var(--v10-up)}
+.v10-chart.tone-down .line{stroke:var(--v10-down)}.v10-chart.tone-down .pt{fill:var(--v10-down)}.v10-chart.tone-down stop{stop-color:var(--v10-down)}
+.v10-chart.tone-flat .line{stroke:var(--v10-flat)}.v10-chart.tone-flat .pt{fill:var(--v10-flat)}.v10-chart.tone-flat stop{stop-color:var(--v10-flat)}
 .v10-chart .pt{opacity:.9}.v10-chart .pt:hover{r:6}
 .v10-chart .overlay{fill:none;stroke-width:1.5;stroke-dasharray:5 4}
 .v10-chart .overlay.ma200{stroke:var(--amber);opacity:.85}

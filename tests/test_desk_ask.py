@@ -194,3 +194,31 @@ def test_unusable_option_quotes_are_information_not_a_corporate_action_warning()
     split = {'status': 'COMPLETED', 'corporate_action_exclusions': [{'instrument': 'XYZ', 'reason': 'UNRESOLVED_SPLIT'}]}
     rows = {r['check']: r for r in operational_checks(split)}
     assert rows['Corporate-action exclusions']['status'] == 'warn' and 'Quotes left out (no usable bid/ask)' not in rows
+
+
+def test_history_page_groups_each_day_and_orders_the_run_before_its_fills():
+    from agents.desk import history_page
+    st = state()
+    html = history_page.render(st)
+    assert 'Monday, October 5' in html and html.count('class="v10-panel hd"') == 1
+    assert html.index('Official run') < html.index('Bought SOXX') < html.index('Protective check')
+    assert '2.32209 shares at $566.64 · AI alone (Lane A)' in html and 'Nothing sold. Still holding SOXX.' in html
+    assert 'Bubbles · Morning note' in html and 'Blossom wrote their daily notes.' in html
+    assert 'Run details' in html and ACCOUNT not in html
+    assert 'Nothing is recorded yet' in history_page.render({})
+
+
+def test_analyst_brief_has_a_sub_tab_per_note_and_opens_the_latest():
+    from agents.desk import analyst_page
+    a = {'exists': True, 'team': {}, 'morning': {'at': '2026-10-05T14:07:00+00:00', 'headline': 'Calm tape.', 'market_read': 'Quiet.', 'news': [], 'watch': ['SOXX']},
+         'close': {'at': '2026-10-05T20:20:00+00:00', 'headline': 'Close: steady.', 'news': [
+             {'ticker': 'XLF', 'sentiment': 'negative', 'relevance': 'medium', 'note': 'Banks soft.', 'headline_ids': ['h1']},
+             {'ticker': 'SOXX', 'sentiment': 'positive', 'relevance': 'high', 'note': 'Chips firm.', 'headline_ids': []}], 'watch': []},
+         'news_close': {'items': [{'id': 'h1', 'url': 'https://example.com/a', 'title': 'Banks slip', 'source': 'Example'}]}}
+    html = analyst_page.render({'analyst': a, 'portfolio': {}})
+    assert 'data-tabgroup="brief"' in html and html.count('data-tabpanel="brief"') == 2
+    assert 'id="an-brief-close" data-tabpanel="brief" data-active' in html and 'id="an-brief-morning" data-tabpanel="brief">' in html
+    assert html.index('Chips firm.') < html.index('Banks soft.')                      # most relevant first
+    assert '1 headline</span>' in html and 'href="https://example.com/a"' in html
+    only_close = analyst_page.render({'analyst': {**a, 'morning': None}, 'portfolio': {}})
+    assert 'Not written yet' in only_close and 'Written after the 10:00 AM ET official run completes.' in only_close

@@ -18,7 +18,7 @@ def test_build_phase_runs_never_count_and_are_labelled():
 
 def test_official_scheduled_completed_run_counts():
     c = categorize(review('2026-10-01T14:01:00+00:00'), {'trigger': 'scheduled'})
-    assert c['group'] == 'official' and c['counts'] is True and c['tags'][0]['label'] == 'Official · v1.5'
+    assert c['group'] == 'official' and c['counts'] is True and c['tags'][0]['label'] == 'Official'
     assert categorize(review('2026-10-01T14:01:00+00:00'), {'trigger': 'manual'})['counts'] is False
 
 
