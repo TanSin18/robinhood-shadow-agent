@@ -1,0 +1,42 @@
+# Research recipe (pre-registered before its first harness run, 2026-09-30).
+# The harness hashes this file's bytes; any edit is a new trial. One parameter set only.
+recipe:
+  id: dual_trend_vol_target_etf17
+  version: 1
+  status: research_only_never_official
+  description: >-
+    Dual trend filter with volatility targeting on the desk's own 17 ETFs. Hold every ETF whose
+    close is above its 200-session average AND whose 252-session return is positive; weight
+    holdings by inverse 63-session volatility; scale the book to 10% annualized target volatility,
+    never above 100% invested and never above 25% in one ETF; rebalance on the first session of
+    each month; the rest stays in cash (earning nothing, like the paper account).
+  engine: dual_trend_vol_target
+universe:
+  kind: etf_list
+  symbols: [GLD, QQQ, SOXX, SPY, TLT, VTI, XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY]
+  join_rule: a symbol becomes eligible after 253 completed sessions of its own history
+signal:
+  trend_sessions: 200
+  absolute_momentum_sessions: 252
+  features_from: completed_sessions_through_t_minus_1
+sizing:
+  weights: inverse_vol63
+  portfolio_target_vol: 0.10
+  vol_estimate: sum_of_weight_times_vol63_assumes_perfect_correlation_conservative
+  max_gross: 1.0
+  max_per_etf: 0.25
+rebalance: first_session_of_each_month_at_open
+execution:
+  timing: next_session_open
+  buy_cost: half_spread_plus_0.1pct_slippage
+  sell_cost: half_spread
+  trade_only_differences: true
+breakers: none
+tax: {short_term: 0.35, long_term: 0.15, liquidation_at_end: true}
+benchmark: VTI_buy_and_hold_same_costs_and_tax
+success_metric: annual_excess_log_growth_vs_vti_pre_tax_with_90pct_block_bootstrap_interval
+fitted_parameters: none
+data_requirement:
+  minimum_years: 15
+  point_in_time_universe_required: false
+  certified_label: CERTIFIED_ETF_HISTORY

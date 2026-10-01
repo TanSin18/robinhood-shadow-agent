@@ -1,0 +1,41 @@
+# Research recipe (pre-registered before its first harness run, 2026-09-30).
+# The harness hashes this file's bytes; any edit is a new trial.
+recipe:
+  id: registered_momentum_126_200_top1
+  version: 1
+  status: research_only_never_official
+  description: >-
+    The Official desk's registered ETF rule exactly as sized live (v1.5.0 entry, v1.5.1 exit,
+    RiskEngine volatility sizing, live breakers including the permanent 10% drawdown latch).
+  engine: registered_rule
+universe:
+  kind: etf_list
+  symbols: [GLD, QQQ, SOXX, SPY, TLT, VTI, XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY]
+  join_rule: a symbol becomes eligible after 253 completed sessions of its own history
+signal:
+  momentum_sessions: 126
+  trend_sessions: 200
+  picks: 1
+  features_from: completed_sessions_through_t_minus_1
+execution:
+  timing: next_session_open
+  buy_cost: half_spread_plus_0.1pct_slippage
+  sell_cost: half_spread
+sizing:
+  rule: account * min(0.25, 0.10 * 0.20 / vol20)
+  max_positions: 5
+  entries_per_day: 1
+exit:
+  rule: close_at_or_below_ma200_or_momentum126_not_positive
+breakers:
+  daily_loss: 0.03
+  weekly_loss: 0.05
+  peak_drawdown_latch: 0.10_never_resets
+tax: {short_term: 0.35, long_term: 0.15, liquidation_at_end: true}
+benchmark: VTI_buy_and_hold_same_costs_and_tax
+success_metric: annual_excess_log_growth_vs_vti_pre_tax_with_90pct_block_bootstrap_interval
+fitted_parameters: none
+data_requirement:
+  minimum_years: 15
+  point_in_time_universe_required: false
+  certified_label: CERTIFIED_ETF_HISTORY
