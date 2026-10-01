@@ -219,7 +219,10 @@ def test_morning_and_close_write_notes_and_never_touch_the_official_db(tmp_path)
                     reader_factory=lambda: reader)
     assert out['close']['note']['status'] == 'WRITTEN' and out['close']['regime_status'] == 'OK'
     assert len(reader.calls) == len(hook.UNIVERSE)
-    assert store.latest('regimes')['status'] == 'OK' and '_labels' not in store.latest('regimes')
+    assert store.latest("regimes")["status"] == "OK" and "_labels" not in store.latest("regimes")
+    g = store.latest("guard")
+    assert g["exits"][0]["ticker"] == "SOXX" and g["exits"][0]["status"] == "OK" and "SOXX" in g["chop"]
+    assert g["entry_gate"] and g["entry_gate"][0]["ticker"] == "SOXX"
     assert 'SOXX' in store.latest('kelly')['tickers'] and store.latest('auction')['tickers']['SOXX']['status'] == 'OK'
     assert hashlib.sha256(official.read_bytes()).hexdigest() == before
     assert store.spent() > 0 and store.spent() < 1
@@ -289,3 +292,35 @@ def test_truncated_or_non_json_output_is_a_named_model_error():
     R.status = 'completed'
     with pytest.raises(ModelError, match='OUTPUT_NOT_JSON'):
         client(commentary.MODEL, 'p', commentary.SCHEMA, commentary.ENVELOPE)
+
+
+def _bars(closes, spread=0.01):
+    return [{'day': f'2026-{1 + i // 28:02d}-{1 + i % 28:02d}', 'open': c, 'high': c * (1 + spread), 'low': c * (1 - spread), 'close': c,
+             'volume': 1000} for i, c in enumerate(closes)]
+
+
+def test_chop_gate_tells_a_trend_from_a_range():
+    from agents.analyst import guard
+    trend = guard.chop_label(_bars([100 * 1.004 ** i for i in range(200)]))
+    rng = random.Random(5)
+    chop = guard.chop_label(_bars([100 + 2 * math.sin(i / 2) + rng.gauss(0, 0.5) for i in range(200)], spread=0.02))
+    assert trend['label'] in ('TRENDING', 'OVEREXTENDED') and trend['adx14'] > 20
+    assert chop['label'] in ('CHOPPY', 'LOW_VOL') and chop['gate'] == 'sit out'
+    assert guard.chop_label(_bars([100] * 20))['status'] == 'TOO_FEW_SESSIONS'
+
+
+def test_exit_guard_trails_locks_profit_and_flags_give_back():
+    from agents.analyst import guard
+    up = [100 * 1.01 ** i for i in range(60)]                       # +80% run since entry
+    bars = _bars([90] * 150 + up)
+    entry = bars[150]['day']
+    h = {'account': 'A:agent_alone', 'ticker': 'SOXX', 'quantity': 1, 'average_cost': 100.0, 'entry_day': entry}
+    g = guard.exit_guard(h, bars)
+    assert g['verdict'] == 'HOLD' and g['guard_stop'] > 100 and 'chandelier' in g['guard_stop_rule'] or 'lock' in g['guard_stop_rule']
+    falling = bars + _bars([up[-1] * 0.97 ** i for i in range(1, 15)])[:14]
+    for i, b in enumerate(falling[-14:]):
+        b['day'] = f'2026-12-{i + 1:02d}'
+    g2 = guard.exit_guard(h, falling)
+    assert g2['verdict'] == 'WOULD_SELL' and any('give-back' in t or 'chandelier' in t or 'lock' in t for t in g2['triggers'])
+    loss = guard.exit_guard({**h, 'average_cost': 200.0}, bars)
+    assert '8%' in loss['guard_stop_rule'] or loss['verdict'] == 'WOULD_SELL'

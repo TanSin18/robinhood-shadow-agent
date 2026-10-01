@@ -63,3 +63,22 @@ def test_enabled_but_no_volume_evidence_blocks_honestly(tmp_path, monkeypatch):
     assert result['decision']['type'] == 'DESK_ENTRY_BLOCKED'
     assert {r['reason'] for r in result['desk_results']} == {'LIQUIDITY_EVIDENCE_MISSING'}
     assert inbox.cards() == []
+
+
+def test_no_ai_day_still_records_the_vti_benchmark(tmp_path, monkeypatch):
+    from agents.daily_cycle import FixtureReader
+    original = FixtureReader.collect
+
+    def with_close(self, now, held):
+        reads = original(self, now, held)
+        for r in reads:
+            if r['tool'] == 'get_equity_quotes':
+                for item in r['data']['results']:
+                    if (item.get('quote') or {}).get('symbol') == 'VTI':
+                        item['close'] = {'date': '2026-09-30', 'price': '378.00', 'symbol': 'VTI', 'interpolated': False}
+        return reads
+    monkeypatch.setattr(FixtureReader, 'collect', with_close)
+    inbox, result = run(tmp_path, monkeypatch, enabled=True)
+    assert result['ai_gate']['invoke'] is False
+    rows = [v for v in inbox.store.read_json('daily_values') if v.get('benchmark') == 'VTI']
+    assert len(rows) == 1 and rows[0]['close'] and rows[0]['data_mode'] == 'live_readonly'

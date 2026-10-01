@@ -15,6 +15,7 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS kelly (id INTEGER PRIMARY KEY, at TEXT, day TEXT, payload_json TEXT)",
     "CREATE TABLE IF NOT EXISTS auction (id INTEGER PRIMARY KEY, at TEXT, day TEXT, payload_json TEXT)",
     "CREATE TABLE IF NOT EXISTS news (id INTEGER PRIMARY KEY, at TEXT, day TEXT, kind TEXT, payload_json TEXT)",
+    "CREATE TABLE IF NOT EXISTS guard (id INTEGER PRIMARY KEY, at TEXT, day TEXT, payload_json TEXT)",
     "CREATE TABLE IF NOT EXISTS budget (id INTEGER PRIMARY KEY, at TEXT, day TEXT, seat TEXT, model TEXT, reserved TEXT, "
     "actual TEXT, status TEXT)",
     "CREATE TABLE IF NOT EXISTS journal (id INTEGER PRIMARY KEY, at TEXT, kind TEXT, payload_json TEXT)",
@@ -70,7 +71,7 @@ class AnalystStore:
 
     # ---------------------------------------------------------------- records
     def add(self, table, day, payload, now, **extra):
-        if table not in ('notes', 'regimes', 'kelly', 'auction', 'news'):
+        if table not in ('notes', 'regimes', 'kelly', 'auction', 'news', 'guard'):
             raise StoreError('UNKNOWN_TABLE')
         cols = ['at', 'day'] + list(extra) + ['payload_json']
         vals = [now.isoformat(), day] + [json.dumps(v, default=str) if isinstance(v, (dict, list)) else v for v in extra.values()]

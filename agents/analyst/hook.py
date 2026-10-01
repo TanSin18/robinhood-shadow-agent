@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from . import auction, commentary, kelly, news, regime
+from . import auction, commentary, guard, kelly, news, regime
 from .store import AnalystStore, default_path
 
 ET = ZoneInfo('America/New_York')
@@ -85,8 +85,16 @@ def official_view(official_db):
         st = json.loads(payload)
         for t, p in (st.get('positions') or {}).items():
             mark = (st.get('marks') or {}).get(t)
+            buys = sorted(str(f.get('timestamp')) for f in st.get('fills') or [] if f.get('ticker') == t and f.get('side') == 'buy')
+            entry = None
+            if buys:
+                try:
+                    entry = datetime.fromisoformat(buys[-1]).astimezone(ET).date().isoformat()
+                except ValueError:
+                    entry = None
             out['holdings'].append({'account': f'{lane}:{track}', 'ticker': t, 'quantity': float(p.get('quantity') or 0),
-                                    'average_cost': float(p.get('average_cost') or 0), 'last_bid': float(mark) if mark else None})
+                                    'average_cost': float(p.get('average_cost') or 0), 'last_bid': float(mark) if mark else None,
+                                    'entry_day': entry})
     return out
 
 
@@ -180,8 +188,9 @@ def morning(store, official_db, now, client, *, opener=None, prices=None, contac
     tickers = list(dict.fromkeys(held + view['signals'] + list(STOCKS) + ['SPY', 'QQQ']))
     items, problems = news.collect(tickers, now, contact=contact, opener=opener)
     store.add('news', day, {'items': items, 'problems': problems}, now, kind='morning')
-    reg, kel, auc = store.latest('regimes'), store.latest('kelly'), store.latest('auction')
+    reg, kel, auc, grd = store.latest('regimes'), store.latest('kelly'), store.latest('auction'), store.latest('guard') or {}
     pkt = commentary.packet('morning', decision=view['decision'], features=view['features'], regime=reg,
+                            guard=grd.get('exits'), chop=grd.get('chop'),
                             kelly=(kel or {}).get('tickers'), auction=(auc or {}).get('tickers'), holdings=view['holdings'], headlines=items)
     return {'news_items': len(items), 'news_problems': len(problems), 'note': _note(store, 'morning', pkt, client, day, now, prices)}
 
@@ -208,11 +217,23 @@ def close(store, official_db, config, now, client, *, reader_factory=None, opene
     reads = {t: auction.read(bars.get(t) or []) for t in UNIVERSE}
     store.add('auction', day, {'tickers': reads}, now)
     view = official_view(official_db)
+    chop = {t: guard.chop_label(bars.get(t) or []) for t in UNIVERSE}
+    exits = [guard.exit_guard(h, bars.get(h['ticker']) or [], fit) for h in view['holdings']]
+    previous = store.latest('guard') or {}
+    first_sells = {(e['account'], e['ticker']) for e in previous.get('exits') or [] if e.get('verdict') == 'WOULD_SELL'}
+    for e in exits:   # remember the first "would sell" price so the record can show later what it saved or cost
+        e['first_would_sell'] = next((p.get('first_would_sell') for p in previous.get('exits') or []
+                                      if (p.get('account'), p.get('ticker')) == (e['account'], e['ticker']) and p.get('first_would_sell')), None)
+        if e.get('verdict') == 'WOULD_SELL' and not e['first_would_sell'] and (e['account'], e['ticker']) not in first_sells:
+            e['first_would_sell'] = {'day': day, 'price': e.get('last_close'), 'rules': e.get('triggers')}
+    entries = (view['decision'] or {}).get('signal_instruments') or []
+    gate = [{'ticker': t, 'label': (chop.get(t) or {}).get('label'), 'would_block': (chop.get(t) or {}).get('gate') == 'sit out'} for t in entries]
+    store.add('guard', day, {'exits': exits, 'chop': chop, 'entry_gate': gate}, now)
     movers = sorted((a for a in reads.items() if a[1].get('status') == 'OK'), key=lambda kv: -abs(kv[1]['change_pct']))[:5]
     tickers = list(dict.fromkeys(sorted({h['ticker'] for h in view['holdings']}) + [t for t, _ in movers] + ['SPY', 'QQQ']))
     items, problems = news.collect(tickers, now, contact=contact, opener=opener)
     store.add('news', day, {'items': items, 'problems': problems}, now, kind='close')
-    pkt = commentary.packet('close', decision=view['decision'], regime=fit, kelly=sizes,
+    pkt = commentary.packet('close', decision=view['decision'], regime=fit, kelly=sizes, guard=exits, chop=chop,
                             auction={t: a for t, a in reads.items() if t in tickers or t in ('VTI', 'SPY', 'QQQ')},
                             holdings=view['holdings'], headlines=items)
     return {'regime': fit.get('current'), 'regime_status': fit.get('status'), 'bars': {t: len(b) for t, b in bars.items() if len(b) < 200},

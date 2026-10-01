@@ -683,6 +683,9 @@ def run_cycle(inbox, config, bridge, now, *, data_mode='live_readonly', clock=No
                 reason_code='DESK_POLICY_ETF_ENTRY' if issued else 'DESK_POLICY_ETF_BLOCKED'
                 reason=('Desk rule (no AI): registered ETF entry issued to paper arms.' if issued else
                         'Desk rule (no AI): registered ETF entry blocked by its own checks.')
+            # VTI benchmark on every completed official day, not only AI days (the promotion test pairs by day).
+            if snapshot['benchmark'] and not rehearsal:
+                inbox.store.append_json('daily_values',{'timestamp':now.isoformat(),'benchmark':'VTI','close':snapshot['benchmark'],'data_mode':data_mode})
             return finish({
                 'status':'COMPLETED','read_tools':sorted({r['tool'] for r in reads}),
                 'quote_freshness':rehearsal_freshness,
