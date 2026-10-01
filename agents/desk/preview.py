@@ -66,6 +66,35 @@ def _promotion(path):
         return {'unavailable':type(error).__name__}
 
 
+def _capsule_view(row):
+    """The latest decision capsule, reduced to what the Portfolio page explains: the signal table for every
+    ticker, why each one was or wasn't picked, and daily closes for anything held (plus VTI) for charts."""
+    if not row:
+        return None
+    try:
+        cap=json.loads(row['payload'])
+    except (TypeError,ValueError):
+        return None
+    assess=cap.get('strategy_assessment') or {}
+    outcome=cap.get('outcome') or {}
+    held=set()
+    for acct in ((cap.get('inputs') or {}).get('paper_accounts') or {}).values():
+        held.update((acct.get('positions') or {}).keys())
+    held.update(r.get('instrument') for r in outcome.get('desk_results') or [] if r.get('instrument'))
+    held.update(s.get('instrument') for s in assess.get('signals') or [] if s.get('instrument'))
+    closes=(cap.get('inputs') or {}).get('session_closes') or {}
+    strategies={k:{'version':v.get('version'),'blocked':v.get('blocked') or {},'evaluated':v.get('evaluated') or [],
+                   'ranked':[x.get('instrument') for x in v.get('ranked') or []],'qualifying_count':v.get('qualifying_count')}
+                for k,v in (assess.get('strategies') or {}).items() if isinstance(v,dict)}
+    return public({'cycle_id':row['cycle_id'],'observed_at':cap.get('observed_at') or row['created_at'],
+        'decision':outcome.get('decision') or {},'desk_results':outcome.get('desk_results') or [],'models':cap.get('models') or {},
+        'features':assess.get('features') or {},'signals':assess.get('signals') or [],'strategies':strategies,
+        'qualification_note':assess.get('qualification_note'),'decision_date':assess.get('decision_date'),
+        'liquidity':(cap.get('inputs') or {}).get('median_dollar_volume_20d') or {},
+        'vols':(cap.get('inputs') or {}).get('vols') or {},
+        'closes':{t:closes[t] for t in sorted(held|{'VTI'}) if isinstance(closes.get(t),dict)}})
+
+
 def snapshot(path,*,now=None):
     now=now or datetime.now(timezone.utc)
     if now.tzinfo is None: raise ValueError('Aware clock required')
@@ -85,6 +114,13 @@ def snapshot(path,*,now=None):
         tripwire_last=(db.execute('SELECT status,created_at FROM broker_tripwire_events ORDER BY id DESC LIMIT 1').fetchone()
                        if 'broker_tripwire_events' in tables else None)
         paper_rows=[dict(r) for r in db.execute('SELECT lane,track,payload FROM paper_accounts')] if 'paper_accounts' in tables else []
+        fill_rows=rows('fills','id,created_at,payload_json','id')
+        tripwire_rows=rows('broker_tripwire_events','id,status,change_class,created_at','id')
+        real_rows=([dict(r) for r in db.execute("SELECT created_at,status,payload_json FROM broker_state_snapshots ORDER BY id DESC LIMIT 200")]
+                   if 'broker_state_snapshots' in tables else [])
+        capsule_row=(db.execute('SELECT cycle_id,created_at,payload FROM decision_capsules ORDER BY created_at DESC LIMIT 1').fetchone()
+                     if 'decision_capsules' in tables else None)
+        capsule_row=dict(capsule_row) if capsule_row else None
         values=rows('daily_values','id,created_at,payload_json','id')
         cycle_meta={}
         if 'cycle_runs' in tables:
@@ -127,10 +163,25 @@ def snapshot(path,*,now=None):
             'positions':[{'quantity':p.get('quantity'),'direction':p.get('direction')} for p in snap.get('positions',[])],
             'open_orders':{k:len(v) for k,v in (snap.get('orders') or {}).items()},
             'last_check':dict(tripwire_last) if tripwire_last else None}
+    portfolio['fills']=[public(json.loads(r['payload_json'])) for r in reversed(fill_rows)]
+    portfolio['tripwire']=[{k:r[k] for k in ('status','change_class','created_at')} for r in reversed(tripwire_rows)]
+    portfolio['real_history']=[]
+    for r in reversed(real_rows):
+        try:
+            snap_=json.loads(r['payload_json'])
+        except (TypeError,ValueError):
+            continue
+        portfolio['real_history'].append({'at':r['created_at'],'status':r['status'],'cash':snap_.get('cash'),
+                                          'positions':len(snap_.get('positions') or []),
+                                          'orders':sum(len(v) for v in (snap_.get('orders') or {}).values())})
+    portfolio['capsule']=_capsule_view(capsule_row)
     for row in paper_rows:
         state_=json.loads(row['payload'])
         portfolio['paper'].append({'lane':row['lane'],'track':row['track'],'start':state_.get('start'),'capital_version':state_.get('capital_version'),'settled_cash':state_.get('settled_cash'),
-            'unsettled_cash':state_.get('unsettled_cash'),'positions':[{k:p.get(k) for k in ('ticker','asset_class','quantity','average_cost','option_type','strike','expiry','multiplier')}
+            'unsettled_cash':state_.get('unsettled_cash'),'marks':state_.get('marks') or {},'peak':state_.get('peak'),
+            'day_start_value':state_.get('day_start_value'),'weekly_start_value':state_.get('weekly_start_value'),
+            'peak_breaker_latched':bool(state_.get('peak_breaker_latched')),'kill_switch':bool(state_.get('global_kill_switch')),
+            'fills':[public(f) for f in (state_.get('fills') or []) if isinstance(f,dict)],'positions':[{k:p.get(k) for k in ('ticker','asset_class','quantity','average_cost','option_type','strike','expiry','multiplier')}
                                                                         for p in (state_.get('positions') or {}).values()] if isinstance(state_.get('positions'),dict) else []})
     research={'protective':[],'rebase':None}
     for row in values:

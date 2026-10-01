@@ -1,0 +1,2314 @@
+{
+ "meta": {
+  "title": "Rules catalogue: Robinhood paper-trading research desk (Agent Desk) + AI trader forward book",
+  "repository": "the installed runtime (branch claude/ai-trader-f, HEAD 70a32cd 'Release F manifest'); UI branch (claude/card-inbox-wt, HEAD 72313a5)",
+  "as_of": "2026-10-01",
+  "method": "Every number below was read from code or YAML in the checkout. 'source' gives file:line (code) or file:yaml.key.path (YAML). Where docs/UI text disagrees with code, the code value is used and the mismatch is listed under known_issues.",
+  "registration_layers": [
+   {
+    "file": "preregistration.yaml",
+    "version": "1.4.2",
+    "status": "approved_for_phase_0 (root, byte-pinned)",
+    "sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+    "pinned_in": "agents/preregistration.py:14 APPROVED_PREREGISTRATION_SHA256; load_phase0_registration checks version 1.4.2, status approved_for_phase_0, scope phase_0_only, phase_1_allowed false, $1,200 cap, exactly 11 read tools, schema manifest hash (agents/preregistration.py:40-102)"
+   },
+   {
+    "file": "preregistration-amendment-v1.5.0.yaml",
+    "version": "1.5.0",
+    "status": "SIGNED 2026-09-30 14:44 ET (re-signed with sector ETFs)",
+    "effective": "2026-10-01T09:30:00-04:00",
+    "sha256": "dc3d884b8e07611005033d67b6cd4b3c26214342d042f8f835e03f976bbe0179",
+    "activation": "agents/v15_activation.py:18-47 v15_active(): sha matches APPROVED_V15_SHA256, now >= EFFECTIVE_FROM, no symlinks, base_sha256 == sha of root preregistration.yaml, operator_signature.status == SIGNED"
+   },
+   {
+    "file": "preregistration-amendment-v1.5.1.yaml",
+    "version": "1.5.1",
+    "status": "SIGNED 2026-09-30 15:49 ET",
+    "effective": "2026-10-01T09:30:00-04:00",
+    "sha256": "24e309c03b3992f7ae6095cbfb096d57639e6fdcc32b2567e410a014f8699045",
+    "activation": "agents/v15_activation.py:52-68 exit_rule_active() (also requires v15_active)"
+   },
+   {
+    "file": "preregistration-amendment-v1.5.2.yaml",
+    "version": "1.5.2",
+    "status": "SIGNED 2026-09-30 15:56 ET",
+    "effective": "2026-10-01T09:30:00-04:00",
+    "sha256": "341a6304d13c5645bc85ff5743470c2f55bfc1468759008f1eda958185826ed9",
+    "activation": "agents/v15_activation.py:72-88 stock_backstop_active() (also requires v15_active)"
+   },
+   {
+    "file": "preregistration-amendment-v1.6.0.yaml",
+    "version": "1.6.0",
+    "status": "SIGNED 2026-09-30 16:25 ET",
+    "effective": "2026-10-01T09:30:00-04:00",
+    "sha256": "86c891cd44238bd45c77934447df6384b29b6532655da25bed5c21e8712887b0",
+    "activation": "agents/v16_policy.py:30-59 v16_active() (sha pin APPROVED_V160_SHA256, time, v15_active, SIGNED)"
+   },
+   {
+    "file": "docs/superpowers/plans/preregistration-v1.5.0.draft.yaml",
+    "version": "1.5.0 (full draft)",
+    "status": "DRAFT, operator_approved_draft_not_active, effective_from NOT_EFFECTIVE_PENDING_OPERATOR_APPROVAL; superseded by the scoped signed v1.5.0 layer. Broad S&P universe, pulse, ledger, seats, token-cap finalization are NOT active (v1.5.0 yaml not_activated_by_this_amendment)."
+   },
+   {
+    "file": "docs/superpowers/plans/preregistration-amendment-v1.5.1.draft.yaml",
+    "version": "1.5.1",
+    "status": "UNSIGNED draft copy; superseded by the signed root file"
+   },
+   {
+    "file": "docs/superpowers/plans/universe-expansion-v1.6.draft.md",
+    "status": "UNSIGNED draft; step 1 (9 sector ETFs) was adopted by signed v1.5.0; step 2 (S&P 500) not adopted"
+   },
+   {
+    "file": "docs/superpowers/plans/preregistration-amendment-v1.6.1-breaker-reset.draft.yaml (branch claude/research-harness only, not in this checkout's tree)",
+    "version": "1.6.1",
+    "status": "DRAFT_UNSIGNED, NOT INSTALLED: proposes clearing the 10% peak latch at <=5% off peak (clause A) and optionally re-basing the peak after 20 latched sessions (option B)"
+   },
+   {
+    "file": "research/recipes/ai_trader_fwd_v1.yaml",
+    "version": "ai_trader_fwd_v1 v1",
+    "status": "research_only_never_official; registered 2026-09-30; start_not_before 2026-10-05",
+    "sha256": "a5e85e29cf27042612529fdec06f6cf500d20bbbeeb789c7b82fceead9facc83",
+    "prompts_sha256": "c90e6f03bd327a02237a753e85aeadf05eda5bc686475c8705fc7811784d1077 (agents/ai_trader/seats.py prompts_sha256(); pinned in trader DB at first run)"
+   }
+  ],
+  "pin_verification": "sha256sum of every root registration file in the checkout matches the pinned constants in agents/preregistration.py, agents/v15_activation.py and agents/v16_policy.py (verified 2026-10-01)."
+ },
+ "rule_groups": [
+  {
+   "id": "activation",
+   "title": "How rules switch on (byte-pinned amendments)",
+   "plain": "The base rulebook (v1.4.2) never changes. Newer rule layers only count if the file on disk is byte-identical to the one the operator signed, and only after their start time (Oct 1, 9:30 ET).",
+   "rules": [
+    {
+     "id": "act-root-pin",
+     "name": "Root registration must be the approved file",
+     "applies_to": "every official run, every LiveReader, bounded inference",
+     "when": "at load",
+     "condition": "sha256(preregistration.yaml) == 39375034...6075; version 1.4.2; status approved_for_phase_0; approval.scope phase_0_only; phase_1_allowed false; max_agentic_cash_usd == 1200.00; allowed_robinhood_read_tools is exactly the 11 READ_METHODS; read schema manifest path broker/read_schemas_v1.4.2.json with matching sha",
+     "action": "ValueError (run fails closed) if any check fails",
+     "source": "agents/preregistration.py:40-102",
+     "status": "active"
+    },
+    {
+     "id": "act-v150",
+     "name": "v1.5.0 desk policy layer",
+     "applies_to": "official cycle (desk ETF entry, 23-ticker universe, ETF removal from AI packets, blind Critic packet, capsule)",
+     "when": "per call to v15_active(now)",
+     "condition": "sha256(preregistration-amendment-v1.5.0.yaml) == dc3d884b...0179 AND now >= 2026-10-01T09:30-04:00 AND not symlink AND declared base_sha256 == root sha AND operator_signature.status == SIGNED",
+     "action": "production_enabled() returns True -> desk_policy_enabled for the cycle",
+     "source": "agents/v15_activation.py:18-47; agents/etf_desk_policy.py:23-30; agents/daily_cycle.py:871-872",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "act-v151",
+     "name": "v1.5.1 ETF exit layer",
+     "applies_to": "Lane A ETF positions, all three paper arms",
+     "when": "evaluated at the cycle's own time (completion_time/observed_at)",
+     "condition": "sha pin 24e309c0...9045, now >= 2026-10-01T09:30-04:00, v15_active",
+     "action": "issue_desk_exits runs",
+     "source": "agents/v15_activation.py:52-68; agents/daily_cycle.py:365-378",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "act-v152",
+     "name": "v1.5.2 stock backstop layer",
+     "applies_to": "Lane A stock positions, all three arms",
+     "when": "same as above",
+     "condition": "sha pin 341a6304...6ed9, time, v15_active",
+     "action": "stock_backstop_exits runs",
+     "source": "agents/v15_activation.py:72-88",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "act-v160",
+     "name": "v1.6.0 capital/options/protective/promotion layer",
+     "applies_to": "Lane A capital rebase, Lane B buys, 15:50 protective exit",
+     "when": "per call",
+     "condition": "sha pin 86c891cd...87b0, now >= 2026-10-01T09:30-04:00, v15_active, SIGNED",
+     "action": "rebase once, pause option buys, enable protective check",
+     "source": "agents/v16_policy.py:30-59",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "act-no-switches",
+     "name": "No env var / dashboard switch can activate rules",
+     "applies_to": "all layers",
+     "when": "always",
+     "condition": "activation reads only pinned constants and file bytes",
+     "action": "dashboard_writable false; changes need new semantic version, effective date, plain-language reason, operator approval",
+     "source": "agents/v15_activation.py:1-11; preregistration.yaml:registration.change_control",
+     "status": "active"
+    },
+    {
+     "id": "act-v15-not-activated",
+     "name": "Things v1.5.0 explicitly does NOT activate",
+     "applies_to": "official system",
+     "when": "-",
+     "condition": "-",
+     "action": "session.pulse, ledger, seats, token_cap_finalization, universe_expansion_broad_screen, advisory_rebuttal, what_if_budget_increase remain off",
+     "source": "preregistration-amendment-v1.5.0.yaml:not_activated_by_this_amendment",
+     "status": "disabled-until-later-signed-amendment"
+    }
+   ]
+  },
+  {
+   "id": "schedule",
+   "title": "When things run (services, windows, claims)",
+   "plain": "One official decision run per trading day at 10:00 ET (it must start by 10:20). A once-a-minute service tick handles approved-card fills, the 3:50 PM safety check and the AI trader; a 5-minute housekeeping job settles cash, expires cards and checks the connection.",
+   "rules": [
+    {
+     "id": "sch-daily-service",
+     "name": "Daily service tick",
+     "applies_to": "official desk + AI trader hook",
+     "when": "launchd StartInterval 60 s, RunAtLoad, plus StartCalendarInterval Mon-Fri 10:00 ET (TZ=America/New_York)",
+     "condition": "-",
+     "action": "runs `agents.daily_cycle --mode live --scheduled` through scripts/runtime_preflight.py",
+     "source": "scripts/install_shadow_services.py:52-68",
+     "status": "active"
+    },
+    {
+     "id": "sch-claim-window",
+     "name": "Official claim window",
+     "applies_to": "official cycle",
+     "when": "10:00:00 <= ET time < 10:20:00 on an XNYS session",
+     "condition": "MarketSchedule.classify == TRADING_WINDOW (exchange_calendars XNYS); scheduled flag; no safety stop; not already claimed today (cycle_runs PRIMARY KEY day; INSERT OR IGNORE); OS flock on agent.db.cycle.lock",
+     "action": "exactly one atomic claim per market date; status STARTED with a cycle_id",
+     "source": "agents/operator.py:59-68; agents/cycle_lifecycle.py:18-20,57-91; preregistration.yaml:official_cycle (target_time_et 10:00, claim_window_end_et 10:20, one_atomic_claim_per_market_date true, manual_official_rerun_allowed false)",
+     "status": "active"
+    },
+    {
+     "id": "sch-recovery",
+     "name": "One recovery attempt",
+     "applies_to": "official cycle",
+     "when": "after a FAILED or FAILED_STALLED claim, inside the window",
+     "condition": "recovery=True, remaining budget > 0, prior status FAILED/FAILED_STALLED, recovery_count < 1",
+     "action": "re-claims as trigger scheduled_recovery",
+     "source": "agents/cycle_lifecycle.py:60-62,75-83; preregistration.yaml:official_cycle.recovery.max_attempts 1",
+     "status": "disabled (code path exists but no caller passes recovery=True; see known_issues)"
+    },
+    {
+     "id": "sch-stall",
+     "name": "Stalled run detection",
+     "applies_to": "official cycle",
+     "when": "maintenance every 300 s",
+     "condition": "a STARTED claim older than 30 minutes (or future-dated)",
+     "action": "status FAILED_STALLED, priority-1 notification",
+     "source": "agents/cycle_lifecycle.py:107-119",
+     "status": "active"
+    },
+    {
+     "id": "sch-missed",
+     "name": "Missed window alert",
+     "applies_to": "official cycle",
+     "when": "maintenance tick after 10:20 ET on a session day",
+     "condition": "MISSED_WINDOW state and no cycle_runs row for today",
+     "action": "MISSED_WINDOW event, priority-1 notification",
+     "source": "agents/cycle_lifecycle.py:120-123",
+     "status": "active"
+    },
+    {
+     "id": "sch-maintenance",
+     "name": "Housekeeping",
+     "applies_to": "all paper accounts",
+     "when": "launchd StartInterval 300 s, RunAtLoad",
+     "condition": "-",
+     "action": "reconcile stalled/missed, expire PENDING cards past expiry, T+1 settlement for all 3 arms x 2 lanes, weekly report if due, deliver notifications, Robinhood authorization check",
+     "source": "scripts/install_shadow_services.py:59; agents/maintenance.py:21-49",
+     "status": "active"
+    },
+    {
+     "id": "sch-nightly",
+     "name": "Nightly S&P 500 shadow screen",
+     "applies_to": "research only",
+     "when": "Mon-Fri 16:50 ET",
+     "condition": "trading day and no safety stop",
+     "action": "see nightly_screen group",
+     "source": "scripts/install_shadow_services.py:70-76",
+     "status": "active (shadow only)"
+    },
+    {
+     "id": "sch-weekly",
+     "name": "Weekly summary",
+     "applies_to": "operator",
+     "when": "Friday 16:30 ET (maintenance; weekend catch-up after sleep/restart)",
+     "condition": "first cycle exists before that Friday; one per week (weekly_reports PRIMARY KEY week)",
+     "action": "Pushover non-urgent summary",
+     "source": "eval/weekly.py:17-31; config/settings.yaml:weekly_report_day_et/_time_et; preregistration.yaml:notifications.weekly_summary",
+     "status": "active"
+    },
+    {
+     "id": "sch-session-close",
+     "name": "Session close from exchange calendar",
+     "applies_to": "card expiry, protective window, entry deadline",
+     "when": "-",
+     "condition": "XNYS session_close (early closes respected)",
+     "action": "used as expiry for AI/sell cards",
+     "source": "agents/operator.py:70-74",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "data",
+   "title": "Data collection and freshness",
+   "plain": "The desk only reads from Robinhood, only the 23 approved tickers, and refuses to act on prices older than 60 seconds or on today's unfinished daily bar.",
+   "rules": [
+    {
+     "id": "dat-quote-age",
+     "name": "60-second quote freshness",
+     "applies_to": "every fill, valuation mark, exit, desk plan, AI final refresh",
+     "when": "each use",
+     "condition": "0 <= now - quote.timestamp <= 60 s (config.risk.max_quote_age_seconds=60) and not halted",
+     "action": "stale -> STALE_QUOTE risk block / FRESH_QUOTE_REQUIRED / NOT_ISSUED_DATA / missing mark",
+     "source": "config/settings.yaml:risk.max_quote_age_seconds; risk/engine.py:45-47; broker/paper.py:42-46; preregistration.yaml:data_quality.live_quote_max_age_seconds 60",
+     "status": "active"
+    },
+    {
+     "id": "dat-history",
+     "name": "Daily history request bounds",
+     "applies_to": "official, protective, AI trader, screen",
+     "when": "each history read",
+     "condition": "interval day, bounds regular, adjustment_type split, end <= now, span <= 550 days, <= 10 symbols per call (official sends 1 symbol per call)",
+     "action": "otherwise denied (incident)",
+     "source": "broker/read_gateway.py:262,288-293; agents/market_reader.py:39-42",
+     "status": "active"
+    },
+    {
+     "id": "dat-completed-only",
+     "name": "Completed sessions only",
+     "applies_to": "features, volatility, liquidity",
+     "when": "snapshot build",
+     "condition": "bars with ET date of begins_at < today's ET date and not interpolated",
+     "action": "today's bar dropped",
+     "source": "agents/daily_cycle.py:216-219; agents/v16_policy.py:170-184",
+     "status": "active (see known issue: bars are labelled one day early)"
+    },
+    {
+     "id": "dat-final-refresh",
+     "name": "Post-AI quote refresh",
+     "applies_to": "AI path of the official cycle",
+     "when": "after Critic",
+     "condition": "re-read quotes for the whole whitelist + wanted option ids; original quotes discarded",
+     "action": "any wanted instrument missing/halted/older than 60 s -> NOT_ISSUED_DATA (no trades from AI)",
+     "source": "agents/daily_cycle.py:771-790",
+     "status": "active"
+    },
+    {
+     "id": "dat-collection-refresh",
+     "name": "Collection-end refresh",
+     "applies_to": "official collection",
+     "when": "after history and option reads",
+     "condition": "-",
+     "action": "initial discovery quotes are replaced by a fresh read before any decision",
+     "source": "agents/market_reader.py:77-81",
+     "status": "active"
+    },
+    {
+     "id": "dat-universe-bound",
+     "name": "Discovery bound",
+     "applies_to": "official collection",
+     "when": "collect()",
+     "condition": "config whitelist must be a subset of REGISTERED_DISCOVERY_UNIVERSE (23 names) and not larger",
+     "action": "BrokerError 'Universe exceeds reviewed discovery bound'",
+     "source": "agents/market_reader.py:33-36; research/strategy_signals.py:14-20; preregistration-amendment-v1.5.0.yaml:reviewed_etf_list.discovery_bound 23",
+     "status": "active"
+    },
+    {
+     "id": "dat-sector-gate",
+     "name": "Sector ETFs inert before v1.5",
+     "applies_to": "XLC XLY XLP XLF XLV XLI XLB XLRE XLK",
+     "when": "each cycle",
+     "condition": "desk_policy_enabled False",
+     "action": "registered_only() strips them from quotes, vols, contracts, closes, liquidity",
+     "source": "agents/daily_cycle.py:349-362,589-590",
+     "status": "active (moot after 2026-10-01 09:30)"
+    },
+    {
+     "id": "dat-options-discovery",
+     "name": "Option contract discovery",
+     "applies_to": "Lane B (paused for buys)",
+     "when": "official collection",
+     "condition": "first 2 expiries 7-45 days out; active+tradable; strike within +/-10% of spot ask; 40 contracts nearest the money; multiplier 100; expiry >= today+7 days to be kept",
+     "action": "contracts registered for quote reads",
+     "source": "agents/market_reader.py:52-74; agents/daily_cycle.py:212; broker/read_gateway.py:281-287",
+     "status": "active (screen recorded; buys paused by v1.6)"
+    },
+    {
+     "id": "dat-corporate-actions",
+     "name": "Corporate-action fail-closed",
+     "applies_to": "live quotes",
+     "when": "snapshot build (require_live_identity)",
+     "condition": "split / reverse split / ticker change unresolved",
+     "action": "instrument excluded for the day (CORPORATE_ACTION_UNRESOLVED / SCOPE_NOT_IMPLEMENTED)",
+     "source": "agents/daily_cycle.py:240-252; data/corporate_actions.py:66-200; preregistration.yaml:data_quality.corporate_actions",
+     "status": "active"
+    },
+    {
+     "id": "dat-news",
+     "name": "News disabled",
+     "applies_to": "AI stages",
+     "when": "always",
+     "condition": "news_enabled False; inference rejects news=True",
+     "action": "models see only recorded prices/features",
+     "source": "agents/daily_cycle.py:735; agents/bounded_inference.py:112",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "signals",
+   "title": "Deterministic signal rules",
+   "plain": "Two written rules turn daily closes into buy ideas: (1) buy the single ETF with the strongest positive 6-month momentum that is above its 200-day average; (2) a name that fell at least 3% yesterday while above its 200-day average. A third, option rule only matters when options are not paused.",
+   "rules": [
+    {
+     "id": "sig-momentum",
+     "name": "momentum_rotation_126d_trend200_top1",
+     "applies_to": "17 ETFs (8 base + 9 SPDR sectors after v1.5)",
+     "when": "official cycle, decision date = today ET",
+     "condition": ">= 253 completed closes; last close > mean of last 200 closes; momentum_126d = last/close[-127] - 1 > 0; rank by -momentum_126d then symbol",
+     "action": "only the top 1 becomes a buy signal; strength = momentum_126d; confidence = min(0.85, 0.55 + max(0, momentum)); invalidation text 'closes at or below its 200-session average or loses positive 126-session momentum'",
+     "source": "research/strategy_signals.py:25-27,58-76,110-121,137",
+     "status": "active"
+    },
+    {
+     "id": "sig-meanrev",
+     "name": "mean_reversion_drop3_above_ma200",
+     "applies_to": "EVERY name with history (all 23 incl. ETFs, not only the 6 stocks)",
+     "when": "official cycle",
+     "condition": ">= 202 completed closes; last close > 200-day mean; one_day_return <= -0.03",
+     "action": "buy signal, strength = |drop|, confidence = min(0.80, 0.55 + |drop|); invalidation text includes 'fails to recover within 10 sessions' (not implemented as an exit)",
+     "source": "research/strategy_signals.py:79-95,123-135",
+     "status": "active"
+    },
+    {
+     "id": "sig-option",
+     "name": "defined_risk_call_on_<strategy>",
+     "applies_to": "Lane B",
+     "when": "official cycle",
+     "condition": "call on an underlying with a buy signal; bid>0, ask>bid; spread/mid <= 0.15; >= 1 contract buyable and available_risk_notional >= ask*100; one per underlying, lowest spread first",
+     "action": "option signal; confidence 0.55",
+     "source": "research/strategy_signals.py:28,163-199",
+     "status": "paused (v1.6: option_signals=[] when options_buys_paused; agents/daily_cycle.py:615-617)"
+    },
+    {
+     "id": "sig-fresh-filter",
+     "name": "Signals need a fresh quote",
+     "applies_to": "all signals",
+     "when": "after strategy evaluation",
+     "condition": "instrument must have a non-stale quote and 20-day vol",
+     "action": "signals for non-fresh instruments dropped",
+     "source": "agents/daily_cycle.py:603-604,622-625; 69-86",
+     "status": "active"
+    },
+    {
+     "id": "sig-not-promoted",
+     "name": "Signals are not historically qualified",
+     "applies_to": "all",
+     "when": "-",
+     "condition": "-",
+     "action": "labelled DAILY_SHADOW_SIGNAL_ONLY",
+     "source": "research/strategy_signals.py:158-159",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "ai_official",
+   "title": "AI invocation gate and the Research / Portfolio / Critic stages (official desk)",
+   "plain": "AI is only called when a stock signal qualifies or a held stock/option needs its daily review. ETF signals and ETF holdings never wake the AI. The AI can only pick from names a rule already flagged, at most one per lane.",
+   "rules": [
+    {
+     "id": "ai-gate",
+     "name": "AIInvocationGate",
+     "applies_to": "official cycle",
+     "when": "after strategy evaluation",
+     "condition": "invoke if any discovery row has qualified True and asset_class 'stock' (QUALIFIED_AI_ELIGIBLE_CANDIDATE), else if any holding has qualitative_review_required (HOLDING_QUALITATIVE_REVIEW_REQUIRED). Holdings rows = every held ticker in Lane A/B agent_alone+with_approvals EXCEPT ETFs when v1.5 is active",
+     "action": "otherwise AI_NOT_NEEDED, $0 cost",
+     "source": "agents/budget.py:29-45; agents/daily_cycle.py:640-651",
+     "status": "active"
+    },
+    {
+     "id": "ai-budget-reserve",
+     "name": "Reserve before any call",
+     "applies_to": "each active lane",
+     "when": "gate open",
+     "condition": "BudgetAllocator.reserve per lane per stage: research $0.03, portfolio $0.05, critic $0.11",
+     "action": "BudgetUnavailable -> status COMPLETED with decision HOLD_OPERATIONAL, missing_evidence BUDGET_MINIMUM_NOT_AVAILABLE",
+     "source": "agents/daily_cycle.py:715-728; agents/budget.py:48-57",
+     "status": "active"
+    },
+    {
+     "id": "ai-etf-strip",
+     "name": "ETFs removed from AI packets",
+     "applies_to": "v1.5 active",
+     "when": "before Research",
+     "condition": "desk_policy_enabled",
+     "action": "model_candidates and ai_signals exclude ETF_UNIVERSE; Portfolio gets lane_guide",
+     "source": "agents/daily_cycle.py:730-743; preregistration-amendment-v1.5.0.yaml:decisions.etf_and_macro_ai_voting forbidden",
+     "status": "active (prompt/packet level only; see known_issues)"
+    },
+    {
+     "id": "ai-research",
+     "name": "Research stage",
+     "applies_to": "official",
+     "when": "gate open",
+     "condition": "registered model (research: gpt-5.4-nano-2026-03-17, reasoning low), one turn, no tools, strict JSON schema {summary, compared_symbols, news_checked, news, missing_evidence}",
+     "action": "output recorded",
+     "source": "agents/daily_cycle.py:38-43,735-740; preregistration.yaml:agent_contract.assigned_models",
+     "status": "active"
+    },
+    {
+     "id": "ai-portfolio",
+     "name": "Portfolio stage",
+     "applies_to": "official",
+     "when": "after Research",
+     "condition": "model gpt-5.4-mini-2026-03-17 (medium); schema Decision{picks (max 2) of {instrument, side buy|sell, thesis, good_if, invalidation, confidence 0..1}, reason}",
+     "action": "picks passed to Critic",
+     "source": "agents/daily_cycle.py:46-57,741-748",
+     "status": "active"
+    },
+    {
+     "id": "ai-critic",
+     "name": "Critic stage (blind)",
+     "applies_to": "official",
+     "when": "after Portfolio",
+     "condition": "model gpt-5.4-2026-03-05 (medium); v1.5: packet built by code, excludes Portfolio 'reason'; schema {counterargument, rejected_instruments}",
+     "action": "any instrument in rejected_instruments is not issued (REJECTED)",
+     "source": "agents/daily_cycle.py:60-62,320-346,749-756,278",
+     "status": "active (only free-text veto; the registered hard-veto/advisory categories are not enforced in code)"
+    },
+    {
+     "id": "ai-signal-required",
+     "name": "AI buy needs a deterministic signal",
+     "applies_to": "AI picks",
+     "when": "apply_decision",
+     "condition": "side buy and instrument not in today's signal map",
+     "action": "REJECTED_NO_STRATEGY_SIGNAL",
+     "source": "agents/daily_cycle.py:276-277",
+     "status": "active"
+    },
+    {
+     "id": "ai-one-per-lane",
+     "name": "One AI action per lane per run",
+     "applies_to": "AI picks",
+     "when": "apply_decision",
+     "condition": "second pick in the same lane, underlying not whitelisted, or critic-rejected",
+     "action": "REJECTED",
+     "source": "agents/daily_cycle.py:278-280; preregistration-amendment-v1.5.0.yaml:decisions (1 per lane, 2 total)",
+     "status": "active"
+    },
+    {
+     "id": "ai-bind-signal-text",
+     "name": "Signal text overrides model text",
+     "applies_to": "AI picks with a signal",
+     "when": "apply_decision",
+     "condition": "deterministic signal exists",
+     "action": "thesis/good_if/invalidation taken from the signal; confidence = min(model, signal); horizon_days 20",
+     "source": "agents/daily_cycle.py:301-305",
+     "status": "active"
+    },
+    {
+     "id": "ai-sizing",
+     "name": "AI buy sizing",
+     "applies_to": "AI buys",
+     "when": "apply_decision",
+     "condition": "available = min(settled_cash, sized_notional(account_value, vol20) - existing position value); qty = available/(ask*multiplier) rounded down to 0.000001 (stocks) or 1 contract",
+     "action": "limit_price = ask (buy) / bid (sell); sell qty = full agent_alone holding",
+     "source": "agents/daily_cycle.py:293-305",
+     "status": "active"
+    },
+    {
+     "id": "ai-near-expiry",
+     "name": "No option buys within 7 days of expiry",
+     "applies_to": "Lane B",
+     "when": "apply_decision",
+     "condition": "expiration < today + 7 days",
+     "action": "NEAR_EXPIRY_BUY_BLOCKED",
+     "source": "agents/daily_cycle.py:285-286",
+     "status": "active (moot: buys paused)"
+    },
+    {
+     "id": "ai-failure-codes",
+     "name": "Inference failure handling",
+     "applies_to": "official",
+     "when": "any stage error",
+     "condition": "codes COST_NO_REPRESENTED_LANE, ALLOCATION_TOKEN_COUNT_FAILED, MODEL_REQUEST_FAILED, MODEL_SCHEMA_INVALID, OUTPUT_TRUNCATED_AT_TOKEN_CAP, MODEL_RESPONSE_INCOMPLETE, INPUT_TOKEN_CAP, INPUT_TOKEN_COUNT_FAILED, INVALID_USAGE, PROVIDER_ENVELOPE_VIOLATION, RESPONSE_MODEL_MISMATCH, RESPONSE_PRICING_TIER_MISMATCH, UNEXPECTED_MODEL_TOOL",
+     "action": "status HOLD_OPERATIONAL with that reason; anything else INFERENCE_FAILED + accounting incident; no model fallback",
+     "source": "agents/daily_cycle.py:757-770; agents/bounded_inference.py:110-214",
+     "status": "active"
+    },
+    {
+     "id": "ai-model-pin",
+     "name": "Registered dated models only",
+     "applies_to": "official scheduled inference",
+     "when": "bridge construction",
+     "condition": "config research/portfolio/critic_model_name must equal preregistration assigned_models; stage 1; broker paper; daily_api_budget_usd == 0.40",
+     "action": "MODEL_CONFIG_MISMATCH / REGISTERED_SCHEDULED_CONFIG_REQUIRED",
+     "source": "agents/bounded_inference.py:34-37; agents/scheduled_inference.py:39-43",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "desk_entry",
+   "title": "ETF desk rule entry (no AI)",
+   "plain": "If an ETF signal exists, code buys it in all three paper accounts (one waits for your YES), limited to 0.5% above the first midpoint of the run, only if spreads and volume are healthy, and only before 3:30 PM.",
+   "rules": [
+    {
+     "id": "desk-select",
+     "name": "Which ETF",
+     "applies_to": "Lane A",
+     "when": "official cycle (both AI and no-AI paths), market open",
+     "condition": "ETF_UNIVERSE signals with side buy and a fresh quote; pick highest 'strength' then symbol",
+     "action": "one candidate per cycle",
+     "source": "agents/daily_cycle.py:381-403",
+     "status": "active"
+    },
+    {
+     "id": "desk-slot",
+     "name": "AI stock pick has precedence",
+     "applies_to": "Lane A",
+     "when": "AI path",
+     "condition": "an AI Lane A result is filled or PENDING",
+     "action": "desk blocked AI_STOCK_SLOT_PRECEDENCE / LANE_A_SLOT_USED; max 1 desk entry per official cycle",
+     "source": "agents/daily_cycle.py:797-802; agents/etf_desk_policy.py:57-60; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.maximum_entries_per_official_cycle 1, slot_precedence",
+     "status": "active"
+    },
+    {
+     "id": "desk-window",
+     "name": "Only from the official window",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "evaluated_at classifies as TRADING_WINDOW (10:00-10:20 ET) and market open at now",
+     "action": "else OUTSIDE_OFFICIAL_SESSION",
+     "source": "agents/etf_desk_policy.py:63-67",
+     "status": "active"
+    },
+    {
+     "id": "desk-deadline",
+     "name": "Entry deadline",
+     "applies_to": "desk entries and desk BUY cards",
+     "when": "-",
+     "condition": "expires = min(15:30 ET, session close - 30 min)",
+     "action": "now >= expires -> TRIGGER_EXPIRED; card expiry = this time",
+     "source": "agents/etf_desk_policy.py:33-36,68-70; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.trigger_expiry_formula",
+     "status": "active"
+    },
+    {
+     "id": "desk-quote",
+     "name": "Quote checks",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "reference and current quote same ticker, not halted, age 0-60 s, 0 < bid <= ask",
+     "action": "STALE_QUOTE / INVALID_QUOTE / QUOTE_IDENTITY_OR_HALT",
+     "source": "agents/etf_desk_policy.py:71-77",
+     "status": "active"
+    },
+    {
+     "id": "desk-liquidity",
+     "name": "Liquidity evidence",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "median 20-session dollar volume (median of close*volume of last 20 completed sessions) >= $50,000,000; spread fraction <= 0.003 using the median of 20 recorded first-of-session spreads, or (interim, until 20 sessions are recorded) the live spread",
+     "action": "missing -> LIQUIDITY_EVIDENCE_MISSING; failing -> LIQUIDITY_BLOCKED",
+     "source": "agents/etf_desk_policy.py:78-83; agents/daily_cycle.py:220-233,398-403; agents/etf_issuer.py:43-71; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.liquidity_evidence",
+     "status": "active"
+    },
+    {
+     "id": "desk-friction",
+     "name": "Price and spread floor",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "midpoint >= $5 and live (ask-bid)/mid <= 0.003",
+     "action": "FRICTION_BLOCKED",
+     "source": "agents/etf_desk_policy.py:84-86",
+     "status": "active"
+    },
+    {
+     "id": "desk-trigger",
+     "name": "Never chase",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "limit = reference_mid * 1.005; modeled fill = ask * 1.001; fires only if mid <= limit and ask*1.001 <= limit",
+     "action": "TRIGGER_NOT_FIRED otherwise",
+     "source": "agents/etf_desk_policy.py:87-91; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.entry_limit_formula",
+     "status": "active"
+    },
+    {
+     "id": "desk-size",
+     "name": "Desk sizing",
+     "applies_to": "each arm separately",
+     "when": "-",
+     "condition": "vol20 required; available = max(0, min(settled_cash, sized_notional - existing)); qty = available / limit rounded down to 0.000001; qty*ask*1.001 >= $1",
+     "action": "SIZING_HISTORY_REQUIRED / BELOW_MINIMUM_NOTIONAL",
+     "source": "agents/etf_desk_policy.py:92-101",
+     "status": "active"
+    },
+    {
+     "id": "desk-exit-plan",
+     "name": "Exit plan required",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "signal has strategy, thesis, good_if, invalidation strings",
+     "action": "SIGNAL_EXIT_PLAN_REQUIRED",
+     "source": "agents/etf_desk_policy.py:102-104",
+     "status": "active"
+    },
+    {
+     "id": "desk-risk",
+     "name": "Full risk engine with reference midpoint",
+     "applies_to": "desk plan",
+     "when": "-",
+     "condition": "RiskEngine.evaluate with etf_entry_reference (limit distance measured from reference mid, ETF buy only)",
+     "action": "RISK_BLOCKED with reasons",
+     "source": "agents/etf_desk_policy.py:111-114; risk/engine.py:48-59",
+     "status": "active"
+    },
+    {
+     "id": "desk-arms",
+     "name": "Arm routing",
+     "applies_to": "agent_alone, deterministic_no_ai (immediate); with_approvals (card)",
+     "when": "-",
+     "condition": "plan ELIGIBLE for that arm's own cash/holdings",
+     "action": "immediate arms fill via paper broker; with_approvals gets a 'Desk rule (no AI)' card with fill_policy fresh_quote_at_approval",
+     "source": "agents/etf_issuer.py:74-121; agents/inbox.py:223-255",
+     "status": "active"
+    },
+    {
+     "id": "desk-attribution",
+     "name": "Never credited to AI",
+     "applies_to": "desk results",
+     "when": "-",
+     "condition": "-",
+     "action": "attribution desk_policy_not_ai; model_name 'deterministic_not_a_model'",
+     "source": "agents/etf_desk_policy.py:105-110; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.never_attribute_desk_policy_return_to_ai",
+     "status": "active"
+    },
+    {
+     "id": "desk-spread-record",
+     "name": "Spread recording",
+     "applies_to": "all quoted symbols",
+     "when": "official live run",
+     "condition": "first observation per symbol per day",
+     "action": "append-only liquidity_observations row",
+     "source": "agents/etf_issuer.py:38-53; agents/daily_cycle.py:406-410",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "risk_engine",
+   "title": "Risk engine (every paper fill, every arm)",
+   "plain": "Before any simulated order, code checks size, cash, price freshness, limits, daily order count and loss/drawdown limits. Any failed check blocks the order and records why.",
+   "rules": [
+    {
+     "id": "risk-size",
+     "name": "Volatility-targeted size",
+     "applies_to": "buys",
+     "when": "evaluate",
+     "condition": "sized_notional = account_value * min(0.25, 0.10 * 0.20 / realized_vol_20d); vol must be finite > 0 and <= 7 days old",
+     "action": "VOLATILITY_SIZE_LIMIT / INVALID_REALIZED_VOLATILITY",
+     "source": "risk/engine.py:14-17,61-68; config/settings.yaml:risk.target_position_fraction 0.10, target_volatility_fraction 0.20, max_position_fraction 0.25",
+     "status": "active"
+    },
+    {
+     "id": "risk-vol-calc",
+     "name": "20-day realized vol",
+     "applies_to": "sizing",
+     "when": "snapshot",
+     "condition": "last 21 completed non-interpolated closes, distinct dates; stdev of 20 log returns * sqrt(252)",
+     "action": "None -> not sizeable",
+     "source": "agents/daily_cycle.py:176-184",
+     "status": "active"
+    },
+    {
+     "id": "risk-position-cap",
+     "name": "25% position cap",
+     "applies_to": "non-closing orders",
+     "when": "evaluate",
+     "condition": "proposed + existing value > 0.25 * account value",
+     "action": "POSITION_TOO_LARGE",
+     "source": "risk/engine.py:69-72",
+     "status": "active"
+    },
+    {
+     "id": "risk-max-positions",
+     "name": "Max 5 open positions",
+     "applies_to": "new names",
+     "when": "evaluate",
+     "condition": "open_position_count >= 5",
+     "action": "TOO_MANY_POSITIONS",
+     "source": "risk/engine.py:73-77; config/settings.yaml:risk.max_open_positions 5",
+     "status": "active"
+    },
+    {
+     "id": "risk-orders-day",
+     "name": "Max 5 orders per day",
+     "applies_to": "per arm per lane",
+     "when": "evaluate",
+     "condition": "filled orders today (ET) >= 5, unless emergency close (closing sell at >= 15% drawdown)",
+     "action": "DAILY_ORDER_LIMIT",
+     "source": "risk/engine.py:94-97; agents/inbox.py:63",
+     "status": "active"
+    },
+    {
+     "id": "risk-round-trip",
+     "name": "No same-day round trip",
+     "applies_to": "all orders incl. closing sells",
+     "when": "evaluate",
+     "condition": "opposite side already filled today in this ticker (unless emergency close)",
+     "action": "SAME_DAY_ROUND_TRIP",
+     "source": "risk/engine.py:98-101",
+     "status": "active"
+    },
+    {
+     "id": "risk-settled-cash",
+     "name": "Settled cash only",
+     "applies_to": "buys",
+     "when": "evaluate + paper broker",
+     "condition": "qty*limit*multiplier > settled_cash",
+     "action": "INSUFFICIENT_SETTLED_CASH",
+     "source": "risk/engine.py:35-36; broker/paper.py:63-67",
+     "status": "active"
+    },
+    {
+     "id": "risk-limit-only",
+     "name": "Limit orders within 0.5%",
+     "applies_to": "all",
+     "when": "evaluate",
+     "condition": "order_type must be limit; |limit - reference|/reference <= 0.005 (reference = ask for buys, bid for sells, or desk reference midpoint)",
+     "action": "LIMIT_ONLY / LIMIT_TOO_FAR",
+     "source": "risk/engine.py:42-59; config/settings.yaml:risk.max_limit_distance_fraction 0.005",
+     "status": "active"
+    },
+    {
+     "id": "risk-account",
+     "name": "Agentic account only",
+     "applies_to": "all",
+     "when": "evaluate",
+     "condition": "proposal.account_id != configured agentic account",
+     "action": "WRONG_ACCOUNT",
+     "source": "risk/engine.py:38-39",
+     "status": "active"
+    },
+    {
+     "id": "risk-whitelist",
+     "name": "Whitelisted instruments",
+     "applies_to": "all",
+     "when": "evaluate",
+     "condition": "ticker (or option underlying) not in instrument_whitelist",
+     "action": "NOT_WHITELISTED",
+     "source": "risk/engine.py:40-41",
+     "status": "active"
+    },
+    {
+     "id": "risk-sell-held",
+     "name": "Sell only what is held",
+     "applies_to": "sells",
+     "when": "evaluate",
+     "condition": "sell qty > held; is_closing without holding",
+     "action": "INSUFFICIENT_POSITION / INVALID_CLOSING",
+     "source": "risk/engine.py:27-32",
+     "status": "active"
+    },
+    {
+     "id": "risk-missing-mark",
+     "name": "No buys with unvalued positions",
+     "applies_to": "buys",
+     "when": "evaluate",
+     "condition": "any position missing a fresh mark at last valuation",
+     "action": "MISSING_POSITION_MARK",
+     "source": "risk/engine.py:25-26; agents/inbox.py:88-95",
+     "status": "active"
+    },
+    {
+     "id": "risk-daily-loss",
+     "name": "Daily loss 3%",
+     "applies_to": "non-closing orders, per arm per lane",
+     "when": "evaluate",
+     "condition": "value - day_start_value <= -(0.03 * current account value); day_start_value = value at first valuation of the ET day",
+     "action": "DAILY_LOSS_LIMIT",
+     "source": "risk/engine.py:103-108; agents/inbox.py:67,82-83",
+     "status": "active"
+    },
+    {
+     "id": "risk-drawdown-10",
+     "name": "10% drawdown buy block",
+     "applies_to": "buys",
+     "when": "evaluate",
+     "condition": "(peak - value)/peak >= 0.10",
+     "action": "DRAWDOWN_BUY_BLOCK (+ alert_drawdown_10)",
+     "source": "risk/engine.py:114-120",
+     "status": "active"
+    },
+    {
+     "id": "risk-drawdown-15",
+     "name": "15% drawdown lock",
+     "applies_to": "non-closing orders",
+     "when": "evaluate",
+     "condition": "drawdown >= 0.15 and manually_unlocked_after_drawdown (hard-coded False)",
+     "action": "DRAWDOWN_LOCK; closing sells exempt from order-count and round-trip rules",
+     "source": "risk/engine.py:89-94,110-113; agents/inbox.py:71",
+     "status": "active"
+    },
+    {
+     "id": "risk-kill",
+     "name": "Kill switch in context",
+     "applies_to": "non-closing orders",
+     "when": "evaluate",
+     "condition": "safety_stopped() OR state.peak_breaker_latched OR state.global_kill_switch OR weekly loss >= 5%",
+     "action": "KILL_SWITCH",
+     "source": "risk/engine.py:127-128; agents/inbox.py:68-71",
+     "status": "active"
+    },
+    {
+     "id": "risk-duplicate",
+     "name": "Duplicate order id",
+     "applies_to": "all",
+     "when": "evaluate + broker",
+     "condition": "client_order_id already seen in this arm",
+     "action": "DUPLICATE_ORDER",
+     "source": "risk/engine.py:122-124; broker/paper.py:38-40",
+     "status": "active"
+    },
+    {
+     "id": "risk-options",
+     "name": "Defined-risk options only",
+     "applies_to": "Lane B",
+     "when": "evaluate",
+     "condition": "options_unlocked; long_call/long_put only; multiplier 100; whole contracts; max_loss == premium for buys; not expired; same-day expiry only for closing; no naked short call",
+     "action": "OPTIONS_LOCKED / OPTION_NOT_DEFINED_RISK / NAKED_SHORT_CALL",
+     "source": "risk/engine.py:79-87; config/settings.yaml:risk.options_unlocked true",
+     "status": "active (buys additionally blocked by v1.6 OPTIONS_LANE_PAUSED_V16)"
+    },
+    {
+     "id": "risk-auto-approve",
+     "name": "Auto-approve forbidden",
+     "applies_to": "all",
+     "when": "evaluate",
+     "condition": "auto_approve_requested (hard-coded False)",
+     "action": "AUTO_APPROVE_FORBIDDEN",
+     "source": "risk/engine.py:125-126",
+     "status": "active (inert)"
+    },
+    {
+     "id": "risk-injection",
+     "name": "Instruction-like evidence",
+     "applies_to": "all",
+     "when": "evaluate",
+     "condition": "any proposal.evidence item contains_instructions",
+     "action": "INJECTED_INSTRUCTIONS",
+     "source": "risk/engine.py:129-130; agents/schemas.py:21",
+     "status": "inert in practice (no code path populates evidence or sets the flag)"
+    }
+   ]
+  },
+  {
+   "id": "approvals",
+   "title": "Approval cards (with_approvals arm)",
+   "plain": "The 'with approvals' account only trades when you answer YES on a card. AI stock cards are priced at the moment the card was issued; desk ETF cards wait for a fresh price after your YES.",
+   "rules": [
+    {
+     "id": "apr-ai-card",
+     "name": "AI card issued only after agent_alone fills",
+     "applies_to": "AI picks",
+     "when": "inbox.issue",
+     "condition": "agent_alone _execute status == filled",
+     "action": "PENDING card (body <= 150 words) expiring at session close (live) or +30 min (non-live); notification enqueued",
+     "source": "agents/inbox.py:181-221; agents/approval.py (150-word cap)",
+     "status": "active"
+    },
+    {
+     "id": "apr-ai-fill",
+     "name": "AI card YES fills at issue-time quote",
+     "applies_to": "AI cards",
+     "when": "operator YES before expiry",
+     "condition": "now < expires",
+     "action": "_execute on with_approvals with the stored issue-time quote at time=issued (labelled proposal_time_counterfactual); NO/expired -> skipped fill record",
+     "source": "agents/inbox.py:300-337",
+     "status": "active"
+    },
+    {
+     "id": "apr-desk-fill",
+     "name": "Desk card YES waits for a fresh quote",
+     "applies_to": "desk ETF BUY cards",
+     "when": "YES -> APPROVED_AWAITING_FILL; fills attempted on even minutes while market open",
+     "condition": "now < card expiry (entry deadline); quote fresh (<= 60 s) and not halted; ask*1.001 <= card limit; risk engine passes with reference midpoint",
+     "action": "fill -> status YES; risk block -> APPROVED_RISK_BLOCKED; past expiry -> APPROVED_NOT_FILLED; otherwise WAITING (NO_FRESH_QUOTE/ABOVE_LIMIT)",
+     "source": "agents/inbox.py:257-294,316-322; agents/etf_issuer.py:143-150; agents/daily_cycle.py:875-887",
+     "status": "active"
+    },
+    {
+     "id": "apr-sell-cards",
+     "name": "SELL cards from rule exits",
+     "applies_to": "with_approvals ETF exit, stock backstop, 15:50 protective",
+     "when": "when the exit rule fires",
+     "condition": "backstop and protective skip if any PENDING sell card for the same ticker exists; ETF exit skips only if the same proposal id exists",
+     "action": "PENDING SELL card expiring at session close; YES fills at the card's issue-time quote; NO keeps the position",
+     "source": "agents/etf_exit.py:103-122,176-197; agents/v16_policy.py:253-270",
+     "status": "active"
+    },
+    {
+     "id": "apr-expiry",
+     "name": "Expiry",
+     "applies_to": "all official cards",
+     "when": "maintenance (every 5 min) and on decide()",
+     "condition": "now >= expires",
+     "action": "EXPIRED (no carry to next day; approval after expiry rejected)",
+     "source": "agents/inbox.py:339-346; preregistration.yaml:paper_approvals",
+     "status": "active"
+    },
+    {
+     "id": "apr-rebase",
+     "name": "Cards closed by capital rebase",
+     "applies_to": "Lane A PENDING/APPROVED_AWAITING_FILL cards",
+     "when": "first official v1.6 cycle",
+     "condition": "-",
+     "action": "status EXPIRED_CAPITAL_REBASE",
+     "source": "agents/v16_policy.py:109-115",
+     "status": "active (one-time)"
+    }
+   ]
+  },
+  {
+   "id": "exits",
+   "title": "Selling rules (registered exits)",
+   "plain": "ETFs are sold when they close at/below their 200-day average or 6-month momentum turns non-positive. AI-bought stocks are reviewed by the AI daily, with a code backstop at the 200-day average or after 20 sessions. At 3:50 PM a safety check sells anything 8% under cost or trading under its 200-day average.",
+   "rules": [
+    {
+     "id": "exit-etf",
+     "name": "v1.5.1 ETF exit",
+     "applies_to": "Lane A ETF positions in agent_alone, with_approvals, deterministic_no_ai",
+     "when": "10:00 official cycle, after entries, market open",
+     "condition": "from today's completed-session features: above_ma200 is False (close <= 200-session mean) OR momentum_126d <= 0",
+     "action": "full position: agent_alone and deterministic_no_ai sell at fresh bid (<=60 s); with_approvals SELL card; missing features -> HOLD EXIT_EVIDENCE_MISSING; stale quote -> EXIT_BLOCKED FRESH_QUOTE_REQUIRED",
+     "why": "operator intent: 'agents should sell when conditions are right' (preregistration-amendment-v1.5.1.yaml:operator_signature.intent_source)",
+     "source": "agents/etf_exit.py:25-36,60-123; preregistration-amendment-v1.5.1.yaml:desk_etf_exit",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "exit-stock-backstop",
+     "name": "v1.5.2 stock backstop",
+     "applies_to": "Lane A positions with asset_class 'stock', all three arms",
+     "when": "10:00 cycle, after AI stages and after ETF exits",
+     "condition": "above_ma200 is False OR >= 20 session-close dates after the ET date of the last buy fill",
+     "action": "agent_alone/deterministic_no_ai sell full position at fresh bid; with_approvals SELL card unless a sell card for the ticker is PENDING",
+     "source": "agents/etf_exit.py:46,131-205; preregistration-amendment-v1.5.2.yaml:stock_backstop_exit",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "exit-protective",
+     "name": "v1.6 protective exit",
+     "applies_to": "Lane A ETF and stock positions, all three arms",
+     "when": "once per session, 15:50 <= ET < 15:58 (early close: close-10 min <= t < close-2 min), inside the daily service tick",
+     "condition": "fresh bid (<=60 s): (1) bid <= average_cost * (1 - 0.08) -> PROTECTIVE_STOP_BELOW_AVERAGE_COST; else (2) bid <= mean of last 200 completed closes -> LIVE_PRICE_AT_OR_BELOW_200_DAY_AVERAGE; else (3) ETF only: bid/close_126_sessions_ago - 1 <= 0 -> LIVE_MOMENTUM_126D_NOT_POSITIVE",
+     "action": "immediate arms sell full quantity at bid; with_approvals SELL card expiring at close (skipped if a sell card is pending); every check recorded; missing quote -> HOLD FRESH_QUOTE_REQUIRED; history error -> HOLD HISTORY_UNAVAILABLE; failed attempt releases the claim and retries next tick inside the window",
+     "why": "review found exits waited for the next 10:00 run (preregistration-amendment-v1.6.0.yaml:rationale)",
+     "source": "agents/v16_policy.py:33,153-167,170-184,187-197,200-278,287-296; agents/daily_cycle.py:888-901; preregistration-amendment-v1.6.0.yaml:protective_exit",
+     "status": "active",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "exit-ai-review",
+     "name": "AI daily review of held stocks/options",
+     "applies_to": "Lane A stocks, Lane B options (not ETFs under v1.5)",
+     "when": "10:00 cycle when held",
+     "condition": "holding exists -> AI gate opens",
+     "action": "Portfolio may issue a sell pick (full agent_alone quantity at bid)",
+     "source": "agents/daily_cycle.py:646-649,296-297",
+     "status": "active"
+    },
+    {
+     "id": "exit-option-expiry",
+     "name": "Option expiry settlement",
+     "applies_to": "Lane B positions, all arms",
+     "when": "start of each 10:00 cycle",
+     "condition": "expiry < today and the underlying's close for the expiry date exists",
+     "action": "cash-settle intrinsic value (call max(0, S-K), put max(0, K-S)) x qty x 100; cash settled T+1 after expiry; missing close -> position frozen unvalued",
+     "source": "agents/inbox.py:116-152",
+     "status": "active"
+    },
+    {
+     "id": "exit-no-broker-stops",
+     "name": "No resting stop orders",
+     "applies_to": "all",
+     "when": "-",
+     "condition": "-",
+     "action": "exits only at the 10:00 run and the 15:50 check (paper); no broker orders exist",
+     "source": "docs/SYSTEM_WALKTHROUGH.md:175,236",
+     "status": "active (design fact)"
+    },
+    {
+     "id": "exit-baseline-rule",
+     "name": "Registered baseline exit (v1.4.2)",
+     "applies_to": "deterministic_no_ai, seeded_random",
+     "when": "-",
+     "condition": "earliest of registered invalidation or close of 20th session after entry",
+     "action": "-",
+     "source": "preregistration.yaml:counterfactual_arms.baseline_exit_rule",
+     "status": "registered; for deterministic_no_ai ETFs the v1.5.1 exit is what runs (no 20-session time stop for ETFs in code)"
+    }
+   ]
+  },
+  {
+   "id": "accounting",
+   "title": "Paper ledger, valuation and settlement",
+   "plain": "Every paper account keeps settled and unsettled cash. Sale money becomes spendable the next business day. Positions are valued at the bid.",
+   "rules": [
+    {
+     "id": "acc-books",
+     "name": "Paper accounts",
+     "applies_to": "Lane A and B x agent_alone, with_approvals, deterministic_no_ai",
+     "when": "created at startup",
+     "condition": "-",
+     "action": "state: settled_cash, unsettled_cash, positions, fills, seen ids, peak, start, weekly_start_value, peak_breaker_latched, global_kill_switch, marks",
+     "source": "agents/inbox.py:25,37-49",
+     "status": "active"
+    },
+    {
+     "id": "acc-rebase",
+     "name": "v1.6 Lane A rebase to $25,000",
+     "applies_to": "Lane A, 3 arms",
+     "when": "once, at the first official v1.6 live_readonly cycle with desk policy enabled",
+     "condition": "no capital_rebases row for 1.6.0",
+     "action": "archive build-phase state, reset each arm to fresh_state(25000) (peak/start/weekly = 25000, latches False), expire pending Lane A cards, record capital_rebase",
+     "source": "agents/v16_policy.py:67-71,89-121; agents/daily_cycle.py:440-443",
+     "status": "active (one-time)",
+     "effective": "2026-10-01T09:30:00-04:00"
+    },
+    {
+     "id": "acc-valuation",
+     "name": "Mark-to-bid",
+     "applies_to": "all 6 accounts",
+     "when": "each official cycle (once in the no-AI path; before and after decisions in the AI path); not at 15:50",
+     "condition": "fresh quote <= 60 s",
+     "action": "mark = bid; missing marks -> value None (and buys blocked); peak updated; drawdown >= 10% sets peak_breaker_latched; >= 15% sets global_kill_switch",
+     "source": "agents/inbox.py:73-114",
+     "status": "active"
+    },
+    {
+     "id": "acc-settlement",
+     "name": "T+1 settlement",
+     "applies_to": "all arms incl. deterministic_no_ai",
+     "when": "maintenance every 5 min",
+     "condition": "settlement due date <= today ET; due = next weekday that is not a regular NYSE holiday",
+     "action": "move amount from unsettled to settled",
+     "source": "agents/maintenance.py:14-18,31-46; agents/inbox.py:172-174",
+     "status": "active"
+    },
+    {
+     "id": "acc-fractional",
+     "name": "Fractional shares",
+     "applies_to": "Lane A",
+     "when": "-",
+     "condition": "-",
+     "action": "quantity to 6 decimals, minimum $1 notional (desk); options whole contracts",
+     "source": "preregistration-amendment-v1.5.0.yaml:decisions; agents/etf_desk_policy.py:99-101",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "safety",
+   "title": "Safety stops, tripwire and connection",
+   "plain": "Any unexpected change in the real Robinhood Agentic account, a refused read or an unexpected capability stops all paper trading until the operator reviews it. The operator can also pause from the dashboard.",
+   "rules": [
+    {
+     "id": "saf-stop-file",
+     "name": "STOP_TRADING pause",
+     "applies_to": "whole system",
+     "when": "dashboard Controls pause/resume",
+     "condition": "file STOP_TRADING beside agent.db (or symlink)",
+     "action": "safety_stopped() True: no claim, no cycle ownership, no inference, no protective check, risk KILL_SWITCH for buys; resume refused while an incident is unresolved",
+     "source": "agents/safety_events.py:81-84; agents/dashboard.py:120-140",
+     "status": "active"
+    },
+    {
+     "id": "saf-incident",
+     "name": "INCIDENT_STOP latch",
+     "applies_to": "whole system",
+     "when": "record_incident()",
+     "condition": "unexpected capability, tripwire violation, snapshot/order-history incomplete, etc.",
+     "action": "creates INCIDENT_STOP + STOP_TRADING, safety_incidents row, priority-1 notification; only cleared by matching operator acknowledgement (tripwire) / manual review",
+     "source": "agents/safety_events.py:34-78; agents/account_tripwire.py:210-264",
+     "status": "active"
+    },
+    {
+     "id": "saf-tripwire",
+     "name": "Agentic account tripwire",
+     "applies_to": "real Robinhood Agentic account (read-only)",
+     "when": "every official 10:00 collection (LiveReader.collect)",
+     "condition": "compare cash, positions, equity/option/crypto orders vs last VERIFIED snapshot: cash > $1,200 -> AGENTIC_ACCOUNT_OUTSIDE_BOUNDS; cash decrease, any position change or any order/activity change -> AGENTIC_ACCOUNT_UNACKNOWLEDGED_CHANGE; cash increase alone (<= cap) -> ACCOUNT_CASH_INCREASE_BENIGN (new baseline); first snapshot -> BASELINE_CREATED",
+     "action": "violation: incident + kill switch + revoke instructions; re-arm only by operator acknowledgement of the exact snapshot hash",
+     "source": "agents/account_tripwire.py:112-205,230-264; agents/market_reader.py:129-187; preregistration.yaml:safety.oauth.state_tripwire",
+     "status": "active"
+    },
+    {
+     "id": "saf-bounded-cash",
+     "name": "$1,200 bounded-cash check",
+     "applies_to": "every LiveReader preflight (full-scope fallback path)",
+     "when": "reader construction",
+     "condition": "cash, buying_power, unleveraged_buying_power finite, >= 0, equal to each other, cash <= 1200.00",
+     "action": "AGENTIC_ACCOUNT_OUTSIDE_BOUNDS incident",
+     "source": "broker/read_gateway.py:135-160; preregistration.yaml:safety.oauth.bounded_cash",
+     "status": "active"
+    },
+    {
+     "id": "saf-order-history",
+     "name": "Order-history coverage",
+     "applies_to": "tripwire",
+     "when": "official collection",
+     "condition": "<= 20 pages per class, <= 1,000 records, <= 1,060 calls; incremental window = last checkpoint - 60 s",
+     "action": "incomplete -> ORDER_HISTORY_INCOMPLETE incident",
+     "source": "preregistration.yaml:safety.order_history_boundary; agents/market_reader.py:151-157",
+     "status": "active"
+    },
+    {
+     "id": "saf-auth-expiry",
+     "name": "Authorization expiry monitor",
+     "applies_to": "Robinhood OAuth",
+     "when": "maintenance every 5 min",
+     "condition": "statuses VALID, WARNING_3_DAYS, WARNING_1_DAY, EXPIRED, REFRESH_FAILED, PROXY_UNAVAILABLE",
+     "action": "deduplicated Pushover page per threshold; expired -> HOLD_OPERATIONAL AUTH_EXPIRED",
+     "source": "broker_proxy/auth_monitor.py:22-60; preregistration.yaml:safety.oauth.authorization_expiry_monitor",
+     "status": "active"
+    },
+    {
+     "id": "saf-capability",
+     "name": "Exact catalog check",
+     "applies_to": "every gateway preflight",
+     "when": "reader construction",
+     "condition": "remote MCP tool schemas for the 11 read tools must structurally equal the pinned schemas",
+     "action": "UNEXPECTED_CAPABILITY incident",
+     "source": "broker/read_gateway.py:80-121",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "isolation",
+   "title": "Run-mode isolation and records",
+   "plain": "Only the scheduled official run can write official results. Rehearsals and replays use separate databases and cannot issue cards or fills.",
+   "rules": [
+    {
+     "id": "iso-modes",
+     "name": "official / what_if / replay",
+     "applies_to": "all runs",
+     "when": "-",
+     "condition": "database role must match (live / whatif / fixture)",
+     "action": "non-official runs may not issue cards, write fills, scoreboard or memory; what-if needs a parent official run id",
+     "source": "agents/daily_cycle.py:418-438; preregistration.yaml:run_mode_isolation",
+     "status": "active"
+    },
+    {
+     "id": "iso-ownership",
+     "name": "Cycle ownership fencing",
+     "applies_to": "every write in an official run",
+     "when": "each step",
+     "condition": "lifecycle.owns(cycle_id): flock held, cycle_runs STARTED with this id, no safety stop",
+     "action": "'Cycle ownership lost' -> abort",
+     "source": "agents/cycle_lifecycle.py:93-96; agents/daily_cycle.py:467-472",
+     "status": "active"
+    },
+    {
+     "id": "iso-capsule",
+     "name": "Decision capsule",
+     "applies_to": "official runs",
+     "when": "finish()",
+     "condition": "-",
+     "action": "content-addressed sanitized capsule (models, snapshot, assessment, accounts, stage requests/outputs, result); capture failure never fails the cycle (capsule_status UNAVAILABLE)",
+     "source": "agents/daily_cycle.py:477-498; preregistration-amendment-v1.5.0.yaml:decision_capsule",
+     "status": "active"
+    },
+    {
+     "id": "iso-capability-gap",
+     "name": "Hold labels",
+     "applies_to": "no-AI path",
+     "when": "no fresh candidates / signals without entry path / no signal",
+     "condition": "-",
+     "action": "HOLD_OPERATIONAL NO_FRESH_ELIGIBLE_CANDIDATES / HOLD_CAPABILITY_GAP DETERMINISTIC_ENTRY_PATH_NOT_IMPLEMENTED / HOLD_CASH NO_QUALIFIED_SIGNAL; replaced by DESK_ENTRY / DESK_ENTRY_BLOCKED when the desk ran",
+     "source": "agents/daily_cycle.py:664-685",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "id": "registered_not_implemented",
+   "title": "Registered in v1.4.2 but not found in runtime code",
+   "plain": "The base rulebook describes more machinery than the code runs today. These rules are on paper only; grep of agents/, eval/, risk/, research/, broker/, data/ found no implementation.",
+   "rules": [
+    {
+     "id": "rni-eqs",
+     "name": "Evidence quality score (threshold 75)",
+     "applies_to": "Research -> Portfolio",
+     "when": "-",
+     "condition": "weights 0.25/0.20/0.25/0.15/0.15",
+     "action": "-",
+     "source": "preregistration.yaml:evidence_quality_score",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-net-edge",
+     "name": "Net-edge gates",
+     "applies_to": "agent arms",
+     "when": "-",
+     "condition": "minimum_net_edge_usd 0.50, minimum_expected_net_return_fraction 0.02, minimum_edge_to_friction_ratio 5.0; shrinkage p_used = base + 0.5*(p - base) until 50 resolved forecasts beat base-rate Brier",
+     "action": "-",
+     "source": "preregistration.yaml:net_edge",
+     "status": "not implemented (no 'brier'/net-edge code)"
+    },
+    {
+     "id": "rni-calibration",
+     "name": "Brier calibration",
+     "applies_to": "per agent",
+     "when": "-",
+     "condition": "50 resolved forecasts, strictly better than base rate",
+     "action": "-",
+     "source": "preregistration.yaml:calibration",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-ai-stop",
+     "name": "AI stop rule",
+     "applies_to": "Research/Portfolio/Critic",
+     "when": "365 days after first official run, then monthly",
+     "condition": "agent_with_approvals after-cost return >= deterministic_no_ai AND paired bootstrap (10,000 runs) P(research concordance > screener) >= 0.80",
+     "action": "disable AI stages persistently (AI_STOP_RULE_TRIGGERED)",
+     "source": "preregistration.yaml:ai_stop_rule",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-kelly",
+     "name": "Shadow Kelly logging",
+     "applies_to": "-",
+     "when": "-",
+     "condition": "fractional 0.25 Kelly, logging only",
+     "action": "-",
+     "source": "preregistration.yaml:shadow_kelly",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-arms",
+     "name": "seeded_random, vti, cash, exposure_matched_vti, lane_b_delta_equivalent_underlying arms",
+     "applies_to": "counterfactual arms",
+     "when": "-",
+     "condition": "-",
+     "action": "-",
+     "source": "preregistration.yaml:counterfactual_arms.arms",
+     "status": "not run as paper books (names appear only in agents/cost_allocation.py:11 for $0 cost attribution; VTI and cash exist only as scoring lines)"
+    },
+    {
+     "id": "rni-selection-ref",
+     "name": "Selection-reference shadow ledger / VOID_DATA paging",
+     "applies_to": "every Portfolio selection",
+     "when": "-",
+     "condition": "void rate > 5%/month pages",
+     "action": "-",
+     "source": "preregistration.yaml:counterfactual_arms.selection_timing_attribution",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-blinding",
+     "name": "Research input blinding / candidate scoring / concordance",
+     "applies_to": "Research",
+     "when": "-",
+     "condition": "seeded shuffle, strip screener rank/score, pairwise concordance on 20-session sector alpha",
+     "action": "-",
+     "source": "preregistration.yaml:agent_contract.research_input_blinding, research_candidate_scoring",
+     "status": "not implemented"
+    },
+    {
+     "id": "rni-critic-categories",
+     "name": "Critic hard-veto / advisory categories, 1 rebuttal",
+     "applies_to": "Critic",
+     "when": "-",
+     "condition": "11 hard-veto categories, 6 advisory, advisory_rebuttal_attempts 1",
+     "action": "-",
+     "source": "preregistration.yaml:hard_failures; v1.5.0 not_activated advisory_rebuttal",
+     "status": "not implemented (Critic output is free-text counterargument + rejected_instruments)"
+    },
+    {
+     "id": "rni-breaker-scope",
+     "name": "Combined-portfolio breakers and documented re-arm",
+     "applies_to": "breakers",
+     "when": "-",
+     "condition": "each_lane + combined_paper_portfolio; peak re-arm requires documented operator review + approval",
+     "action": "-",
+     "source": "preregistration.yaml:risk_and_sizing.automatic_breakers; risk/breakers.py:38-95 (BreakerState with rearm exists but is not used by runtime)",
+     "status": "not implemented in runtime (per-arm state flags only)"
+    }
+   ]
+  }
+ ],
+ "daily_timeline": [
+  {
+   "time_et": "00:00-09:30 (pre-open)",
+   "what": "Daily service ticks every 60 s but does nothing (no claim outside 10:00-10:20; approval fills need market open; protective outside window; AI trader needs 10:05+). Maintenance every 5 min: stalled/missed reconcile, card expiry, T+1 settlement, notification delivery, Robinhood authorization check (3-day / 1-day warnings).",
+   "source": "scripts/install_shadow_services.py:52-68; agents/maintenance.py:21-49"
+  },
+  {
+   "time_et": "09:30",
+   "what": "Market opens. On 2026-10-01 only: amendments v1.5.0/1.5.1/1.5.2/1.6.0 become active (effective_from 2026-10-01T09:30-04:00).",
+   "source": "agents/v15_activation.py:19,53,73; agents/v16_policy.py:31"
+  },
+  {
+   "time_et": "10:00:00",
+   "what": "launchd calendar tick (Mon-Fri) + 60-s tick: runtime preflight, then atomic claim of today's official cycle (flock + cycle_runs INSERT OR IGNORE). Claim allowed only 10:00:00-10:19:59 ET on XNYS sessions, not while safety-stopped.",
+   "source": "scripts/install_shadow_services.py:68; agents/cycle_lifecycle.py:57-91; agents/operator.py:59-68"
+  },
+  {
+   "time_et": "10:00 (+~45-70 s)",
+   "what": "Official cycle: v1.6 rebase (first run only) -> read-only collection with tripwire -> snapshot -> option expiry settlement -> signals -> AI gate -> [no-AI path: valuation, spread record, ETF desk entry, ETF exit, stock backstop] or [AI path: budget reservation, Research, Portfolio, Critic, final refresh, valuation, AI issue, spread record, desk entry, exits, valuation, VTI benchmark] -> capsule -> terminal record.",
+   "source": "agents/daily_cycle.py:413-816"
+  },
+  {
+   "time_et": "10:00-15:30 (every even minute, market open)",
+   "what": "Approved desk ETF cards (APPROVED_AWAITING_FILL) try to fill at a fresh quote within the limit; on odd minutes/closed market, cards past their window are closed APPROVED_NOT_FILLED.",
+   "source": "agents/daily_cycle.py:875-887; agents/etf_issuer.py:143-150; agents/inbox.py:257-294"
+  },
+  {
+   "time_et": "10:00-16:00 (any time before expiry)",
+   "what": "Operator answers PENDING cards on the Approvals page (AI cards and sell cards expire at session close; desk BUY cards at the entry deadline).",
+   "source": "agents/inbox.py:300-337"
+  },
+  {
+   "time_et": "10:20",
+   "what": "Claim window closes. If no run was recorded, maintenance raises MISSED_WINDOW (priority 1). A STARTED claim older than 30 min becomes FAILED_STALLED. (Registered single recovery attempt is not wired.)",
+   "source": "agents/cycle_lifecycle.py:107-123"
+  },
+  {
+   "time_et": "10:05-15:30",
+   "what": "AI trader morning run (only if trader.db exists, today's official cycle_runs status == COMPLETED, < 3 attempts today, not retired): settle T+1, code exits (PAPER), management cards, Scout -> PM -> code checks -> Critic -> fills (PAPER) or WATCH_APPROVED (WATCH_ONLY). Stops starting model calls after 360 s.",
+   "source": "agents/ai_trader/hook.py:16,110-171; agents/ai_trader/cycle.py:23-25,157-297"
+  },
+  {
+   "time_et": "even minutes (AI trader)",
+   "what": "Book B approved cards fill at a fresh quote if ask*1.001 <= A's fill mark * 1.005 and before 15:30.",
+   "source": "agents/ai_trader/hook.py:136; agents/ai_trader/cycle.py:388-423"
+  },
+  {
+   "time_et": "15:30",
+   "what": "Entry deadline: last ETF desk entry/fill (min(15:30, close-30 min)); desk BUY cards expire; AI trader entries stop and its book-B cards expire.",
+   "source": "agents/etf_desk_policy.py:33-36; agents/ai_trader/cycle.py:23,227-229,438-446"
+  },
+  {
+   "time_et": "15:50-15:58",
+   "what": "v1.6 protective exit check, once per session (early close: close-10 min to close-2 min). AI trader protective check in the same window (PAPER mode only).",
+   "source": "agents/v16_policy.py:33,153-167; agents/daily_cycle.py:888-901; agents/ai_trader/hook.py:17,133"
+  },
+  {
+   "time_et": "16:00",
+   "what": "Close. PENDING AI cards and SELL cards expire (session_close); maintenance marks them EXPIRED within ~5 min.",
+   "source": "agents/inbox.py:210-214,339-346"
+  },
+  {
+   "time_et": "Fri 16:30",
+   "what": "Weekly Pushover summary (maintenance; weekend catch-up).",
+   "source": "eval/weekly.py:17-31; config/settings.yaml:weekly_report_time_et"
+  },
+  {
+   "time_et": "16:50 (Mon-Fri)",
+   "what": "Nightly S&P 500 shadow screen (read-only, own store, never trades).",
+   "source": "scripts/install_shadow_services.py:70-76; agents/nightly_screen.py"
+  },
+  {
+   "time_et": "every 5 min (all day)",
+   "what": "Maintenance: reconcile, expire, settle, weekly report, notifications, authorization check.",
+   "source": "agents/maintenance.py:21-49"
+  }
+ ],
+ "official_cycle_stages": [
+  {
+   "order": 0,
+   "stage": "Claim and preconditions",
+   "what": "Tick acquires the day's claim; production_enabled (v1.5) computed; registered scheduled bridge built (models must equal registered dated IDs; stage 1; paper; $0.40).",
+   "gates": [
+    "TRADING_WINDOW 10:00-10:20",
+    "no STOP_TRADING/INCIDENT_STOP",
+    "one claim per date + flock",
+    "MODEL_CONFIG_MISMATCH / REGISTERED_SCHEDULED_CONFIG_REQUIRED",
+    "root registration hash"
+   ],
+   "source": "agents/daily_cycle.py:864-919; agents/scheduled_inference.py:39-43"
+  },
+  {
+   "order": 1,
+   "stage": "Capital rebase (v1.6, once)",
+   "what": "If v1.6 active and desk enabled: archive build-phase Lane A, reset 3 arms to $25,000, expire Lane A cards.",
+   "gates": [
+    "v16_active",
+    "capital_rebases has no 1.6.0 row"
+   ],
+   "source": "agents/daily_cycle.py:440-443; agents/v16_policy.py:95-121"
+  },
+  {
+   "order": 2,
+   "stage": "Read (collection)",
+   "what": "LiveReader: proxy preflight (exact 11-tool catalog, Agentic account, $1,200 bounded cash), accounts/portfolio/positions, order histories, tripwire, then quotes (20/call) for the whitelist, 550-day daily history per symbol, option chains/instruments (7-45 DTE, +/-10%, 40 nearest), option quotes, and a final fresh equity quote read.",
+   "gates": [
+    "tripwire",
+    "BROKER_SNAPSHOT_INCOMPLETE / ORDER_HISTORY_INCOMPLETE incidents",
+    "whitelist subset of 23",
+    "gateway argument validation"
+   ],
+   "source": "agents/market_reader.py:25-187"
+  },
+  {
+   "order": 3,
+   "stage": "Snapshot / features",
+   "what": "Agentic account must be authenticated; quotes normalized for corporate actions; completed-session closes, 20-day realized vol (21 closes), 20-session median dollar volume; sector ETFs stripped if v1.5 inactive.",
+   "gates": [
+    "corporate-action exclusions",
+    "today's bar excluded"
+   ],
+   "source": "agents/daily_cycle.py:194-263,584-593"
+  },
+  {
+   "order": 4,
+   "stage": "Option expiry settlement",
+   "what": "Lane B expired positions cash-settled at intrinsic value from the expiry-date close.",
+   "gates": [
+    "cycle ownership"
+   ],
+   "source": "agents/inbox.py:116-152; agents/daily_cycle.py:601"
+  },
+  {
+   "order": 5,
+   "stage": "Candidates and signals",
+   "what": "Candidate rows (fresh quote + vol), evaluate_daily_signals (momentum top-1 on active ETF universe; mean reversion on all names), option signals (emptied by v1.6), drop signals without fresh quotes.",
+   "gates": [
+    "60-s freshness",
+    "253 / 202 close warm-ups"
+   ],
+   "source": "agents/daily_cycle.py:602-634"
+  },
+  {
+   "order": 6,
+   "stage": "AI invocation gate",
+   "what": "Invoke only for a qualified stock signal or a held stock/option needing review (ETF holdings excluded under v1.5).",
+   "gates": [
+    "AIInvocationGate"
+   ],
+   "source": "agents/daily_cycle.py:640-651"
+  },
+  {
+   "order": "7a",
+   "stage": "No-AI path",
+   "what": "Mark accounts at bid -> record first-of-day spreads -> ETF desk entry (3 arms) -> ETF exit (v1.5.1) -> stock backstop (v1.5.2) -> finish with DESK_ENTRY / DESK_ENTRY_BLOCKED / HOLD_*.",
+   "gates": [
+    "market open",
+    "desk planner gates",
+    "risk engine"
+   ],
+   "source": "agents/daily_cycle.py:652-704"
+  },
+  {
+   "order": "7b",
+   "stage": "AI path: budget",
+   "what": "Reserve $0.03/$0.05/$0.11 per active lane (daily $0.40, monthly allowance, annual $19.80 per lane); ScheduledInference also reserves 2 x ($0.0123+$0.0225+$0.0500) = $0.1696 against the $0.40 daily ledger before the first generation.",
+   "gates": [
+    "BudgetUnavailable -> HOLD_OPERATIONAL",
+    "BudgetExceeded -> NOT_ISSUED_BUDGET"
+   ],
+   "source": "agents/daily_cycle.py:715-728,757-758; agents/bounded_inference.py:96-101,164-166"
+  },
+  {
+   "order": "7c",
+   "stage": "AI path: Research",
+   "what": "gpt-5.4-nano-2026-03-17, effort low, <= 24,000 input / 6,000 output tokens, no tools, strict schema, news off; ETFs removed from packet under v1.5.",
+   "gates": [
+    "input token count <= envelope before call",
+    "ownership + safety recheck before generation",
+    "max 2 attempts per role",
+    "response model and default service tier must match",
+    "schema valid"
+   ],
+   "source": "agents/daily_cycle.py:729-740; agents/bounded_inference.py:110-214"
+  },
+  {
+   "order": "7d",
+   "stage": "AI path: Portfolio",
+   "what": "gpt-5.4-mini-2026-03-17, effort medium, <= 12,000 / 3,000 tokens; returns <= 2 picks with thesis/good_if/invalidation/confidence.",
+   "gates": [
+    "same inference gates"
+   ],
+   "source": "agents/daily_cycle.py:741-748"
+  },
+  {
+   "order": "7e",
+   "stage": "AI path: Critic",
+   "what": "gpt-5.4-2026-03-05, effort medium, <= 8,000 / 2,000 tokens; v1.5 blind packet built by code (no Portfolio reasoning); returns counterargument and rejected_instruments.",
+   "gates": [
+    "same inference gates"
+   ],
+   "source": "agents/daily_cycle.py:320-346,749-756"
+  },
+  {
+   "order": "7f",
+   "stage": "AI path: final refresh",
+   "what": "Re-read all whitelist quotes + wanted option ids; any wanted instrument stale/missing -> NOT_ISSUED_DATA.",
+   "gates": [
+    "60-s freshness"
+   ],
+   "source": "agents/daily_cycle.py:771-790"
+  },
+  {
+   "order": "7g",
+   "stage": "AI path: issue (approvals)",
+   "what": "Mark accounts; for each pick: needs strategy signal (buys), one per lane, whitelisted, not critic-rejected, quote+vol, sizing; agent_alone executes; if filled, with_approvals card issued.",
+   "gates": [
+    "market open",
+    "risk engine",
+    "OPTIONS_LANE_PAUSED_V16 for option buys"
+   ],
+   "source": "agents/daily_cycle.py:791-794,266-313; agents/inbox.py:181-221"
+  },
+  {
+   "order": "7h",
+   "stage": "AI path: desk entry and exits",
+   "what": "Record spreads; desk ETF entry unless an AI Lane A order filled/pending; ETF exit; stock backstop (after AI so AI exits come first).",
+   "gates": [
+    "slot precedence",
+    "desk planner",
+    "exit evidence"
+   ],
+   "source": "agents/daily_cycle.py:795-804"
+  },
+  {
+   "order": "7i",
+   "stage": "AI path: valuation and benchmark",
+   "what": "Mark accounts again; append VTI benchmark close to daily_values (AI path only).",
+   "gates": [],
+   "source": "agents/daily_cycle.py:810-816"
+  },
+  {
+   "order": 8,
+   "stage": "Finish",
+   "what": "Decision capsule (failure never fails the cycle), run_states 'decision_before_accounting', lifecycle finish (COMPLETED requires ownership), cost settlement per stage/lane (allocation by input-token share, fallback candidate count), allocation warning, terminal trace.",
+   "gates": [
+    "COST_SETTLEMENT_FAILED incident",
+    "TERMINAL_PERSISTENCE_FAILED"
+   ],
+   "source": "agents/daily_cycle.py:477-559"
+  }
+ ],
+ "arms_and_lanes": {
+  "lanes": {
+   "A": {
+    "what": "Stocks and ETFs as shares, fractional to 6 decimals, $1 minimum notional",
+    "capital_per_arm_usd": "25000.00 from the first official v1.6 cycle (config base 500; preregistration v1.4.2 starting_cash_usd_per_lane 500)",
+    "source": "preregistration-amendment-v1.6.0.yaml:paper_capital.lane_A_stocks_etfs_usd; agents/v16_policy.py:67-71"
+   },
+   "B": {
+    "what": "Defined-risk long calls/puts, whole contracts, multiplier 100",
+    "capital_per_arm_usd": "500.00 (unchanged)",
+    "status": "new buys paused by v1.6 (OPTIONS_LANE_PAUSED_V16); held contracts keep AI exit / expiry settlement; resume needs a later signed amendment",
+    "source": "preregistration-amendment-v1.6.0.yaml:options_lane; config/settings.yaml:paper_lanes.options_starting_cash_usd; agents/inbox.py:185-189"
+   }
+  },
+  "paper_arms_implemented": {
+   "agent_alone": {
+    "definition": "AI picks fill immediately when risk passes; also receives desk ETF entries and all rule exits immediately",
+    "measures": "AI judgment + desk rule without human filter",
+    "capital": "Lane A $25,000 / Lane B $500",
+    "ai_cost_charged": "yes (promotion_stats AI_ARMS)",
+    "source": "agents/inbox.py:25,202; agents/etf_issuer.py:22; eval/promotion_stats.py:33"
+   },
+   "with_approvals": {
+    "definition": "Same decisions as cards; fills only on operator YES (AI cards at issue-time quote; desk cards at fresh approval-time quote); public alias agent_with_approvals",
+    "measures": "value of the operator's yes/no filter",
+    "capital": "Lane A $25,000 / Lane B $500",
+    "ai_cost_charged": "yes",
+    "source": "agents/inbox.py:300-337; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.public_approval_arm_alias"
+   },
+   "deterministic_no_ai": {
+    "definition": "Only registered desk-policy (code) entries and rule exits; never AI picks",
+    "measures": "what the written rules alone produce (AI-free baseline)",
+    "capital": "Lane A $25,000 / Lane B $500 (Lane B receives nothing)",
+    "ai_cost_charged": "no",
+    "source": "agents/inbox.py:23-25; agents/etf_issuer.py:22"
+   }
+  },
+  "benchmarks_scoring_only": {
+   "vti": "observed VTI price-only series (daily_values benchmark rows) in promotion_stats / weekly report; not a paper book",
+   "cash": "starting cash, no interest",
+   "source": "eval/promotion_stats.py:68-70; eval/weekly.py:61-66; eval/scoreboard.py:35-77"
+  },
+  "registered_not_run": [
+   "seeded_random",
+   "exposure_matched_vti",
+   "lane_b_delta_equivalent_underlying (preregistration.yaml:counterfactual_arms)"
+  ],
+  "ai_trader_books": {
+   "A": "ai_alone, $25,000, AI team picks, fills immediately after Critic and risk",
+   "B": "ai_plus_operator, $25,000, fills only on operator YES/CUT; operator may skip or cut, never add size or a name; unanswered = skip",
+   "C": "matched_random, $25,000, seeded random ticker from the same universe, same entry day, same notional fraction, same exit day as its A trade (seed 'ai_trader_fwd_v1:2026-09-30')",
+   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the official DB directory",
+   "source": "research/recipes/ai_trader_fwd_v1.yaml:books; agents/ai_trader/hook.py:20-21; agents/ai_trader/store.py:131-145"
+  }
+ },
+ "universe": {
+  "tickers": {
+   "base_etfs_v1.4.2": [
+    "SPY",
+    "QQQ",
+    "VTI",
+    "SOXX",
+    "XLE",
+    "XLU",
+    "GLD",
+    "TLT"
+   ],
+   "sector_etfs_v1.5.0": [
+    "XLC",
+    "XLY",
+    "XLP",
+    "XLF",
+    "XLV",
+    "XLI",
+    "XLB",
+    "XLRE",
+    "XLK"
+   ],
+   "stocks_v1.4.2": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "META"
+   ],
+   "count": 23
+  },
+  "how_chosen": [
+   "v1.4.2 operator-owned whitelist: 8 reviewed unlevered liquid ETFs + 6 current mega-cap stocks (config/settings.yaml:risk.instrument_whitelist; preregistration.yaml:strategy_evaluation.single_stock_backtest_scope current_mega_caps_only).",
+   "v1.5.0 added the nine SPDR sector ETFs the registration already used as sector benchmarks (preregistration.yaml:forecast_targets.sector_benchmark_mapping; preregistration-amendment-v1.5.0.yaml:reviewed_etf_list; docs/superpowers/plans/universe-expansion-v1.6.draft.md step 1).",
+   "The repo's config/settings.yaml still lists 14; the operator's local config/settings.local.yaml (not in git) lists 23 (docs/review/HANDOFF_2026-09-30_EVENING.md:64). Whitelist owner: operator_local_config; unregistered symbols are refused at collection."
+  ],
+  "liquidity_and_eligibility_filters": {
+   "registered_universe_rules_v1.4.2": "exclude OTC and leveraged/inverse; price >= $5.00; >= 253 history sessions; median 20-day dollar volume >= $50,000,000; median spread <= 0.003; shortlist 30, live quote verification 20, AI research 8; tie-break symbol ascending (preregistration.yaml:universe)",
+   "applied_in_runtime": "desk ETF entries only: $50M median 20-session close*volume, spread <= 0.3%, midpoint >= $5 (agents/etf_desk_policy.py:78-86). Momentum needs 253 closes, mean reversion 202. AI stock picks have no explicit liquidity gate beyond the whitelist.",
+   "survivorship": "every backtest labelled SURVIVORSHIP-BIASED until Norgate point-in-time constituents are validated (status not_provisioned_or_validated) (preregistration.yaml:universe.historical_constituent_source)"
+  },
+  "strategy_coverage": "momentum rotation: 17 ETFs (8 before v1.5 activation); mean reversion: all names with history (agents/daily_cycle.py:605-607; research/strategy_signals.py:123-135)",
+  "ai_trader_universe": "same 23 names, long shares only; S&P shortlist = watch cards only; options off until 50 closed stock trades then a separate trial (research/recipes/ai_trader_fwd_v1.yaml:universe)",
+  "nightly_screen_universe": "S&P 500 constituents present in BOTH the SPY (SSGA xlsx) and IVV (iShares csv) holdings files + ETF_UNIVERSE; refreshed when the newest file is >= 7 days old (agents/nightly_screen.py:25-57,79)"
+ },
+ "fill_model": {
+  "buy_price": "quote.ask (PaperBroker fills buys at the ask; the registered +0.1% slippage is NOT added to the recorded fill price)",
+  "buy_price_source": "broker/paper.py:48-69",
+  "sell_price": "quote.bid",
+  "fill_condition": "buy limit >= ask; sell limit <= bid; else 'pending' -> treated as UNFILLED (no resting orders)",
+  "fill_condition_source": "broker/paper.py:48-55; agents/inbox.py:164-167",
+  "limit_price": {
+   "ai_buy": "limit = ask at proposal (distance 0 from ask)",
+   "ai_sell_and_rule_exits": "limit = bid",
+   "desk_etf_buy": "reference_mid * 1.005 where reference = midpoint of the quote at desk evaluation (first fresh quote of that stage)",
+   "source": "agents/daily_cycle.py:305; agents/etf_exit.py:49-57; agents/etf_desk_policy.py:87-88"
+  },
+  "slippage_usage": "0.001 is used only in the desk trigger (ask*1.001 <= limit), desk minimum-notional, and the approval-fill wait condition (agents/etf_desk_policy.py:89,100; agents/inbox.py:272); registered approval-time buy formula is fresh_ask*(1+0.001) (preregistration.yaml:paper_approvals.approval_time_fill) and the walkthrough states 'modeled fill = ask x 1.001'. AI trader books do fill at ask*1.001 (agents/ai_trader/risk.py:9-19).",
+  "spread_cost": "recorded per fill as |fill price - midpoint| x units (half-spread), already embedded because buys pay ask and positions are marked at bid (broker/paper.py:60-61; agents/inbox.py:94)",
+  "settlement": "T+1: sale proceeds go to unsettled_cash with due = next weekday that is not a regular NYSE holiday; maintenance moves due amounts every 5 min; buys require settled cash (agents/maintenance.py:14-18,31-46; agents/inbox.py:172-174)",
+  "fresh_quote_rules": "fills require quote age 0-60 s and not halted (broker/paper.py:42-46); exits/protective/desk require fresh bid; desk card fills need a fresh quote at fill time",
+  "approval_time_fill_policy": {
+   "ai_cards": "issue-time quote, executed as of the issue timestamp (labelled proposal-time counterfactual; excludes approval latency) (agents/inbox.py:323-325)",
+   "desk_etf_buy_cards": "fresh quote at or after YES, polled every even minute until min(15:30, close-30 min); fill only if ask*1.001 <= limit and risk passes (agents/inbox.py:257-294)",
+   "sell_cards": "issue-time quote on YES (agents/etf_exit.py:6-9)",
+   "registered_test_vector": "mid 100.00, limit 100.5000, bid 99.90 / ask 100.10, slippage 0.001 -> expected fill 100.2001 (preregistration.yaml:paper_approvals.required_normal_spread_test_vector); runtime PaperBroker would record 100.10"
+  },
+  "not_modelled": "queue position, partial fills, auctions, dividends (price-only split-adjusted history), fees (docs/SYSTEM_WALKTHROUGH.md:159; research/backtest_etf_rule.py:22-24)",
+  "option_expiry": "intrinsic-value cash settlement only, never physical exercise (agents/inbox.py:116-152)"
+ },
+ "breakers_and_stops": [
+  {
+   "id": "brk-daily",
+   "name": "Daily loss 3%",
+   "scope": "each arm x lane separately",
+   "condition": "value - day_start_value <= -0.03 x current value; day_start_value = value at the first valuation of the ET day (not literally prior close)",
+   "effect": "blocks non-closing orders (DAILY_LOSS_LIMIT)",
+   "reset": "next market day (new day_start_value)",
+   "source": "risk/engine.py:103-108; agents/inbox.py:67,82-83; preregistration.yaml:risk_and_sizing.automatic_breakers.daily_loss_fraction 0.03",
+   "status": "active"
+  },
+  {
+   "id": "brk-weekly",
+   "name": "Weekly loss 5%",
+   "scope": "each arm x lane",
+   "condition": "(weekly_start_value - value)/weekly_start_value >= 0.05; weekly_start_value = value at the first valuation of the ISO week",
+   "effect": "kill_switch flag in risk context -> blocks non-closing orders",
+   "reset": "next ISO week",
+   "source": "agents/inbox.py:68-70,84-87; preregistration.yaml:...weekly_loss_fraction 0.05",
+   "status": "active"
+  },
+  {
+   "id": "brk-peak-latch",
+   "name": "10% peak-to-trough latch",
+   "scope": "each arm x lane",
+   "condition": "at any valuation (peak - value)/peak >= 0.10",
+   "effect": "state.peak_breaker_latched = True -> KILL_SWITCH for all non-closing orders; risk engine also DRAWDOWN_BUY_BLOCK while drawdown >= 10%",
+   "reset": "NONE in code: nothing ever sets peak_breaker_latched back to False (only a v1.6 rebase writes a fresh state). Registered re-arm (documented operator review + approval) is not wired; draft v1.6.1 is unsigned.",
+   "source": "agents/inbox.py:101-107,70; risk/engine.py:114-120; research/backtest_etf_rule.py:18-20,281",
+   "status": "active; KNOWN ISSUE (never resets)"
+  },
+  {
+   "id": "brk-hard-lock",
+   "name": "15% hard drawdown lock",
+   "scope": "each arm x lane",
+   "condition": "drawdown >= 0.15",
+   "effect": "state.global_kill_switch = True (per-arm flag, not the system STOP file); DRAWDOWN_LOCK; closing sells exempt from order-count/round-trip limits",
+   "reset": "none in code (manually_unlocked_after_drawdown hard-coded False)",
+   "source": "agents/inbox.py:108-109; risk/engine.py:89-94,110-113; preregistration.yaml:...hard_drawdown_lock_fraction 0.15",
+   "status": "active"
+  },
+  {
+   "id": "brk-missing-valuation",
+   "name": "Missing valuation",
+   "scope": "each arm",
+   "condition": "any position without a fresh mark",
+   "effect": "MISSING_POSITION_MARK blocks buys",
+   "reset": "next complete valuation",
+   "source": "risk/engine.py:25-26",
+   "status": "active"
+  },
+  {
+   "id": "brk-kill-switch-system",
+   "name": "Safety pause STOP_TRADING",
+   "scope": "whole system (official desk, protective, inference, nightly screen, AI trader hook)",
+   "condition": "STOP_TRADING file present (dashboard pause or incident)",
+   "effect": "no claims, no exits, no inference; risk KILL_SWITCH",
+   "reset": "dashboard resume (refused while any incident unresolved)",
+   "source": "agents/safety_events.py:81-84; agents/dashboard.py:120-140; agents/cycle_lifecycle.py:59; agents/ai_trader/hook.py:118-119",
+   "status": "active"
+  },
+  {
+   "id": "brk-incident-latch",
+   "name": "INCIDENT_STOP latch",
+   "scope": "whole system",
+   "condition": "record_incident (UNEXPECTED_CAPABILITY, tripwire, snapshot/order-history incomplete, accounting failures, etc.)",
+   "effect": "INCIDENT_STOP + STOP_TRADING + unresolved safety_incidents row",
+   "reset": "operator acknowledgement of the exact pending snapshot (tripwire) or manual resolution; latches removed only when no incident remains",
+   "source": "agents/safety_events.py:34-78; agents/account_tripwire.py:210-264",
+   "status": "active"
+  },
+  {
+   "id": "brk-tripwire",
+   "name": "Real-account tripwire",
+   "scope": "Robinhood Agentic account",
+   "condition": "cash > $1,200, cash decrease, position change, order/activity change",
+   "effect": "incident + global stop + revoke instructions",
+   "reset": "operator acknowledgement only (automatic_rearm_allowed false)",
+   "source": "agents/account_tripwire.py:112-205; preregistration.yaml:safety.oauth.state_tripwire",
+   "status": "active"
+  },
+  {
+   "id": "brk-options-pause",
+   "name": "Options buy pause",
+   "scope": "Lane B",
+   "condition": "v16_active",
+   "effect": "OPTIONS_LANE_PAUSED_V16 and option signals not issued",
+   "reset": "later signed amendment",
+   "source": "agents/v16_policy.py:78-79; agents/inbox.py:185-189",
+   "status": "active"
+  },
+  {
+   "id": "brk-ai-trader-stops",
+   "name": "AI trader book stops",
+   "scope": "AI trader books A/B (C mirrors A)",
+   "condition": "daily: value <= day_start_value x 0.97; weekly: value <= week_start_value x 0.94",
+   "effect": "block new entries only (DAILY_LOSS_HIT / WEEKLY_LOSS_HIT); exits always allowed",
+   "reset": "next session / ISO week (Book.roll)",
+   "source": "agents/ai_trader/risk.py:22-38; agents/ai_trader/store.py:89-99",
+   "status": "active once trader.db initialised"
+  }
+ ],
+ "budgets": [
+  {
+   "id": "bud-daily",
+   "name": "Official daily AI ceiling",
+   "value": "$0.40 per ET day (official_daily_llm_ceiling; per lane in BudgetAllocator, and the ScheduledInference CostLedger total)",
+   "source": "preregistration.yaml:cost.official_daily_llm_ceiling; agents/budget.py:49,156-157; agents/scheduled_inference.py:49; config/settings.yaml:daily_api_budget_usd"
+  },
+  {
+   "id": "bud-run-reservation",
+   "name": "Per-run upfront reservation (bounded inference)",
+   "value": "2 x sum of stage bounds = 2 x ($0.0123 + $0.0225 + $0.0500) = $0.1696, reserved before the first generation; uncertain calls keep their full bound",
+   "source": "agents/bounded_inference.py:96-101,164-169,221-226; preregistration.yaml:cost.estimated_cost_per_full_ai_run"
+  },
+  {
+   "id": "bud-stage",
+   "name": "Stage reservations per active lane",
+   "value": "research $0.03, portfolio $0.05, critic $0.11 (sum $0.19); unallocated headroom $0.21; each includes one repair attempt",
+   "source": "agents/budget.py:51-57; preregistration.yaml:cost.official_stage_reservations"
+  },
+  {
+   "id": "bud-monthly",
+   "name": "Monthly allowance per lane",
+   "value": "$1.65 credited per calendar month; unused carries forward within the calendar year, carry capped at $5.00 (max $6.65 available after credit); no borrowing",
+   "source": "agents/budget.py:50-52,88-112,158-159; preregistration.yaml:cost.annual_pacing_per_lane"
+  },
+  {
+   "id": "bud-annual",
+   "name": "Annual cap per lane",
+   "value": "$19.80 enforced (target < $20.00); exhausted -> HOLD_OPERATIONAL ANNUAL_AI_COST_TARGET_EXCEEDED",
+   "source": "agents/budget.py:53,160-161; preregistration.yaml:cost.annual_official_api_cost_enforcement_value_usd_per_lane"
+  },
+  {
+   "id": "bud-whatif",
+   "name": "What-if / replay",
+   "value": "what-if $0.20 per run; replay without new inference $0.00",
+   "source": "preregistration.yaml:cost.what_if_run_llm_ceiling, replay_without_new_inference_ceiling; agents/bounded_inference.py:52"
+  },
+  {
+   "id": "bud-tokens",
+   "name": "Official token envelopes per attempt",
+   "value": "research gpt-5.4-nano: 24,000 in / 6,000 out (incl. reasoning), effort low, est. max $0.0123; portfolio gpt-5.4-mini: 12,000 / 3,000, medium, $0.0225; critic gpt-5.4: 8,000 / 2,000, medium, $0.0500; max 2 attempts per role; input counted by provider before the call; output capped by max_output_tokens; truncation disabled",
+   "source": "preregistration.yaml:cost.stage_token_envelopes_per_attempt; agents/bounded_inference.py:115-127,179-191"
+  },
+  {
+   "id": "bud-pricing",
+   "name": "Registered price snapshot (2026-09-28, standard uncached)",
+   "value": "input $/M: nano 0.20, mini 0.75, gpt-5.4 2.50; output $/M: nano 1.25, mini 4.50, gpt-5.4 15.00; reasoning billed as output",
+   "source": "preregistration.yaml:cost.pricing_snapshot"
+  },
+  {
+   "id": "bud-allocation",
+   "name": "Cross-lane cost split",
+   "value": "by input-token share of lane blocks, common tokens split equally; fallback by candidate count if token counting fails; no cross-lane shifting",
+   "source": "agents/bounded_inference.py:128-162; preregistration.yaml:cost.shared_call_lane_allocation_method"
+  },
+  {
+   "id": "bud-degradation",
+   "name": "Degradation order",
+   "value": "drop news after 2nd corroboration -> drop research candidates 6-8 -> drop candidate 5 -> drop optional narrative/insider enrichment -> holdings + deterministic baselines only; never drop auth verification, holdings review, quote freshness, citation validation, Critic for AI selection, risk checks, schema validation, persistence, notifications",
+   "source": "preregistration.yaml:cost.degradation_order, never_drop; agents/budget.py:58-64 (listed, not executed)"
+  },
+  {
+   "id": "bud-ai-trader",
+   "name": "AI trader daily cap",
+   "value": "$2.00 per day, no rollover; each call reserves its worst-case envelope cost first; uncertain calls keep the reservation; separate from the official $0.40/$19.80 budgets",
+   "source": "research/recipes/ai_trader_fwd_v1.yaml:budget; agents/ai_trader/model.py:40-77"
+  },
+  {
+   "id": "bud-ai-trader-envelopes",
+   "name": "AI trader seat envelopes (worst-case cost at registered prices)",
+   "value": "scout gpt-5.4-nano 16,000 in / 3,000 out, low ($0.00695); pm gpt-5.4-mini 8,000 / 2,500, medium ($0.01725); critic gpt-5.4 10,000 / 2,500, medium ($0.0625); manage (PM model) 8,000 / 2,000, low ($0.0150)",
+   "source": "research/recipes/ai_trader_fwd_v1.yaml:budget.envelopes; agents/ai_trader/spec.py:34-36; agents/ai_trader/model.py:35-37"
+  },
+  {
+   "id": "bud-time",
+   "name": "Time budgets",
+   "value": "official claim window 20 min; stall after 30 min; OpenAI client timeout 120 s, max_retries 0; gateway/Codex request timeout 30 s; AI trader morning: no new model call after 360 s, <= 3 attempts/day; nightly screen 600 calls / 20 min / 120 first-fill symbols; history span <= 550 days; volatility evidence <= 7 days old",
+   "source": "agents/operator.py:66; agents/cycle_lifecycle.py:116; agents/scheduled_inference.py:16-34; broker/read_gateway.py:305; agents/ai_trader/cycle.py:25; agents/ai_trader/hook.py:131; agents/universe_screen.py:43; risk/engine.py:65"
+  }
+ ],
+ "real_money_blocks": [
+  {
+   "mechanism": "Registration safety block",
+   "detail": "broker_mode paper_only, real_broker_writes_enabled false, default_deny_external_actions true; prohibited: place/replace/cancel order, exercise, transfer, deposit, withdrawal, settings mutation",
+   "source": "preregistration.yaml:safety (lines 106-111, 240-248)"
+  },
+  {
+   "mechanism": "Stage-1 config lock",
+   "detail": "AppConfig.validate_runtime_ready: stage 1 requires broker 'paper'; PaperInbox refuses unless stage 1 + paper; scheduled bridge requires stage 1 + paper + $0.40",
+   "source": "config/loader.py:122-127 (AppConfig.validate_runtime_ready); agents/inbox.py:31-34; agents/scheduled_inference.py:41-42"
+  },
+  {
+   "mechanism": "Proxy exposes reads only",
+   "detail": "broker_proxy server dispatches only READ_METHODS (11 tools); anything else METHOD_NOT_ALLOWED; only the registered operator UID may connect; account arguments must match the single agentic_allowed account; no write-capable client code",
+   "source": "broker_proxy/server.py:240-261,289-290; broker/read_contracts.py:123; preregistration.yaml:safety.oauth.credential_isolation"
+  },
+  {
+   "mechanism": "Credential isolation",
+   "detail": "OAuth token lives only in the robinhoodproxy macOS user's Keychain; main process and agents never receive it; Unix socket 0660, group robinhoodreaders",
+   "source": "preregistration.yaml:safety.oauth.credential_isolation; config/broker-proxy.yaml"
+  },
+  {
+   "mechanism": "Application default-deny",
+   "detail": "Stage1ToolPolicy authorizes only READ_ONLY_TOOL_ALLOWLIST; EffectiveReadGateway requires exact pinned catalog schemas and reports effective_write_tool_count 0; argument validation (whitelist, account, date windows)",
+   "source": "broker/policy.py:16-26; broker/read_gateway.py:80-121,164-174,256-295"
+  },
+  {
+   "mechanism": "Live-order scaffold unreachable",
+   "detail": "RobinhoodBroker at stage 1 only allows read tools; stage-2 writes require a LiveUnlock with manual approval id that nothing constructs",
+   "source": "broker/robinhood.py:15-73"
+  },
+  {
+   "mechanism": "Inference has no broker tools",
+   "detail": "requests use tools=[], tool_choice none; read_tools/news raise; Codex bridge raises BrokerError on any broker capability; UNEXPECTED_MODEL_TOOL check on outputs",
+   "source": "agents/bounded_inference.py:112,118-121,206-207; agents/codex_bridge.py:81-112"
+  },
+  {
+   "mechanism": "Paper broker only",
+   "detail": "all fills go through broker/paper.py PaperBroker inside SQLite; trace events record real_execution 'blocked'",
+   "source": "agents/inbox.py:154-179; agents/daily_cycle.py:808-809; agents/maintenance.py:49"
+  },
+  {
+   "mechanism": "Bounded cash + tripwire on the real account",
+   "detail": "$1,200 cap check at each reader preflight; any unacknowledged change stops everything",
+   "source": "broker/read_gateway.py:135-160; agents/account_tripwire.py:112-205"
+  },
+  {
+   "mechanism": "Promotion never unlocks live money",
+   "detail": "automatic_live_promotion false; exception may_enable_real_trading false; v1.6 promotion_gate unlocks_live_money false; promotion_stats output unlocks_live_money False; AI trader unlocks_live_money false",
+   "source": "preregistration.yaml:promotion; preregistration-amendment-v1.6.0.yaml:promotion_gate; eval/promotion_stats.py:142; research/recipes/ai_trader_fwd_v1.yaml:scoring.unlocks_live_money"
+  },
+  {
+   "mechanism": "Card 'live copy' disabled",
+   "detail": "LIVE_COPY_ENABLED = False until the tripwire reads copy acknowledgements; front door returns 409",
+   "source": "agents/cards.py:33-35; agents/desk/frontdoor.py:91"
+  },
+  {
+   "mechanism": "Release installer never touches config/credentials/DB/registration",
+   "detail": "NEVER_TOUCH config/settings.local.yaml, config/broker-proxy.local.yaml, data/agent.db, preregistration.yaml; manifest hashes, installed fingerprint and full test suite must pass or it rolls back",
+   "source": "scripts/release_install.py:27-29,45-64,112-135"
+  }
+ ],
+ "promotion_gate": {
+  "current_gate_v1.6": {
+   "implementation": "eval/promotion_stats.py",
+   "replaces": "four_weeks_thirty_decisions_checklist for any claim of edge (preregistration-amendment-v1.6.0.yaml:promotion_gate.replaces)",
+   "metric": "annual_excess_log_growth_vs_vti_after_spread_ai_cost_and_estimated_short_term_tax (eval/promotion_stats.py:28)",
+   "data_counted": "Lane A paper_valuation rows with data_mode live_readonly, timestamp >= 2026-10-01T09:30-04:00, excluding approval counterfactual rows; last value per ET day per arm; VTI benchmark rows keyed by run day (eval/promotion_stats.py:27,54-84)",
+   "costs": "bid marks (spread), cumulative AI cost charged to agent_alone and with_approvals only, 35% tax applied to positive cumulative gain (eval/promotion_stats.py:31-33,87-97)",
+   "minimum_sample": ">= 200 filled decisions (count of filled fills, any side, per arm) OR >= 252 official sessions (eval/promotion_stats.py:29-30,71-76,124-127)",
+   "test": "daily excess log returns vs VTI; needs >= 20 comparable sessions; block bootstrap with fixed block 21, 2,000 draws, seed 11, circular wrap; 90% interval = [5th, 95th] percentile of annualized mean (x252); lower bound must be > 0 (eval/promotion_stats.py:100-113,131-137). Amendment text says 'stationary block bootstrap'.",
+   "verdict": "EDGE_SHOWN only if no reasons (sample, METRIC_CHANGED, interval) else NOT_PROVEN; unlocks_live_money False (eval/promotion_stats.py:116-143)",
+   "status": "active (reporting only)"
+  },
+  "registered_v1.4.2_promotion": {
+   "historical_qualification": "out-of-sample after-cost beats VTI; Monte Carlo P(beat VTI) >= 0.60; AI variant must beat plain variant after cost",
+   "normal_shadow_gate": "minimum 183 calendar days, 30 completed trades, calibration gate, positive after-cost performance, max drawdown 10%",
+   "champion_challenger": "same snapshots, beats champion and deterministic_no_ai after cost, 10,000 paired bootstrap runs, P(challenger beats champion) >= 0.80, drawdown may not exceed champion, no unresolved hard failures",
+   "exception": "operator approval, expires in 7 days, still >= 56 days and >= 15 trades, plain-language warning, cannot waive safety or enable real trading",
+   "automatic_live_promotion": false,
+   "retirement": "immediate suspend on safety/data-integrity violation or 15% drawdown; review at 60 trades: retire if after-cost excess vs deterministic <= 0 or P(beats deterministic) < 0.40; calibration review at 100 forecasts; reinstatement needs operator approval",
+   "source": "preregistration.yaml:promotion, retirement",
+   "status": "registered; superseded for edge claims by v1.6; not implemented in code"
+  },
+  "ai_trader_pass_rule": {
+   "rule": "TOO_EARLY until book A has 200 closed trades or 252 sessions; then PASS only if A's 90% block-bootstrap interval (block 10, 2,000 draws, seed 11) of daily excess log growth over VTI is above 0 AND A beats C with interval above 0; LUCK_OR_BETA if it beats VTI but not C; else NOT_PROVEN. After costs: spread in fills, AI bill charged to A and B, 35% tax on positive cumulative gain. Stopping rule: evaluate at 2027-10-05 or 200 closed A trades; no rule/prompt changes during the run.",
+   "source": "agents/ai_trader/scoring.py:13-90; research/recipes/ai_trader_fwd_v1.yaml:stopping_rule, scoring"
+  },
+  "backtest_context": "research/backtest_etf_rule.py (2005-2026 Robinhood split-adjusted, price-only history): registered rule 0.4%/yr after tax vs VTI 8.3%/yr; the 10% latch froze buying in July 2010; signal alone 1.7%/yr, Sharpe 0.20 vs 0.54. Verdict NOT PROVEN. Informational only, not an activation condition (docs/review/HANDOFF_2026-09-30_EVENING.md:19-23; preregistration-amendment-v1.6.0.yaml:research_evidence)."
+ },
+ "ai_trader": {
+  "status": "Code present in this checkout (release E/F manifests). Disabled until the operator runs `python -m agents.ai_trader.cli init` (creates trader.db in WATCH_ONLY); PAPER mode refused before 2026-10-05 or if the 2026-10-01 official cycle_runs status is not COMPLETED. Never official; own DB; runs inside the existing daily service tick (no second runner).",
+  "source_status": "agents/ai_trader/hook.py:110-125; agents/ai_trader/store.py:174-190; agents/ai_trader/cli.py:20; research/recipes/ai_trader_fwd_v1.yaml:recipe.start_not_before, start_conditions",
+  "spec_pin": "spec sha256 a5e85e29... and prompts sha256 c90e6f03... pinned in trader.db at first run; any change raises SPEC_CHANGED_THIS_IS_A_NEW_TRIAL / PROMPT_CHANGED_THIS_IS_A_NEW_TRIAL (agents/ai_trader/store.py:162-172; agents/ai_trader/cycle.py:64-73)",
+  "seats": {
+   "scout": "gpt-5.4-nano-2026-03-17: names 0-3 candidates from TRADABLE using only the tool packet, with tool-id sources (schema maxItems 3)",
+   "pm": "gpt-5.4-mini-2026-03-17: one candidate -> ticket {thesis <= 3 sentences, invalidation_price below current ask, time_stop_sessions 1-20, false_tomorrow_if, sources, cited_numbers}; does not choose size",
+   "critic": "gpt-5.4-2026-03-05: pass/fail each code-passed ticket with fail codes; runs only on tickets that pass code checks; missing verdict = fail POLICY_VIOLATION",
+   "manage": "PM model: one hold/trim(0.1-0.9)/exit card per holding per day; no adding size",
+   "risk_and_clerk": "code only (sizing, caps, stops, exits, journal)",
+   "source": "research/recipes/ai_trader_fwd_v1.yaml:seats; agents/ai_trader/seats.py:17-67; agents/ai_trader/spec.py:35-36; agents/ai_trader/cycle.py:284-285"
+  },
+  "router": "code prechecks (can_enter, deadline) -> Scout -> PM per candidate (max entries_per_day - entries_today candidates; one ticket per name per day, no retry after fail) -> code ticket checks -> Critic -> code approve (agents/ai_trader/cycle.py:224-297)",
+  "books": {
+   "A": "ai_alone, $25,000, AI team picks, fills immediately after Critic and risk",
+   "B": "ai_plus_operator, $25,000, fills only on operator YES/CUT; operator may skip or cut, never add size or a name; unanswered = skip",
+   "C": "matched_random, $25,000, seeded random ticker from the same universe, same entry day, same notional fraction, same exit day as its A trade (seed 'ai_trader_fwd_v1:2026-09-30')",
+   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the official DB directory",
+   "source": "research/recipes/ai_trader_fwd_v1.yaml:books; agents/ai_trader/hook.py:20-21; agents/ai_trader/store.py:131-145"
+  },
+  "sizing": "notional = min(book value x 0.05, settled cash); fill = ask x 1.001; qty rounded down to 0.000001; must be >= $1. Book B sizes from A's fraction x cut fraction (capped at 5%); book C uses A's fraction (agents/ai_trader/risk.py:9-19; agents/ai_trader/cycle.py:316-319,410-414,336)",
+  "caps": "max 5 names; max 2 entries per day; no pyramiding (PYRAMIDING_FORBIDDEN); long shares only (agents/ai_trader/risk.py:28-38; agents/ai_trader/store.py:104-112; research/recipes/ai_trader_fwd_v1.yaml:risk)",
+  "stops": "daily book loss 3% (value <= day_start x 0.97), weekly 6% (<= week_start x 0.94): block new entries only; exits always allowed; baselines from the last recorded value of an earlier session/week (agents/ai_trader/risk.py:22-38; agents/ai_trader/store.py:89-99)",
+  "budget": "$2.00/day, no rollover, worst-case reservation per call, 360-s morning time budget (see budgets)",
+  "entry_deadline": "15:30 ET: no new tickets/approvals after; book-B cards expire 15:30 (agents/ai_trader/cycle.py:23,227-229,327-330)",
+  "exits_code_owned": [
+   "INVALIDATION_PRICE: fresh bid <= ticket invalidation_price (morning run and 15:50 check)",
+   "TIME_STOP: sessions_held (XNYS sessions after entry day up to today) >= ticket time_stop_sessions (<= 20) (morning run only)",
+   "PROTECTIVE_HARD_STOP: bid <= average_cost x 0.92 (15:50 only)",
+   "PROTECTIVE_MA200: bid <= mean of last 200 closes (15:50 only)",
+   "EXIT_TWO_SESSIONS_WITHOUT_A_CARD: second consecutive session without a management card",
+   "AI exit/trim via management card; book C mirrors A's exit day and trim fraction (parked if C's quote is stale, swept later)",
+   "source: agents/ai_trader/cycle.py:117-148,176-222,83-113"
+  ],
+  "citation_checks": "pre-Critic code checks: ticker in universe; not already held; weekly stop not hit; names < 5 and entries < 2 (else SIZE_OVER_CAP); quote available and fresh (-5 s to +60 s) and 0 < invalidation_price < current bid (else NO_INVALIDATION); 1 <= time_stop <= 20, thesis present and <= 3 sentences, false_tomorrow_if present (else POLICY_VIOLATION); every source id in the packet and every cited number found in that tool field within max(0.01, 0.5%) (else NUMBERS_NOT_IN_TOOLS) (agents/ai_trader/seats.py:79-109; agents/ai_trader/tools.py:99-108)",
+  "critic_fail_codes": [
+   "NOT_IN_UNIVERSE",
+   "NO_INVALIDATION",
+   "NUMBERS_NOT_IN_TOOLS",
+   "WEEKLY_LOSS_HIT",
+   "SIZE_OVER_CAP",
+   "ALREADY_HELD",
+   "THESIS_UNSUPPORTED",
+   "POLICY_VIOLATION"
+  ],
+  "critic_fail_codes_source": "research/recipes/ai_trader_fwd_v1.yaml:critic_fail_codes; agents/ai_trader/seats.py:30-35 (prompt lists all except SIZE_OVER_CAP; returned codes are free strings, not validated against the list)",
+  "tools": "precomputed by code, embedded in the packet, no live tool calls, no news: quote:<T> (bid, ask, mid, spread_pct, age, fresh), features:<T> (returns 1/5/20/63/126/252d, ma50/ma200, vol20, 252-day high, median $ volume), screen:<T>, risk:book, journal:<T> (agents/ai_trader/tools.py)",
+  "watch_only_vs_paper": "WATCH_ONLY (default after init): morning run still calls Scout/PM/Critic (spends budget) and records tickets as WATCH_APPROVED; no fills, no management, no protective, no scoring. PAPER: fills, exits, scoring; AI bill counted from paper_started_at. RETIRED: hook returns None. Only the operator can change mode (agents/ai_trader/store.py:174-190; agents/ai_trader/cycle.py:169,177,306-309,346-360,450-453)",
+  "operator_book_B": "YES or CUT (fraction 0.1 to < 1) -> APPROVED_AWAITING_FILL, filled at a fresh quote on an even-minute tick if ask x 1.001 <= A's fill mark x 1.005; NO/SKIP final; unanswered by 15:30 = EXPIRED (skip). Runbook says 'half size'; code accepts any cut 0.1-0.99 (agents/ai_trader/cycle.py:364-446; docs/review/AI_TRADER_RUNBOOK.md)",
+  "start_date_guard": "set_mode('PAPER') refuses if at.date() < 2026-10-05 (PAPER_NOT_BEFORE_2026-10-05) or the 2026-10-01 official cycle_runs row is not COMPLETED (START_CONDITION_OFFICIAL_RUN_NOT_CONFIRMED) (agents/ai_trader/store.py:182-186; agents/ai_trader/cli.py:132-134)",
+  "isolation": "DB must be in its own directory (not beside agent.db); reads via LiveReader against the trader path (incident latch lands beside trader.db); hook skips when the official DB is safety-stopped; failures journaled as AI_TRADER_TICK_FAILED and never fail the official tick (agents/ai_trader/store.py:131-140; agents/ai_trader/hook.py:118-125,255-282; agents/daily_cycle.py:902-907)"
+ },
+ "known_issues": [
+  {
+   "id": "ki-bars-day-early",
+   "severity": "medium",
+   "issue": "Robinhood daily bars have begins_at 00:00Z, so converting to ET labels each session one calendar day early. Documented as 'decisions unaffected' (the 10:00 run uses the prior session's close) but date-keyed lookups are off by one: option expiry-close settlement (session_closes[expiry]) and the v1.5.2 20-session backstop count (closes dated after the entry day). The same parse is used in research/history_backfill.py, so research backtest bar dates are also labelled a day early. Fix planned 'in data parsing before options resume'. Not independently verified whether today's partial bar can ever be labelled 'yesterday' and slip through the < today filter.",
+   "source": "docs/review/HANDOFF_2026-09-30_EVENING.md:25-28; agents/daily_cycle.py:217-219; agents/inbox.py:135; agents/etf_exit.py:141-147; research/history_backfill.py:83"
+  },
+  {
+   "id": "ki-peak-latch",
+   "severity": "high",
+   "issue": "peak_breaker_latched is set at a 10% drawdown and nothing clears it (per arm, per lane); the 15% global_kill_switch flag likewise. Registered re-arm via documented operator review is not wired (risk/breakers.py BreakerState has a rearm path but is unused). In the backtest the latch froze buying from July 2010. Draft v1.6.1 (unsigned) proposes a reset.",
+   "source": "agents/inbox.py:101-109; risk/breakers.py:38-95; docs/SYSTEM_WALKTHROUGH.md:234"
+  },
+  {
+   "id": "ki-vti-benchmark-ai-only",
+   "severity": "high",
+   "issue": "The VTI benchmark row is appended to daily_values only at the end of the AI path (after line 811). The no-AI path (most days) returns at line 686 without writing it. eval/promotion_stats.py pairs arm values with VTI by day, so comparable sessions accrue only on AI-invoked days, and the weekly report's VTI line is similarly starved.",
+   "source": "agents/daily_cycle.py:686-704,813-815; eval/promotion_stats.py:68-70,122; eval/weekly.py:62"
+  },
+  {
+   "id": "ki-slippage-not-recorded",
+   "severity": "medium",
+   "issue": "Registered approval-time buy fill = fresh_ask x (1 + 0.001) and the guide says 'modeled fill = ask x 1.001', but PaperBroker records buy fills at the plain ask. The 0.1% is used only for trigger/limit checks, so official paper results omit the registered slippage cost (the AI trader does apply it).",
+   "source": "broker/paper.py:57-69; preregistration.yaml:paper_approvals.approval_time_fill; agents/etf_desk_policy.py:89"
+  },
+  {
+   "id": "ki-options-paused",
+   "severity": "info",
+   "issue": "Lane B new buys are paused by v1.6; even before the pause, Lane B was structurally idle because one contract usually costs more than the $500 lane (option screen 878 seen -> 0 passed on 2026-09-30).",
+   "source": "preregistration-amendment-v1.6.0.yaml:options_lane; docs/review/CLAUDE_RETURN.md (14:32 and 14:50 ET entries)"
+  },
+  {
+   "id": "ki-ai-card-issue-price",
+   "severity": "low (documented design)",
+   "issue": "With-approvals AI stock cards (and rule SELL cards) fill at the issue-time quote, not the price when the operator approves.",
+   "source": "agents/inbox.py:323-325; docs/SYSTEM_WALKTHROUGH.md:241"
+  },
+  {
+   "id": "ki-approval-arm-divergence",
+   "severity": "medium",
+   "issue": "An AI card for with_approvals is issued only if agent_alone filled first, and AI sell quantity is read from agent_alone's holdings. If the two arms diverge (e.g. operator said NO earlier, or agent_alone was risk-blocked), with_approvals cannot receive the same AI decision.",
+   "source": "agents/inbox.py:202-205; agents/daily_cycle.py:289-299"
+  },
+  {
+   "id": "ki-meanrev-etfs",
+   "severity": "medium",
+   "issue": "mean_reversion_drop3_above_ma200 is evaluated on every name, including ETFs (UI labels it 'Mean reversion (all names)'), while the guide calls it a stock-only 'Stock dip' rule. The desk picks the top ETF signal by 'strength', mixing units (momentum_126d vs one-day drop magnitude). An ETF bought on a dip is then governed by the momentum rule's exit (MA200/momentum), and the dip rule's own 'fails to recover within 10 sessions' invalidation is not implemented.",
+   "source": "research/strategy_signals.py:123-137; agents/daily_cycle.py:388-395; agents/etf_exit.py:25-36; agents/desk/run_checks.py:27-28"
+  },
+  {
+   "id": "ki-etf-ai-voting-not-code-enforced",
+   "severity": "medium",
+   "issue": "v1.5 forbids AI voting on ETFs, but enforcement is packet-level only: model_candidates and ai_signals drop ETFs, yet eligible_instruments (sent to Portfolio and Critic) still includes ETF signals and held ETFs, and apply_decision has no ETF exclusion. A Portfolio pick of a signalled ETF (buy) or a held ETF (sell) would be executed.",
+   "source": "agents/daily_cycle.py:634-637,741,266-313; preregistration-amendment-v1.5.0.yaml:decisions.etf_and_macro_ai_voting"
+  },
+  {
+   "id": "ki-registered-not-implemented",
+   "severity": "high (for review)",
+   "issue": "Large parts of v1.4.2 are not in runtime code: evidence quality score, net-edge gates and probability shrinkage, Brier calibration, AI stop rule, shadow Kelly, seeded_random / exposure_matched_vti / lane_b_delta arms, selection-reference shadow ledger and VOID_DATA paging, research blinding and concordance scoring, Critic hard-veto/advisory categories, combined-portfolio breakers.",
+   "source": "see rule group registered_not_implemented"
+  },
+  {
+   "id": "ki-recovery-unwired",
+   "severity": "medium",
+   "issue": "The registered single recovery attempt exists in CycleLifecycle.acquire(recovery=True) but nothing calls it; a failed 10:00 run is not retried that day (the operator only gets a page).",
+   "source": "agents/cycle_lifecycle.py:57-83; agents/daily_cycle.py:870"
+  },
+  {
+   "id": "ki-breaker-scope-reference",
+   "severity": "low",
+   "issue": "Breakers are per arm per lane only (no combined-portfolio scope). Daily reference = value at the day's first valuation (10:00 marks, not literally the prior close); weekly reference = value at the first valuation of the ISO week. Valuations happen only in the 10:00 run, not at 15:50.",
+   "source": "agents/inbox.py:60-114; preregistration.yaml:risk_and_sizing.automatic_breakers"
+  },
+  {
+   "id": "ki-exits-halt-when-paused",
+   "severity": "medium",
+   "issue": "'Closing sells are always allowed' holds only inside the risk engine. While STOP_TRADING/INCIDENT_STOP is present there is no claim, protective ownership fails and the AI trader hook skips, so no exits run at all during a pause.",
+   "source": "agents/cycle_lifecycle.py:59,93-96; agents/v16_policy.py:142-146; agents/ai_trader/hook.py:118-119"
+  },
+  {
+   "id": "ki-tripwire-coverage",
+   "severity": "low",
+   "issue": "The real-account tripwire runs only in the 10:00 collection (LiveReader.collect). Protective checks, approval-fill ticks, the AI trader and the nightly screen use gateway.call directly after preflight (the $1,200 bounded-cash preflight still runs), so intraday account changes are detected only the next morning.",
+   "source": "agents/market_reader.py:129-187; agents/v16_policy.py:218-228; agents/etf_issuer.py:143-150"
+  },
+  {
+   "id": "ki-desk-window",
+   "severity": "low",
+   "issue": "The desk planner requires the evaluation time to be inside 10:00-10:20 (TRADING_WINDOW). On the AI path, evaluation happens after the AI stages; if they run past 10:20 the desk entry is blocked OUTSIDE_OFFICIAL_SESSION.",
+   "source": "agents/etf_desk_policy.py:63-67; agents/daily_cycle.py:799-802"
+  },
+  {
+   "id": "ki-fill-spread",
+   "severity": "low",
+   "issue": "The interim spread rule registered as max(live spread at reference, live spread at fill) is implemented as liquidity_spread(recorded, quote, quote) at issue; the approval-time fill does not re-check spread.",
+   "source": "agents/etf_issuer.py:65-71,84; agents/inbox.py:257-294; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.liquidity_evidence.interim_spread_rule_until_20_recorded_sessions"
+  },
+  {
+   "id": "ki-promotion-stats-details",
+   "severity": "low",
+   "issue": "promotion_stats uses a circular fixed-length (21) block bootstrap with seed 11, not a stationary (random-length) bootstrap as worded in v1.6. 'Filled decisions' counts every filled fill (buys, rule exits, protective sells). Arm values are 10:00 bid marks while VTI is the prior session's close keyed to the run day (timing offset).",
+   "source": "eval/promotion_stats.py:68-76,100-113; preregistration-amendment-v1.6.0.yaml:promotion_gate.interval"
+  },
+  {
+   "id": "ki-model-names-docs",
+   "severity": "low (docs)",
+   "issue": "The guide/walkthrough and the repo config/settings.yaml name 'gpt-5.6-luna' (Research) and 'gpt-5.6-terra' (Portfolio, Critic), but the official scheduled path refuses any config whose model names differ from the registered dated IDs (gpt-5.4-nano-2026-03-17 / gpt-5.4-mini-2026-03-17 / gpt-5.4-2026-03-05). HANDOFF says registered dated API models are deployed, so the guide text is likely wrong; the gpt-5.6 aliases are legacy Codex-bridge pricing.",
+   "source": "agents/desk/guide_content.py:106 = docs/SYSTEM_WALKTHROUGH.md:95; config/settings.yaml:4-6; agents/bounded_inference.py:34-37; agents/codex_bridge.py:31-32; HANDOFF.md:18"
+  },
+  {
+   "id": "ki-prompts-500",
+   "severity": "low",
+   "issue": "Official prompts (hardening_v2) still tell the models they manage 'two $500 paper lanes' after the v1.6 rebase to $25,000 in Lane A.",
+   "source": "prompts/research_hardening_v2.md; prompts/portfolio_hardening_v2.md; prompts/critic_hardening_v2.md"
+  },
+  {
+   "id": "ki-injection-flag-inert",
+   "severity": "low",
+   "issue": "The INJECTED_INSTRUCTIONS risk check depends on EvidenceItem.contains_instructions, but proposals in the official cycle carry no evidence items, so the check never fires; the registered prompt-injection scan is not implemented.",
+   "source": "risk/engine.py:129-130; agents/schemas.py:21,52; agents/daily_cycle.py:305"
+  },
+  {
+   "id": "ki-glossary",
+   "severity": "trivial (docs)",
+   "issue": "Guide glossary defines bid as 'best price a buyer pays' and ask as what 'a seller asks'; a buyer pays the ask. Fill rules in code are correct (buy at ask, sell at bid).",
+   "source": "agents/desk/guide_content.py:255 (GLOSSARY 'Bid / ask / spread')"
+  },
+  {
+   "id": "ki-dividends-survivorship",
+   "severity": "medium (research)",
+   "issue": "History is split-adjusted price-only (no dividends) for strategy and benchmarks alike; S&P 500 screen uses current members (survivorship bias); Norgate point-in-time data not provisioned.",
+   "source": "research/backtest_etf_rule.py:22-24; preregistration.yaml:universe.historical_constituent_source; docs/SYSTEM_WALKTHROUGH.md:239"
+  },
+  {
+   "id": "ki-no-edge",
+   "severity": "info",
+   "issue": "Backtest of the registered ETF rule: NOT PROVEN (0.4%/yr after tax vs VTI 8.3%); research trials 14-17 all NOT_PROVEN; research freeze until 2026-10-31.",
+   "source": "docs/review/HANDOFF_2026-09-30_EVENING.md:9,19-23"
+  },
+  {
+   "id": "ki-ai-trader-budget-separate",
+   "severity": "low",
+   "issue": "The AI trader's $2/day budget is outside the official $0.40/day and $19.80/year per-lane AI ceilings and uses the same Keychain API key; WATCH_ONLY mode still spends on model calls.",
+   "source": "agents/ai_trader/model.py:40-77,189-198; agents/ai_trader/cycle.py:171-297"
+  },
+  {
+   "id": "ki-ai-trader-runbook-cut",
+   "severity": "trivial",
+   "issue": "Runbook describes book-B answers as Yes / half size / No / Skip; code accepts CUT with any fraction 0.1 <= f < 1.",
+   "source": "docs/review/AI_TRADER_RUNBOOK.md; agents/ai_trader/cycle.py:380-385"
+  },
+  {
+   "id": "ki-nightly-screen-spread",
+   "severity": "low",
+   "issue": "Nightly screen filters on price >= $5, >= 253 sessions, $50M median 20-day dollar volume and a leveraged/inverse name regex, but has no spread filter (registered 0.3%).",
+   "source": "agents/universe_screen.py:41-45,240-283"
+  },
+  {
+   "id": "ki-etf-exit-card-dedupe",
+   "severity": "trivial",
+   "issue": "v1.5.1 ETF exit SELL cards only dedupe on their own proposal id; unlike the stock backstop and the protective exit, they do not skip when another PENDING sell card for the same ticker already exists.",
+   "source": "agents/etf_exit.py:104-105,179-182; agents/v16_policy.py:254-258"
+  },
+  {
+   "id": "ki-ops-followups",
+   "severity": "info",
+   "issue": "Open operational follow-ups listed by the team: revocation.py divergence between primary and proxy app; corporate-action exclusions with instrument null; real-account buying power/positions not recorded beyond tripwire fields.",
+   "source": "docs/review/HANDOFF_2026-09-30_EVENING.md:117-128"
+  }
+ ],
+ "vague_phrases_resolved": [
+  {
+   "phrase": "There are three rules, one per kind of thing it buys.",
+   "where": "agents/desk/guide_content.py:67 (= docs/SYSTEM_WALKTHROUGH.md:54)",
+   "means": "(1) momentum_rotation_126d_trend200_top1 on 17 ETFs: >=253 closes, close > 200-day mean, 126-day momentum > 0, top 1 only; (2) mean_reversion_drop3_above_ma200: >=202 closes, close > 200-day mean, last one-day return <= -3% (code applies it to ALL 23 names, not only stocks); (3) defined_risk_call_on_<strategy>: call on a signalled underlying, spread <= 15% of mid, >=1 affordable contract (paused by v1.6). Source research/strategy_signals.py:25-199."
+  },
+  {
+   "phrase": "Risk checks · 20+ hard limits",
+   "where": "agents/desk/guide_content.py:38",
+   "means": "The 26 RiskReason codes in risk/models.py (invalid_multiplier, missing_position_mark, insufficient_position, invalid_closing, insufficient_settled_cash, invalid_realized_volatility, volatility_size_limit, wrong_account, not_whitelisted, limit_only, stale_quote, limit_too_far, position_too_large, too_many_positions, options_locked, option_not_defined_risk, naked_short_call, daily_order_limit, same_day_round_trip, daily_loss_limit, drawdown_buy_block, drawdown_lock, duplicate_order, auto_approve_forbidden, kill_switch, injected_instructions) evaluated in risk/engine.py:19-142, plus OPTIONS_LANE_PAUSED_V16 (agents/inbox.py:189). Two are inert in practice (auto_approve_forbidden, injected_instructions)."
+  },
+  {
+   "phrase": "checks every trade against hard risk limits",
+   "where": "agents/desk/guide_content.py:20-21",
+   "means": "Same RiskEngine.evaluate list as above, applied in PaperInbox._execute for every paper fill in every arm (agents/inbox.py:154-159)."
+  },
+  {
+   "phrase": "Agent alone: fills immediately if the risk checks pass.",
+   "where": "agents/desk/guide_content.py:148",
+   "means": "RiskEngine.evaluate allowed AND PaperBroker accepts (quote 0-60 s old, not halted, limit reaches ask/bid, settled cash) (agents/inbox.py:154-179; broker/paper.py:37-85)."
+  },
+  {
+   "phrase": "3 paper accounts · AI · you · rules only / Three paper accounts",
+   "where": "agents/desk/guide_content.py:39,143-151; guide.py:35",
+   "means": "agent_alone, with_approvals, deterministic_no_ai per lane (6 SQLite accounts: Lanes A and B x 3), agents/inbox.py:25."
+  },
+  {
+   "phrase": "Three AI roles look at the stock ideas in turn",
+   "where": "agents/desk/guide_content.py:96",
+   "means": "Research (gpt-5.4-nano-2026-03-17), Portfolio (gpt-5.4-mini-2026-03-17), Critic (gpt-5.4-2026-03-05) per preregistration.yaml:agent_contract.assigned_models, enforced by agents/bounded_inference.py:34-37 (guide text names gpt-5.6-luna/terra instead)."
+  },
+  {
+   "phrase": "Safety rules · Rules, not AI / 'Check the safety rules' / 'Finished the recorded safety checks.' / 'No proposal reached the safety checks.'",
+   "where": "agents/desk/scene.py:18,20; agents/desk/team.py:8; agents/desk/workspace.py:14,83; agents/desk/run_log.py:185",
+   "means": "The deterministic risk stage of the run (RiskEngine.evaluate per proposal; trace event 'risk_evaluated' with real_execution 'blocked'), agents/daily_cycle.py:805-809."
+  },
+  {
+   "phrase": "Checks: size, cash, stale prices, loss and drawdown limits",
+   "where": "agents/desk/scene.py:206",
+   "means": "Subset of RiskEngine reasons: volatility_size_limit/position_too_large/too_many_positions (size), insufficient_settled_cash (cash), stale_quote (stale prices), daily_loss_limit + weekly kill switch (loss), drawdown_buy_block/drawdown_lock/peak latch (drawdown)."
+  },
+  {
+   "phrase": "The desk rule found an ETF signal but its own safety checks blocked the entry.",
+   "where": "agents/desk/workspace.py:56",
+   "means": "Any plan_entry BLOCKED reason: ETF_SCOPE_REQUIRED, QUALIFIED_ETF_SIGNAL_REQUIRED, UNREGISTERED_ETF_STRATEGY, AI_STOCK_SLOT_PRECEDENCE, LANE_A_SLOT_USED, HOLDINGS_REVIEW_REQUIRED, OUTSIDE_OFFICIAL_SESSION, TRIGGER_EXPIRED, QUOTE_IDENTITY_OR_HALT, STALE_QUOTE, INVALID_QUOTE, LIQUIDITY_EVIDENCE_MISSING, LIQUIDITY_BLOCKED, FRICTION_BLOCKED, TRIGGER_NOT_FIRED, SIZING_HISTORY_REQUIRED, BELOW_MINIMUM_NOTIONAL, SIGNAL_EXIT_PLAN_REQUIRED, RISK_BLOCKED (+risk reasons), or MISSING_DATA (agents/etf_desk_policy.py:49-114; agents/etf_issuer.py:80-83)."
+  },
+  {
+   "phrase": "System checks (Connection, registration, data, AI and outcome)",
+   "where": "agents/desk/checks.py:224; agents/desk/scene.py:262-266; agents/desk/workspace.py:189-195",
+   "means": "agents/desk/run_checks.py:133-177 rows: Robinhood authorization (VALID=pass), write/trade tools exposed (must be 0), read-only tools available, Keychain retrieval, preregistration in force (v1.4.2 root hash), tripwire status, market open at run time, quotes collected (>0), volatility series (>0), corporate-action exclusions (0=pass), AI gate, AI cost estimate, uncertain model calls (0=pass), news checked, run status (COMPLETED=pass), paper accounting (SETTLED=pass)."
+  },
+  {
+   "phrase": "Account tripwire: unexpected cash, positions or orders in the Agentic account stop everything.",
+   "where": "agents/desk/guide_content.py:55",
+   "means": "cash > $1,200 (OUTSIDE_BOUNDS), cash decrease, any position change, any new/changed equity/option/crypto order -> incident, INCIDENT_STOP + STOP_TRADING; a pure cash increase <= $1,200 is benign and re-baselined (agents/account_tripwire.py:112-205)."
+  },
+  {
+   "phrase": "Any surprise (an unexpected change in the Robinhood account, a refused read) stops trading automatically until you look.",
+   "where": "agents/desk/guide_content.py:204",
+   "means": "record_incident codes, e.g. AGENTIC_ACCOUNT_UNACKNOWLEDGED_CHANGE, AGENTIC_ACCOUNT_OUTSIDE_BOUNDS, UNEXPECTED_CAPABILITY, STAGE1_AGENTIC_ACCOUNT_UNVERIFIED, BROKER_SNAPSHOT_INCOMPLETE, ORDER_HISTORY_INCOMPLETE, plus gateway deny() on any off-policy read argument (agents/safety_events.py:34-64; broker/read_gateway.py; agents/market_reader.py)."
+  },
+  {
+   "phrase": "a safety check at 3:50 PM sells anything that breaks badly during the day",
+   "where": "agents/desk/guide_content.py:172-173",
+   "means": "v1.6 protective exit, 15:50-15:58 ET once per session: fresh bid <= average cost x 0.92, or <= 200-session average of completed closes, or (ETF only) bid <= close 126 sessions ago (agents/v16_policy.py:187-197)."
+  },
+  {
+   "phrase": "Selling · exit rules + 3:50 PM",
+   "where": "agents/desk/guide_content.py:40",
+   "means": "v1.5.1 ETF exit (close <= MA200 or momentum_126d <= 0), v1.5.2 stock backstop (close <= MA200 or 20 sessions since last buy), AI sell picks for held stocks/options, option intrinsic expiry settlement, v1.6 protective exit."
+  },
+  {
+   "phrase": "Day down 3% or week down 5%: no new buys. Down 10% from the peak: buying stops, with no automatic reset. Down 15%: everything but selling is locked.",
+   "where": "agents/desk/guide_content.py:134 = docs/SYSTEM_WALKTHROUGH.md:124",
+   "means": "Per arm per lane: DAILY_LOSS_LIMIT (value change since first valuation of the day <= -3% of current value), weekly kill flag (>= 5% below first valuation of the ISO week), peak_breaker_latched at >= 10% (never cleared), global_kill_switch flag + DRAWDOWN_LOCK at >= 15% (agents/inbox.py:60-114; risk/engine.py:89-120)."
+  },
+  {
+   "phrase": "Live copy is off until the account safety check accepts acknowledgements.",
+   "where": "agents/desk/frontdoor.py:91; agents/desk/inbox_page.py:37,62",
+   "means": "LIVE_COPY_ENABLED = False in agents/cards.py:33-35 until the account tripwire (agents/account_tripwire.py) is extended to read copy_acks (status DECLARED_NOT_ENFORCED)."
+  },
+  {
+   "phrase": "Strategy conditions ... Every ticker x condition",
+   "where": "agents/desk/scene.py:224-226; agents/desk/run_checks.py:20-33",
+   "means": "Momentum rotation (ETFs): history >= 253 closes, price above 200-day avg, 126-day momentum > 0, rank #1. Mean reversion (all names): history >= 202 closes, price above 200-day avg, fell >= 3% last session. Recomputed from recorded features; mismatches flagged."
+  },
+  {
+   "phrase": "Code steps (Scanners, AI gate, Nugget, Outcome) use no AI.",
+   "where": "agents/desk/checks.py:215",
+   "means": "Scanners = read-only collection + strategy_signals; AI gate = AIInvocationGate; Nugget = risk stage (team.py:8 'Safety rules · Rules, not AI'); Outcome = terminal record."
+  }
+ ]
+}

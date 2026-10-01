@@ -35,7 +35,7 @@ FLOW = [
     ('gate', 'AI needed?', 'stocks only', 'gate'),
     ('ai', 'AI team', 'research · PM · critic', 'ai'),
     ('desk', 'ETF desk rule', 'no AI', 'code'),
-    ('risk', 'Risk checks', '20+ hard limits', 'code'),
+    ('risk', 'Risk checks', '26 coded checks', 'code'),
     ('arms', '3 paper accounts', 'AI · you · rules only', 'you'),
     ('exits', 'Selling', 'exit rules + 3:50 PM', 'code'),
     ('score', 'Keep score', 'vs VTI and cash', 'code'),
@@ -64,13 +64,15 @@ STEPS = [
     {
         'id': 'signals', 'title': 'Rules find signals', 'who': 'Code',
         'plain': ('Written rules turn price history into a short list of ideas. They only use days that have already '
-                  'closed, so the desk never "sees the future". There are three rules, one per kind of thing it buys.'),
+                  'closed, so the desk never "sees the future". There are three rules: ETF momentum and the 3% dip (both '
+                  'buy) and an options call rule (paused since v1.6). Each is listed below with its exact test; the Rule book has every number.'),
         'checks': [
             'ETF momentum: rank the ETFs whose price is above their 200-day average and whose 6-month (126-day) '
             'return is positive; only the single strongest qualifies.',
-            'Stock dip: a stock that fell at least 3% in the last session while still above its 200-day average.',
+            'Stock dip: fell at least 3% in the last session while still above its 200-day average. (The code currently '
+            'checks all 23 names, ETFs included; listed under Known issues in the Rule book.)',
             'Options: only calls on an underlying that has a buy signal, bid/ask spread at most 15% of the midpoint, '
-            'and at least one contract affordable in the options account.',
+            'and at least one contract affordable in the options account. Paused: no new option buys under v1.6.',
             'Needs at least 253 days of history for momentum (202 for the dip rule).',
         ],
         'trader': ('momentum_rotation_126d_trend200_top1 on 17 ETFs (SPY QQQ VTI SOXX XLE XLU GLD TLT + 9 SPDR sectors); '
@@ -118,7 +120,8 @@ STEPS = [
             'Entries stop at 3:30 PM ET (or 30 minutes before an early close).',
             'An AI stock pick takes precedence for the one daily stocks/ETF slot.',
         ],
-        'trader': 'Limit = reference mid × 1.005; modeled fill = ask × 1.001; sized by the risk engine (next step).',
+        'trader': ('Limit = reference mid × 1.005; the trigger needs ask × 1.001 ≤ limit; the ledger records the fill at the plain ask '
+                   '(the registered 0.1% slippage is not charged; a known issue). Sized by the risk engine (next step).'),
         'example': 'Thursday: SOXX at about $567. Limit about $570.',
     },
     {
@@ -252,7 +255,8 @@ GLOSSARY = [
     ('VTI', 'An ETF holding the whole US stock market; the "do nothing clever" benchmark.'),
     ('200-day average', 'The average closing price of the last 200 trading days; above it = long-term uptrend.'),
     ('Momentum (126-day)', 'How much the price rose over the last ~6 months.'),
-    ('Bid / ask / spread', 'Best price a buyer pays (bid), a seller asks (ask); the gap is the spread, a cost.'),
+    ('Bid / ask / spread', 'Bid = the highest price a buyer offers now (what you can sell at). Ask = the lowest price a '
+                          'seller accepts (what you pay to buy). The gap is the spread, a cost.'),
     ('Limit order', 'An order that only fills at the stated price or better.'),
     ('Settlement (T+1)', 'Money from a sale becomes spendable one business day later.'),
     ('Volatility', 'How much a price swings; used to size positions smaller when swings are large.'),

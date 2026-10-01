@@ -8,7 +8,7 @@ from pathlib import Path
 
 def test_seven_routes_are_readable_without_script_and_safety_is_explicit():
     page = shell('Today', '<p>Recorded content</p>', '/', {'paused': True})
-    assert len(ROUTES) == 11
+    assert len(ROUTES) == 13
     for path, label in ROUTES:
         assert f'href="{path}"' in page
         assert label in page

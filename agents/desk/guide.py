@@ -67,7 +67,31 @@ def _step(i, step):
             f'<h4>Checks at this step</h4><ul class="gd-checks">{checks}</ul>'
             f'<p class="gd-example"><strong>Thursday example</strong> {esc(step["example"])}</p>'
             f'<details class="gd-trader"><summary>For traders: exact rules</summary><p>{esc(step["trader"])}</p></details>'
-            '</li>')
+            + _rules_for(step['id']) + '</li>')
+
+
+# Which Rule book groups explain each step (every rule with its numbers, schedule, effect and source).
+STEP_RULES = {'read': ('data',), 'signals': ('signals',), 'gate': ('ai_official',), 'ai': ('ai_official',),
+              'desk': ('desk_entry',), 'risk': ('risk_engine',), 'arms': ('approvals',), 'fills': ('accounting',),
+              'exits': ('exits',), 'score': (), 'safety': ('safety', 'activation', 'isolation')}
+
+
+def _rules_for(step_id):
+    from .rulebook import catalogue, _rule
+    groups = {g['id']: g for g in catalogue().get('rule_groups') or []}
+    rules = [r for gid in STEP_RULES.get(step_id, ()) for r in (groups.get(gid) or {}).get('rules') or []]
+    if step_id == 'score':
+        return ('<details class="gd-trader gd-allrules"><summary>Every rule at this step</summary>'
+                '<p>The promotion test, benchmarks and costs are set out in the <a href="/rules#promotion">Rule book</a>.</p></details>')
+    if not rules:
+        return ''
+    seen, unique = set(), []
+    for r in rules:
+        if r.get('id') not in seen:
+            seen.add(r.get('id'))
+            unique.append(r)
+    return (f'<details class="gd-trader gd-allrules"><summary>Every rule at this step ({len(unique)}) · numbers, timing, effect, source</summary>'
+            '<div class="rb-groupgrid">' + ''.join(_rule(r) for r in unique) + '</div></details>')
 
 
 def body():
@@ -81,6 +105,9 @@ def body():
     return f'''<div class="gd" data-detail="plain">
 <header class="gd-hero"><p class="gd-eyebrow">System walkthrough · rules as of {esc(C.AS_OF)}</p>
 <h1>{esc(C.INTRO["title"])}</h1><p class="gd-lede">{esc(C.INTRO["lede"])}</p><dl class="gd-facts">{facts}</dl></header>
+<nav class="rb-toc gd-deeper" aria-label="Go deeper"><a href="/rules">Rule book: every rule with its numbers and source</a>
+<a href="/rules#day">A day, minute by minute</a><a href="/rules#cycle">The 10:00 run, stage by stage</a>
+<a href="/rules#issues">Known issues</a><a href="/architecture">Architecture for reviewers</a></nav>
 <section class="gd-section" aria-labelledby="gd-flow-h"><div class="gd-section-head"><h2 id="gd-flow-h">The daily flow</h2>
 <p>Click a box to jump to its step, or play the demo to walk through Thursday's first official run.</p></div>
 <div class="gd-demo"><button type="button" class="gd-btn" data-demo="prev">Previous</button>
