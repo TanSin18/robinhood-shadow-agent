@@ -202,7 +202,7 @@ def close(store, official_db, config, now, client, *, reader_factory=None, opene
             closes = merged_closes(long_history(official_db, t), closes)
         sizes[t] = kelly.size(closes, labels, fit.get('current'))
     store.add('kelly', day, {'method': 'continuous Kelly mean/variance of daily excess return over 4% cash; half-Kelly; disciplined = 0 '
-                                       'unless t-stat >= 2, capped at the registered 25% position limit; regime = sessions with the same '
+                                       'unless t-stat >= 2 both in the regime and over all history, capped at the registered 25% position limit; regime = sessions with the same '
                                        'in-sample HMM label (look-ahead: labels use the whole sample)',
                              'regime': fit.get('current'), 'tickers': sizes}, now)
     reads = {t: auction.read(bars.get(t) or []) for t in UNIVERSE}

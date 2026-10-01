@@ -5,7 +5,9 @@ good as the edge estimate, so three numbers are shown:
   raw         f* from history (can be wildly large or negative),
   half        f* / 2, the usual practical fraction,
   disciplined half-Kelly, but 0 unless the edge is statistically distinguishable from zero
-              (t-stat >= 2), and never above the registered 25% position cap or below 0 (no shorts).
+              (t-stat >= 2) over the whole history as well as inside the regime (regime labels are
+              in-sample, so a regime-only t-stat is inflated), and never above the registered 25%
+              position cap or below 0 (no shorts).
 These are shown beside the size the risk engine actually uses: min(25%, 2% / realized vol).
 Shadow only: nothing in the trading path reads them.
 """
@@ -52,4 +54,8 @@ def size(closes, regime_by_day=None, current=None):
         out[scope] = {'sessions': n, 'mean_excess_daily_pct': round(m * 100, 4), 'vol_daily_pct': round(math.sqrt(v) * 100, 4),
                       't_stat': round(t, 2), 'kelly_raw': round(raw, 3), 'kelly_half': round(half, 3),
                       'kelly_disciplined': round(max(0.0, min(CAP, half)) if t >= T_REQUIRED else 0.0, 4)}
+    # A regime-only edge is not enough: in-sample HMM labels flatter it. Require the full-history edge too.
+    if (out.get('all') or {}).get('t_stat', 0) < T_REQUIRED and 'kelly_disciplined' in (out.get('regime') or {}):
+        out['regime']['kelly_disciplined'] = 0.0
+        out['regime']['disciplined_note'] = 'full-history t-stat below 2'
     return out

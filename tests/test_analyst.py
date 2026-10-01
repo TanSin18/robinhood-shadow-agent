@@ -240,3 +240,19 @@ def test_a_failing_job_is_contained_and_retries_are_capped(tmp_path):
         else:
             assert out is None
     assert store.meta('close_attempts:2026-10-05') == '2'
+
+
+def test_disciplined_kelly_needs_the_full_history_edge_too():
+    rng = random.Random(1)
+    closes, c = [], 100.0
+    labels = {}
+    for i in range(800):
+        calm = i % 2 == 0
+        r = (0.004 if calm else -0.004) + rng.gauss(0, 0.002)
+        c *= 1 + r
+        d = f'd{i:04d}'
+        closes.append((d, c))
+        labels[d] = 'calm' if calm else 'normal'
+    k = kelly.size(closes, labels, 'calm')
+    assert k['regime']['t_stat'] > 2 and k['all']['t_stat'] < 2
+    assert k['regime']['kelly_disciplined'] == 0.0 and k['regime']['disciplined_note']
