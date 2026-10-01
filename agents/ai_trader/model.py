@@ -100,4 +100,10 @@ class OpenAIResponsesClient:
                                                 max_output_tokens=envelope['max_output_tokens'])
         if response.model != model:
             raise ModelError('RESPONSE_MODEL_MISMATCH')
-        return json.loads(response.output_text), response.usage.input_tokens, response.usage.output_tokens
+        if getattr(response, 'status', 'completed') == 'incomplete':
+            raise ModelError('OUTPUT_TRUNCATED')
+        try:
+            output = json.loads(response.output_text)
+        except ValueError:
+            raise ModelError('OUTPUT_NOT_JSON') from None
+        return output, response.usage.input_tokens, response.usage.output_tokens

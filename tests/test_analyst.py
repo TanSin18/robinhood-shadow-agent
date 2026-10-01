@@ -256,3 +256,36 @@ def test_disciplined_kelly_needs_the_full_history_edge_too():
     k = kelly.size(closes, labels, 'calm')
     assert k['regime']['t_stat'] > 2 and k['all']['t_stat'] < 2
     assert k['regime']['kelly_disciplined'] == 0.0 and k['regime']['disciplined_note']
+
+
+def test_headline_cap_spreads_across_tickers():
+    heads = [{'id': f'news:{i}', 'ticker': 'SOXX' if i < 20 else f'T{i}', 'title': 't'} for i in range(60)]
+    pkt = commentary.packet('morning', headlines=heads)
+    h = pkt['HEADLINES_UNTRUSTED']
+    assert len(h) == commentary.MAX_HEADLINES and sum(x['ticker'] == 'SOXX' for x in h) == 4
+
+
+def test_truncated_or_non_json_output_is_a_named_model_error():
+    from agents.ai_trader.model import ModelError, OpenAIResponsesClient
+
+    class R:
+        model = commentary.MODEL
+        status = 'incomplete'
+        output_text = '{"headline": "cut'
+
+    class API:
+        class responses:
+            class input_tokens:
+                @staticmethod
+                def count(**kw):
+                    return type('C', (), {'input_tokens': 10})()
+
+            @staticmethod
+            def create(**kw):
+                return R()
+    client = OpenAIResponsesClient(API())
+    with pytest.raises(ModelError, match='OUTPUT_TRUNCATED'):
+        client(commentary.MODEL, 'p', commentary.SCHEMA, commentary.ENVELOPE)
+    R.status = 'completed'
+    with pytest.raises(ModelError, match='OUTPUT_NOT_JSON'):
+        client(commentary.MODEL, 'p', commentary.SCHEMA, commentary.ENVELOPE)
