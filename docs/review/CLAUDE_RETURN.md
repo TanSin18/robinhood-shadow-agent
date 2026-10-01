@@ -77,3 +77,9 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - DESK_ENTRY SOXX: agent_alone and deterministic_no_ai filled 2.322090 @ $566.64; operator answered YES and with_approvals filled 2.322090 @ $565.79 at 10:24 ET. Desk exit check: HOLD (condition not met).
 - No incidents, no stop flags, authorization VALID. Dashboard tags the run "Official · v1.5 · Scheduled · Completed · Counts toward results" and shows the $25,000 capital as live.
 - Cosmetic follow-up: the category label could read "v1.5 + v1.6".
+
+## 2026-10-01 10:34 ET — release E INSTALLED + overlay v9
+- First attempt ROLLED_BACK (827/1: `desk_policy_exits` used the wall clock; fixed with `exit_rule_active(now=now)` / `stock_backstop_active(now=now)`, manifest regenerated at `a2e607f`).
+- Retry INSTALLED 14:34:21 UTC: 828 passed, 0 failed; backup `release-rollback.633ig_5n`; after_source_fingerprint `c1644558970ba0d9bd3ce0cdd45c1865bf00a110dcb250c22474d34ddf89acb8`; `/firm` returns 200.
+- Dashboard overlay v9 deployed (backup `agent-desk.3K4Fam.v8-20261001`): routes include `/inbox` and `/firm`.
+- AI trader stays DISABLED until operator runs `python -m agents.ai_trader.cli init --official-database <primary>/data/agent.db` (→ WATCH_ONLY). Paper start no earlier than Mon 2026-10-05 via `cli start-paper`.
