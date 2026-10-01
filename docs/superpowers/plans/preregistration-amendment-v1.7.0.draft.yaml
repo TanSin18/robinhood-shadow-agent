@@ -1,0 +1,66 @@
+# DRAFT v1.7.0 amendment layer. NOT SIGNED, NOT ACTIVE. Written 2026-10-01 for the operator to read.
+# Nothing here changes the running system. A signed copy would need its SHA-256 pinned in code, an
+# effective time, tests and a release, exactly like v1.5-v1.6. Each part can be signed separately.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.7.0
+  kind: scoped_amendment_layer
+  base_version: 1.6.0
+  status: DRAFT_UNSIGNED
+  operator_signature: {status: UNSIGNED}
+  intent_source: operator_chat_2026-10-01_1537_ET_beat_the_market_and_secure_profits
+  rationale: >-
+    v1.6 measures well but cannot meet the operator's goal: each account is ~95% cash after one 5% ETF
+    entry, so in a rising market it trails VTI almost by construction, and exits are slow (200-day
+    average, 8% below cost) with nothing that protects an open gain. Parts A-D below address that. None
+    unlocks real money; the v1.6 promotion gate still decides that.
+
+part_A_core_plus_satellite:            # biggest P&L lever; changes what the experiment measures
+  lane_A_core:
+    instrument: VTI
+    target_weight: '0.70'
+    held_in: all_three_arms_identically      # so arm differences stay attributable to decisions
+    rebalance: first_session_of_each_month_if_drift_exceeds_5_points
+    exits: none_except_breakers              # the core is the market; it is not traded
+  lane_A_satellite:
+    weight: '0.30'
+    entries: unchanged_v1.5_desk_rule_and_AI_stock_path
+    sizing: unchanged_risk_engine_fraction_of_satellite_value
+  scoring:
+    primary: unchanged_v1.6_excess_log_growth_vs_VTI
+    note: with a VTI core, excess over VTI comes only from the satellite and from the core's drag-free cash
+  open_question_for_operator: whether 70/30 or a different split; whether the core should be VTI or the trial-19 sleeves if trial 19 passes
+
+part_B_exit_guard:                     # "secure profits, stop losses" — promote only on evidence
+  rules:
+    chandelier_stop: highest_close_since_entry_minus_3_x_ATR22_trailing_up_only
+    profit_lock: breakeven_at_plus_2_ATR_then_cost_plus_2_ATR_at_plus_4_ATR
+    give_back: sell_if_half_of_a_10pct_or_larger_peak_gain_is_gone
+    fast_trend_break: below_50_day_average_while_HMM_regime_is_stressed
+  checked: after_the_close_and_at_the_existing_15:50_window_with_a_fresh_bid
+  applies_to: satellite_positions_in_all_three_arms; with_approvals_gets_a_SELL_card
+  evidence_before_signing: >-
+    The shadow guard has run since 2026-10-01 (release I). Sign only if, over at least 20 first
+    would-sell events or by 2026-12-31, the guard's exits beat holding to the official exits on
+    average after spread, or cut the worst loss without cutting average return by more than a third.
+
+part_C_chop_gate:                      # sit out when the tape is not trending
+  rule: new_lane_A_entries_only_when_the_name_is_TRENDING (ADX14 >= 20, not low-vol, not more than 3 ATR from the 50-day average)
+  evidence_before_signing: >-
+    Shadow labels recorded beside every official entry since 2026-10-01. Sign only if entries the gate
+    would have blocked did worse, on 20+ sessions of forward returns, than entries it would have allowed.
+
+part_D_options_if_ever_resumed:        # options stay paused; these are the minimum rules to resume
+  preconditions:
+    - fix_the_00:00_UTC_daily_bar_date_label_issue_used_by_expiry_settlement
+    - lane_B_capital_reviewed (500 USD buys about one contract)
+  exits:
+    loss_stop: sell_if_premium_bid_is_50pct_below_cost
+    profit_take: sell_half_at_plus_100pct_and_trail_the_rest_with_the_underlying_exit_guard
+    time_exit: close_at_7_calendar_days_to_expiry_never_hold_into_expiry_week
+    underlying_exit: close_if_the_underlying_triggers_its_lane_A_exit
+  still_forbidden: [short_options, naked_calls, spreads_with_undefined_risk, same_day_expiry_entries]
+
+part_E_news_and_events_as_filters:     # news never picks; it may only keep the desk out
+  rule: no_new_single_stock_entry_within_2_sessions_of_a_scheduled_earnings_date_or_after_a_negative_high_relevance_filing
+  status: needs_a_reliable_free_earnings_calendar_source_first (not available yet); shadow only until then
