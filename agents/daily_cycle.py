@@ -899,9 +899,16 @@ def main():
                             check_reader.close()
                     except Exception as check_error:  # never a cycle failure; retried next tick inside the window
                         protective=record_protective_failure(inbox,now,check_error)
+                ai_trader=None
+                try:  # forward AI-trader book (own DB); disabled unless initialised; never affects this service
+                    from agents.ai_trader.hook import tick as ai_trader_tick
+                    ai_trader=ai_trader_tick(inbox,config,now)
+                except Exception as ai_error:
+                    ai_trader={'status':'AI_TRADER_UNAVAILABLE','error_type':type(ai_error).__name__}
+                extra={'ai_trader':ai_trader} if ai_trader is not None else {}
                 if protective is not None:
-                    print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,'protective_check':protective},default=str));return
-                print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick}));return
+                    print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,'protective_check':protective,**extra},default=str));return
+                print(json.dumps({'status':'SKIPPED_SCHEDULE','approval_fills':tick,**extra},default=str));return
             from agents.readiness import capture_runtime, source_fingerprint, record_background_receipt
             from agents.market_reader import LiveReader
             root=Path(__file__).resolve().parents[1]
