@@ -1,0 +1,34 @@
+{
+  "source_commit": "906ffdd6095a97cf6fbc3e78896b8d8c89ab6cac",
+  "installed_base_commit": "f33fe71",
+  "before_source_fingerprint": "2d2f8d391d9e1034e14bcf80d4f369c68e09b6a261e2d588c6576c4495066887",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/analyst/ask.py": {
+      "before_sha256": "5409375f8ecd4e69fe6937d8a286a28f5c9ca6f03144327d1ed98d80c4867afd",
+      "after_sha256": "b0bf513b07feb5faab0dbba49f43f2215ef7eee94da288a4b108f24719d5aeee"
+    },
+    "agents/analyst/commentary.py": {
+      "before_sha256": "0216a6c35e6e0f1a62c4e5ebcc438ba67c939d4724c3513c69d49f51912bcc55",
+      "after_sha256": "72e86e00ff4b5868960d36e3167b60d3afe93b3c91da7c87fbeee16fc97b9276"
+    },
+    "agents/analyst/hook.py": {
+      "before_sha256": "6af55d93286713657ddd4e4112120f901bb1fc2fcd9ba9a9b97441658dc7a524",
+      "after_sha256": "9aaada568d0b44e6045ff53bbf8c9e42c68a4663babc0eb68c85748687b6ee9c"
+    },
+    "agents/analyst/memory.py": {
+      "before_sha256": null,
+      "after_sha256": "086d4cf1f942122d8d588ff4abe09dca8b36bc4ce8d153d96feb531390f72b7d"
+    },
+    "agents/analyst/team.py": {
+      "before_sha256": "4776dcf9a11f0ed4b8f43c4d35846c5b360299ad473de58f7e056b63d7245306",
+      "after_sha256": "185c1cf35b34b7dea1acceaa52a582cae8588f6a57f709357720a3583fc61514"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": "cd08c7f697178b70154d7defbb6baba4474385a27c2b05f0a6b457451116354c",
+      "after_sha256": "fd04ec6d1f1bc23056941c810065638043003c1193e4418e652870b8c52f5988"
+    }
+  },
+  "root_files": {}
+}
