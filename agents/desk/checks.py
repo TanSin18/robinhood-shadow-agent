@@ -241,7 +241,8 @@ def render(state):
     html = ('<div class="room-head"><div><h1>Checks &amp; charts</h1><p>Every check each step ran, with the numbers behind it.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
     from .research import render as measurement
-    html += measurement(state.get('research'))
+    from .components import capital_note
+    html += capital_note(state) + measurement(state.get('research'))
     if not reviews:
         return html + '<p>No saved review yet.</p>'
     return html + '<h2 class="section-title">Per-run checks</h2>' + ''.join(run_section(r, i) for i, r in enumerate(reviews))

@@ -52,3 +52,6 @@
  .agent-desk.team-preview .desk-header nav a{padding:6px 10px;font-size:12.5px}
  .agent-desk.team-preview .team-flow>li:not(:last-child)::after{right:50%;top:auto;bottom:-14px}
 }
+.agent-desk.team-preview .capital-note{margin:0 0 20px;padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:14px;max-width:none}
+.agent-desk.team-preview .capital-note.is-scheduled{border-color:var(--amber)}
+.agent-desk.team-preview .capital-note.is-live{border-color:var(--cyan)}

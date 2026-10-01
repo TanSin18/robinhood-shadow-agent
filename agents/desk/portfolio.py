@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
-from .components import deferred, esc
+from .components import V16_CAPITAL, V16_START_TEXT, capital_note, capital_state, deferred, esc
 
 ET = ZoneInfo('America/New_York')
 ARMS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only (no AI)'}
@@ -65,7 +65,7 @@ def latest_values(values):
     return out
 
 
-def paper_card(paper, values):
+def paper_card(paper, values, scheduled=False):
     latest = latest_values(values)
     html = '<section class="room-card pf-paper"><div class="card-head"><h3>Paper · what the agents trade</h3><span class="pill-paper">simulated</span></div>'
     total = Decimal(0)
@@ -86,7 +86,8 @@ def paper_card(paper, values):
             rows += (f'<tr><td>{esc(ARMS.get(p["track"], p["track"]))}</td><td class="num">{money(cash)}</td><td class="num">{len(p["positions"])}</td>'
                      f'<td class="num">{money(value)}</td><td class="num {"pos" if change > 0 else "neg" if change < 0 else ""}">{"+" if change > 0 else ""}{money(change) if change else "$0.00"}</td>'
                      f'<td class="muted small">{esc(basis)}</td></tr>')
-        html += (f'<h4>{esc(LANES[lane])}</h4><div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Cash</th><th>Positions</th>'
+        label = LANES[lane] + (f' · build phase $500, becomes ${V16_CAPITAL:,} per account {V16_START_TEXT}' if lane == 'A' and scheduled else '')
+        html += (f'<h4>{esc(label)}</h4><div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Cash</th><th>Positions</th>'
                  f'<th>Value</th><th>vs start</th><th>Valued</th></tr></thead><tbody>{rows}</tbody></table></div>')
     positions = [(p['lane'], p['track'], x) for p in paper for x in p['positions']]
     if positions:
@@ -97,7 +98,7 @@ def paper_card(paper, values):
         html += ('<p class="muted">No paper positions yet. Every run so far ended without an entry (holds and one Critic rejection). '
                  'From Thursday the desk rule can buy ETFs such as SOXX in these accounts.</p>')
     starts = sorted({f'lane {p["lane"]} ${D(p.get("start")) or START:,.0f}' for p in paper})
-    return html + f'<p class="muted small">Starting capital: {esc(", ".join(starts))}. From Oct 1 (v1.6) lane A trades a $25,000 paper book so fills and costs are realistic. Paper results are not investment returns.</p></section>'
+    return html + f'<p class="muted small">Recorded starting capital per account: {esc(", ".join(starts))}. Paper results are not investment returns.</p></section>'
 
 
 OFFICIAL_FROM = '2026-10-01T13:30:00+00:00'
@@ -142,7 +143,8 @@ def render(state):
         return deferred('Portfolio', 'U4')
     pf = state.get('portfolio') or {}
     return ('<div class="room-head"><div><h1>Portfolio</h1><p>Your real Robinhood Agentic account next to the paper accounts the agents trade.</p></div></div>'
-            f'<div class="pf-split">{real_card(pf.get("real"))}{paper_card(pf.get("paper", []), pf.get("values", []))}</div>'
+            + capital_note(state)
+            + f'<div class="pf-split">{real_card(pf.get("real"))}{paper_card(pf.get("paper", []), pf.get("values", []), capital_state(state)[0] == "scheduled")}</div>'
             + value_chart(pf.get('values', []), {(p['lane'], p['track']): D(p.get('start')) for p in pf.get('paper', []) if D(p.get('start'))})
             + _lanes(state))
 

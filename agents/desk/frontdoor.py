@@ -28,6 +28,15 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('href="/#', 'href="/legacy#').replace('action="/#', 'action="/legacy#')
                 content = content.replace('action="/"', 'action="/legacy"').replace('href="/"', 'href="/legacy"')
                 content = content.replace('<main ', '<a class="button" href="/">Agent Desk home</a><main ', 1)
+                # Capital wording follows the ledger (v1.6 Lane A $25,000) instead of the old fixed "$500" text.
+                try:
+                    from .components import capital_note
+                    note = capital_note(snapshot(inbox.path))
+                except Exception:
+                    note = ''
+                content = content.replace('<p class="muted">Two independent $500 lanes. ',
+                                          note + '<p class="muted">Two independent paper lanes; each lane header shows its recorded start. ', 1)
+                content = content.replace('<p>Each lane starts at $500. ', '<p>Each lane starts at its recorded capital (Lane A $25,000 from the first v1.6 run; Lane B $500). ', 1)
                 # Same look as Agent Desk; markup, forms and checks unchanged.
                 content = content.replace('<link rel="stylesheet" href="/assets/dashboard.css">',
                     '<link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/legacy-skin.css">', 1)

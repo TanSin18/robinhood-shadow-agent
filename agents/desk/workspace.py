@@ -1,7 +1,7 @@
 """Plain-language, read-only view of the existing six-stage records."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from .components import esc, category_chips
+from .components import capital_note, esc, category_chips
 from .team import TEAM
 from .approval_card import preview_card
 from .clock import render_clock
@@ -173,6 +173,7 @@ def render(state):
     pending = [c for c in cards if c.get('status') == 'PENDING']
     html = '<div class="room-head"><div><h1>Today</h1><p>What happened, what needs you, and whether the system is healthy.</p></div></div>'
     html += render_clock(state.get('now'))
+    html += capital_note(state)
     if state.get('paused'):
         html += '<p class="team-pause">Paper activity is paused. Resume it in Controls.</p>'
     if not reviews:

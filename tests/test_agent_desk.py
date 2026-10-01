@@ -69,3 +69,12 @@ def test_guide_walks_through_every_step_and_needs_no_records():
         assert f'href="#step-{key}"' in html
     assert '/assets/guide.css' in html and '/assets/guide.js' in html
     assert ' style=' not in html and '<script>' not in html   # strict CSP: no inline style or script
+
+
+def test_capital_note_follows_the_ledger():
+    from agents.desk.components import capital_note
+    before = {'portfolio': {'paper': [{'lane': 'A', 'track': 'agent_alone', 'start': '500'}]}, 'research': {'rebase': None}}
+    after = {'portfolio': {'paper': [{'lane': 'A', 'track': 'agent_alone', 'start': '25000.00', 'capital_version': '1.6.0'}]},
+             'research': {'rebase': {'timestamp': '2026-10-01T14:00:05+00:00', 'capital': '25000.00', 'lane': 'A'}}}
+    assert 'becomes <strong>$25,000 per account</strong>' in capital_note(before) and 'is-scheduled' in capital_note(before)
+    assert 'is-live' in capital_note(after) and '$25,000 per account under v1.6, since 2026-10-01 14:00 UTC' in capital_note(after)

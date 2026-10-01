@@ -40,3 +40,5 @@ body.legacy-skin{--canvas:#0f1217;--paper:#161b23;--ink:#e8ecf1;--forest:#c6b7f3
 .legacy-skin .workspace>a.button[href="/"]{display:none}
 .legacy-skin .rail .desk-brand{display:block;font-size:16px;font-weight:700;color:var(--ink);text-decoration:none;padding:0 10px;margin-bottom:18px;letter-spacing:-.2px}
 .legacy-skin .phone-nav a{color:var(--muted)}
+.legacy-skin .capital-note{margin:12px 0;padding:10px 14px;border:1px solid #edca91;border-radius:10px;font-size:14px}
+.legacy-skin .capital-note.is-live{border-color:#a5d9d0}

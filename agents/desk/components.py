@@ -68,3 +68,30 @@ def category_chips(review):
 def category_prefix(review):
     cat = review.get('category') or {}
     return '' if not cat else ('[Official] ' if cat.get('group') == 'official' else '[Build] ')
+
+
+V16_CAPITAL = 25000   # signed v1.6.0 amendment: Lane A paper capital per account
+V16_START_TEXT = 'Thursday Oct 1, at the first official run (10:00 ET)'
+
+
+def capital_state(state):
+    """'rebased' once the ledger shows the v1.6 reset; otherwise 'scheduled'. Read from records only."""
+    paper = (state.get('portfolio') or {}).get('paper') or []
+    lane_a = [p for p in paper if p.get('lane') == 'A']
+    rebase = (state.get('research') or {}).get('rebase')
+    if rebase or any(p.get('capital_version') == '1.6.0' for p in lane_a):
+        return 'rebased', rebase
+    return 'scheduled', None
+
+
+def capital_note(state):
+    status, rebase = capital_state(state)
+    if status == 'rebased':
+        at = (rebase or {}).get('timestamp', '')
+        return ('<p class="capital-note is-live"><strong>Paper capital:</strong> Lane A (stocks &amp; ETFs) '
+                f'${V16_CAPITAL:,} per account under v1.6' + (f', since {esc(at[:16].replace("T", " "))} UTC' if at else '')
+                + '. Lane B (options) $500, new option buys paused. Real money: $0.</p>')
+    return ('<p class="capital-note is-scheduled"><strong>Paper capital:</strong> Lane A (stocks &amp; ETFs) becomes '
+            f'<strong>${V16_CAPITAL:,} per account</strong> on {V16_START_TEXT} under the signed v1.6 rules. Until then the '
+            'accounts still hold the $500 build-phase balances, which are archived (not deleted) at the switch. '
+            'Lane B (options) stays $500 with new option buys paused. Real money: $0.</p>')
