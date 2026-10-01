@@ -159,7 +159,77 @@ def engine_dual_trend_vol_target(panel, recipe, capital):
             'latched_on': None}, start
 
 
-ENGINES = {'registered_rule': engine_registered_rule, 'dual_trend_vol_target': engine_dual_trend_vol_target}
+def engine_gem_dual_momentum(panel, recipe, capital):
+    sig = recipe['signal']
+    symbols = recipe['universe']['symbols']
+    look = sig['lookback_sessions']
+    p = Params(universe=tuple(symbols), capital=capital, guards=False)
+    days = panel.days
+    def ret(s, i):   # completed sessions through i-1
+        closes = [panel.close[s][k] for k in range(i) if panel.present[s][k]]
+        return None if len(closes) <= look else closes[-1] / closes[-look - 1] - 1
+    start = next(i for i in range(len(days)) if all(
+        sum(1 for k in range(i) if panel.present[s][k]) >= 253 for s in symbols))
+    book, curve, trades, target, holding_log = Book(settled=capital), [], [], None, {}
+    for i in range(start, len(days)):
+        day = days[i]
+        book.settled += book.unsettled; book.unsettled = 0.0
+        opens = {s: panel.open[s][i] for s in symbols if panel.present[s][i] and panel.open[s][i]}
+        if i == start or day[:7] != days[i - 1][:7]:
+            rets = {s: ret(s, i) for s in sig['risk_assets']}
+            if all(v is not None for v in rets.values()):
+                if rets['VTI'] > sig['absolute_hurdle']:
+                    target = max(sig['risk_assets'], key=lambda s: (rets[s], s == 'VTI'))
+                else:
+                    target = sig['safe_asset']
+            holding_log[day[:7]] = target
+            for s in sorted(list(book.lots)):
+                if book.lots[s] and s != target and s in opens:
+                    qty = book.qty(s)
+                    book.sell_qty(s, qty, opens[s] * (1 - HALF_SPREAD[s]), opens[s], day)
+                    trades.append({'day': day, 'side': 'sell', 'symbol': s, 'qty': qty})
+        if target in opens and book.settled > 1.0:        # buy with settled cash (T+1 after a switch)
+            fill = opens[target] * (1 + HALF_SPREAD[target]) * (1 + p.slippage)
+            qty = book.settled / fill
+            book.buy(target, qty, fill, opens[target], day)
+            trades.append({'day': day, 'side': 'buy', 'symbol': target, 'qty': qty})
+        if i + 1 == len(days) or days[i + 1][:4] != day[:4]:
+            book.year_end_tax(p.st_tax, p.lt_tax)
+        curve.append((day, book.value({s: panel.close[s][i] or 0.0 for s in panel.close})))
+    liq = book.liquidation_tax({s: panel.close[s][-1] or 0.0 for s in panel.close}, days[-1], p.st_tax, p.lt_tax)
+    months = list(holding_log.values())
+    share = {s: round(months.count(s) / max(1, len(months)), 3) for s in symbols}
+    return {'curve': curve, 'trades': trades, 'tax_paid': book.tax_paid, 'liquidation_tax': liq,
+            'cost_paid': book.cost_paid, 'invested_share': 1.0, 'locked': False, 'latched_on': None,
+            'holding_share': share, 'switches': sum(1 for a, b in zip(months, months[1:]) if a != b)}, start
+
+
+def basket_buy_and_hold(panel, weights, start, capital):
+    """Static basket bought once at the start (no rebalancing, so no tax until the end)."""
+    parts = []
+    for s, w in weights.items():
+        part = buy_and_hold(panel, s, start, Params(capital=capital * w))
+        parts.append(part)
+    curve = [(d, sum(p['curve'][k][1] for p in parts)) for k, (d, _) in enumerate(parts[0]['curve'])]
+    return {'curve': curve, 'trades': [], 'tax_paid': 0.0, 'liquidation_tax': sum(p['liquidation_tax'] for p in parts),
+            'cost_paid': sum(p['cost_paid'] for p in parts), 'invested_share': 1.0, 'locked': False, 'latched_on': None}
+
+
+def period_table(strategy, benchmarks, periods):
+    out = {}
+    for name, (lo, hi) in periods.items():
+        row = {}
+        for label, res in (('strategy', strategy), *benchmarks.items()):
+            pts = [(d, v) for d, v in res['curve'] if lo <= d <= hi]
+            if len(pts) > 20:
+                yrs = (date.fromisoformat(pts[-1][0]) - date.fromisoformat(pts[0][0])).days / 365.25
+                row[label] = round((pts[-1][1] / pts[0][1]) ** (1 / yrs) - 1, 4)
+        out[name] = row
+    return out
+
+
+ENGINES = {'registered_rule': engine_registered_rule, 'dual_trend_vol_target': engine_dual_trend_vol_target,
+           'gem_dual_momentum': engine_gem_dual_momentum}
 
 
 def _start(panel, feats, p):
@@ -300,7 +370,7 @@ def run(recipe_path, bars_path, log_path, capital=25000.0):
     if dataset['missing_symbols']:
         raise HarnessError(f"DATASET_MISSING_SYMBOLS: {dataset['missing_symbols']}")
     log = TrialLog(log_path)
-    panel = Panel(bars)
+    panel = Panel(bars, 'SPY' if 'SPY' in bars else 'VTI')
     engine = ENGINES[recipe['recipe']['engine']]
     strategy, start = engine(panel, recipe, capital)
     vti = buy_and_hold(panel, 'VTI', start, Params(capital=capital))
@@ -314,6 +384,25 @@ def run(recipe_path, bars_path, log_path, capital=25000.0):
     dsr = deflated_sharpe(sr, skew, kurt, n, trials, var)
     passed = dataset['label'].startswith('CERTIFIED') and boot['ci90'][0] > 0 and dsr['probability'] >= 0.95 \
         and s['cagr_after_all_tax'] > b['cagr_after_all_tax']
+    verdict = 'PASS' if passed else 'NOT_PROVEN'
+    extras = {}
+    if 'holding_share' in strategy:
+        share = strategy['holding_share']
+        # Price-only data understates bond interest (~3%/yr) and EFA's extra dividend (~1.5%/yr vs VTI).
+        bias = 0.03 * share.get('AGG', 0) + 0.015 * share.get('EFA', 0)
+        extras.update(holding_share=share, switches=strategy['switches'], price_only_bias_estimate=round(bias, 4))
+        if not passed and -bias <= boot['annual_excess_log_growth'] < 0:
+            verdict = 'INCONCLUSIVE'
+    sec = recipe.get('secondary_benchmark', '')
+    benches = {'vti': vti}
+    if sec.startswith('buy_and_hold_60pct_VTI_40pct_EFA'):
+        mix = basket_buy_and_hold(panel, {'VTI': 0.6, 'EFA': 0.4}, start, capital)
+        benches['vti60_efa40'] = mix
+        m = stats(mix, capital)
+        extras['secondary_benchmark'] = {'name': sec, **{k: m[k] for k in ('cagr_after_all_tax', 'sharpe_rf0', 'max_drawdown')},
+                                         'excess_vs_strategy': bootstrap_excess(strategy, mix)}
+    if recipe.get('report_periods'):
+        extras['periods_cagr_pre_tax'] = period_table(strategy, benches, recipe['report_periods'])
     result = {
         'recipe': {'id': recipe['recipe']['id'], 'version': recipe['recipe']['version'], 'sha256': recipe_sha},
         'capital': capital, 'start_session': panel.days[start], 'end_session': panel.days[-1],
@@ -325,10 +414,11 @@ def run(recipe_path, bars_path, log_path, capital=25000.0):
                           'annualized_information_ratio': round(sr * math.sqrt(252), 3)},
         'walk_forward': monthly_folds(strategy, vti),
         'deflated_sharpe': dsr,
-        'verdict': 'PASS' if passed else 'NOT_PROVEN',
+        'verdict': verdict,
         'pass_rule': 'certified dataset AND 90% interval of excess > 0 AND deflated Sharpe probability >= 0.95 '
                      'AND after-tax CAGR above VTI',
         'promotion': 'never automatic: a PASS only allows a shadow (Adventure) run; Official needs a signed amendment',
+        **extras,
     }
     trial_id = log.add(recipe_id=recipe['recipe']['id'], recipe_sha256=recipe_sha, code_commit=_commit(),
                        dataset=dataset, result=result, status=result['verdict'])
@@ -354,6 +444,18 @@ def to_markdown(r):
              f"{r['deflated_sharpe']['trials_counted']} trials.", '', f"**{r['verdict']}** — {r['pass_rule']}. {r['promotion']}.", '',
              '| Year | Excess log growth vs VTI |', '|---|---|']
     lines += [f'| {y} | {x:+.2%} |' for y, x in w['by_year'].items()]
+    if 'holding_share' in r:
+        lines += ['', f"Time held: {', '.join(f'{k} {v:.0%}' for k, v in r['holding_share'].items())}; {r['switches']} switches. "
+                  f"Price-only bias estimate against the strategy: {r['price_only_bias_estimate']:.2%}/yr."]
+    if 'secondary_benchmark' in r:
+        sb = r['secondary_benchmark']
+        lines += ['', f"Secondary benchmark ({sb['name']}): {sb['cagr_after_all_tax']:.2%}/yr after tax, Sharpe {sb['sharpe_rf0']}, "
+                  f"max drawdown {sb['max_drawdown']:.1%}. Strategy excess over it: {sb['excess_vs_strategy']['annual_excess_log_growth']:+.2%}/yr "
+                  f"(90% {sb['excess_vs_strategy']['ci90'][0]:+.2%} to {sb['excess_vs_strategy']['ci90'][1]:+.2%})."]
+    if 'periods_cagr_pre_tax' in r:
+        cols = sorted({k for row in r['periods_cagr_pre_tax'].values() for k in row})
+        lines += ['', '| Period (pre-tax CAGR) | ' + ' | '.join(cols) + ' |', '|---' * (len(cols) + 1) + '|']
+        lines += [f'| {n} | ' + ' | '.join(f"{row.get(c, 0):.2%}" for c in cols) + ' |' for n, row in r['periods_cagr_pre_tax'].items()]
     return '\n'.join(lines) + '\n'
 
 

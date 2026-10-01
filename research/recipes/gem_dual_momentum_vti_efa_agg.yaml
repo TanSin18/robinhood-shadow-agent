@@ -1,0 +1,48 @@
+# Research recipe (pre-registered 2026-09-30 before any GEM data was fetched or looked at).
+# One parameter set. The harness hashes this file's bytes; any edit is a new trial.
+# Operator budget: this is the single Path B trial. If it is NOT_PROVEN, the hunt stops.
+recipe:
+  id: gem_dual_momentum_vti_efa_agg
+  version: 1
+  status: research_only_never_official
+  description: >-
+    Global Equities Momentum (Antonacci-style dual momentum), monthly. On the first session of each
+    month, using completed closes only: if VTI's 252-session return is above zero (absolute momentum;
+    the T-bill hurdle is taken as zero because the dataset is price-only and a T-bill fund's price
+    return is ~0), hold 100% of whichever of VTI or EFA has the higher 252-session return (relative
+    momentum); otherwise hold 100% AGG. EFA stands in for VXUS (VXUS starts 2011; EFA covers 2005+).
+  engine: gem_dual_momentum
+  publication_year: 2014
+universe:
+  kind: etf_list
+  symbols: [VTI, EFA, AGG]
+  join_rule: decisions start once all three have 253 completed sessions
+signal:
+  lookback_sessions: 252
+  absolute_hurdle: 0.0
+  risk_assets: [VTI, EFA]
+  safe_asset: AGG
+  features_from: completed_sessions_through_t_minus_1
+rebalance: first_session_of_each_month_at_open
+execution:
+  timing: next_session_open
+  buy_cost: half_spread_plus_0.1pct_slippage
+  sell_cost: half_spread
+  settlement: T_plus_1_cash_account_buy_with_settled_cash_only
+sizing: {weight: 1.0}
+breakers: none
+tax: {short_term: 0.35, long_term: 0.15, liquidation_at_end: true}
+benchmark: VTI_buy_and_hold_same_costs_and_tax
+secondary_benchmark: buy_and_hold_60pct_VTI_40pct_EFA_no_rebalancing
+report_periods:
+  pre_publication: ['2006-01-01', '2014-12-31']
+  post_publication: ['2015-01-01', '2026-12-31']
+success_metric: annual_excess_log_growth_vs_vti_pre_tax_with_90pct_block_bootstrap_interval
+fitted_parameters: none
+known_bias: >-
+  Price-only data omits AGG's ~2-4%/yr interest and ~1.5-3%/yr equity dividends; bond months are
+  understated more than equity months. A shortfall smaller than this bias is reported as INCONCLUSIVE.
+data_requirement:
+  minimum_years: 15
+  point_in_time_universe_required: false
+  certified_label: CERTIFIED_ETF_HISTORY

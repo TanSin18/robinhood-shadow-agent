@@ -146,6 +146,7 @@ def main(argv=None):
     parser.add_argument('--config')
     parser.add_argument('--official-database')
     parser.add_argument('--floor', default=DEFAULT_FLOOR.isoformat())
+    parser.add_argument('--symbols', help='comma-separated ETF tickers for a research dataset (default: the 17 reviewed ETFs)')
     args = parser.parse_args(argv)
     os.umask(0o077)
     if args.export and not args.config:
@@ -164,6 +165,10 @@ def main(argv=None):
     config = load_config(args.config)
     config.validate_runtime_ready()
     symbols = sorted(ETF_UNIVERSE)
+    if args.symbols:
+        symbols = sorted({t.strip().upper() for t in args.symbols.split(',') if t.strip()})
+        if not symbols or len(symbols) > 20 or any(not t.isalpha() or len(t) > 5 for t in symbols):
+            parser.error('--symbols must be 1-20 plain tickers')
     derived = config.model_copy(update={'risk': config.risk.model_copy(update={'instrument_whitelist': frozenset(symbols)})})
     from agents.market_reader import LiveReader
     reader = LiveReader(store.path, derived)   # preflight verifies the Agentic account first

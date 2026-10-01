@@ -85,3 +85,40 @@ def test_monthly_folds_cover_each_month_once():
     b = {'curve': [('2020-01-02', 100), ('2020-01-31', 100), ('2020-02-03', 100), ('2020-02-28', 100)]}
     w = monthly_folds(s, b)
     assert w['folds'] == 2 and w['share_positive'] == 1.0
+
+
+def _gem_bars(path):
+    rng, rows, d, days = random.Random(8), [], date(2005, 1, 3), []
+    while len(days) < 252 * 17:
+        if d.weekday() < 5:
+            days.append(d.isoformat())
+        d += timedelta(days=1)
+    for s, drift, vol in (('VTI', 0.0004, 0.012), ('EFA', 0.0003, 0.013), ('AGG', 0.0001, 0.003)):
+        price = 60.0
+        for day in days:
+            o = price
+            price *= 1 + drift + rng.gauss(0, vol)
+            rows.append((s, day, o, price, 1e6))
+    with open(path, 'w', newline='') as h:
+        w = csv.writer(h); w.writerow(['symbol', 'day', 'open', 'close', 'volume']); w.writerows(rows)
+    return path
+
+
+def test_gem_recipe_runs_with_periods_secondary_benchmark_and_holdings(tmp_path):
+    r = run(RECIPES / 'gem_dual_momentum_vti_efa_agg.yaml', _gem_bars(tmp_path / 'g.csv'), tmp_path / 'res' / 'trials.db')
+    assert r['verdict'] in {'PASS', 'NOT_PROVEN', 'INCONCLUSIVE'}
+    assert abs(sum(r['holding_share'].values()) - 1) < 0.01 and r['switches'] >= 0
+    assert set(r['periods_cagr_pre_tax']) == {'pre_publication', 'post_publication'}
+    assert 'vti60_efa40' in r['periods_cagr_pre_tax']['post_publication']
+    assert r['secondary_benchmark']['name'].startswith('buy_and_hold_60pct')
+
+
+def test_gem_holds_one_asset_and_never_peeks(tmp_path):
+    from research.backtest_etf_rule import Panel, load_bars
+    from research.harness import engine_gem_dual_momentum
+    bars, _ = load_bars(_gem_bars(tmp_path / 'g.csv'))
+    recipe, _ = load_recipe(RECIPES / 'gem_dual_momentum_vti_efa_agg.yaml')
+    res, start = engine_gem_dual_momentum(Panel(bars, 'VTI'), recipe, 10000)
+    assert start >= 253
+    buys = {t['symbol'] for t in res['trades'] if t['side'] == 'buy'}
+    assert buys <= {'VTI', 'EFA', 'AGG'} and res['trades'][0]['day'] >= Panel(bars, 'VTI').days[253]
