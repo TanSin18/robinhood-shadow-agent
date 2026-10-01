@@ -280,6 +280,15 @@ def build_packet(state, question, context='', run=None, step=None, now=None):
                           'when_they_write': 'every trading day: after the 10:00 ET official run, and again in the after-close job; advisory only, no trade reads their notes'}
     if notes:
         pkt['TEAM_NOTES'] = notes
+    mem = a.get('memory') or {}
+    if mem.get('scorecard') or mem.get('lessons'):
+        card = mem.get('scorecard') or {}
+        pkt['memory'] = {'id': 'memory', 'what': 'calls made after the close are scored at the next close; no verdict before 60 scored calls',
+                         **{k: card.get(k) for k in ('sentiment_calls_scored', 'hits', 'hit_rate_pct', 'needed_before_any_verdict', 'verdict',
+                                                     'calls_waiting_for_next_close')},
+                         'recent_calls': [{k: c.get(k) for k in ('day', 'ticker', 'call', 'next_day_return_pct', 'hit')} for c in (mem.get('calls') or [])
+                                          if c.get('kind') == 'sentiment'][:8],
+                         'lessons': [{k: x.get(k) for k in ('day', 'lesson', 'check_next')} for x in (mem.get('lessons') or [])[:5]]}
     spent = a.get('spent') or {}
     pkt['ai_budget'] = {'id': 'ai_budget', 'analyst_spend_today_usd': (_num(spent.get('usd')) or 0) if spent.get('day') == now.date().isoformat() else 0,
                         'analyst_daily_cap_usd': 1.0, 'questions_share_usd': 0.5, 'official_daily_cap_usd': 0.4}

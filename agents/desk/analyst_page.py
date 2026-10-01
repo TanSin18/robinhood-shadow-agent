@@ -135,8 +135,20 @@ def load(official_db):
                 n = latest('notes', f'{job}:{seat}')
                 if n and (seat not in team or n['at'] > team[seat]['at']):
                     team[seat] = n
+        memory = {'calls': [], 'lessons': [], 'scorecard': None}
+        if _has(db, 'calls'):
+            memory['calls'] = [{'day': d, 'seat': st, 'kind': k, 'ticker': t, 'call': c, 'note': n, 'scored_day': sd, **(json.loads(o) if o else {})}
+                               for d, st, k, t, c, n, sd, o in db.execute(
+                                   'SELECT day, seat, kind, ticker, call, note, scored_day, outcome_json FROM calls ORDER BY id DESC LIMIT 60')]
+        if _has(db, 'lessons'):
+            memory['lessons'] = [{'day': d, 'job': j, 'lesson': x, 'check_next': c} for d, j, x, c in
+                                 db.execute('SELECT day, job, lesson, check_next FROM lessons ORDER BY id DESC LIMIT 12')]
+        try:
+            memory['scorecard'] = json.loads(meta.get('scorecard') or 'null')
+        except ValueError:
+            pass
         spent = db.execute("SELECT day, SUM(COALESCE(actual, reserved)) FROM budget GROUP BY day ORDER BY day DESC LIMIT 1").fetchone()
-        return {'exists': True, 'meta': {k: v for k, v in meta.items() if not k.endswith(('_attempts', 'attempts'))},
+        return {'exists': True, 'memory': memory, 'meta': {k: v for k, v in meta.items() if not k.endswith(('_attempts', 'attempts')) and k != 'scorecard'},
                 'team': team, 'morning': latest('notes', 'morning'), 'close': latest('notes', 'close'), 'regime': latest('regimes'),
                 'kelly': latest('kelly'), 'auction': latest('auction'), 'guard': latest('guard') if _has(db, 'guard') else None, 'news_morning': latest('news', 'morning'),
                 'news_close': latest('news', 'close'), 'spent': {'day': spent[0], 'usd': spent[1]} if spent and spent[0] else None}
@@ -353,6 +365,58 @@ def _sizing(k, held):
     return out
 
 
+SEAT_NAMES = {'bubbles': 'Bubbles', 'biscuit': 'Buttercup', 'model': 'Regime model', 'pickle': 'Mojo Jojo'}
+
+
+def _memory(m):
+    """What the team carries forward: scored calls, the running record and the critic's lessons."""
+    m = m or {}
+    card = m.get('scorecard') or {}
+    calls, lessons = m.get('calls') or [], m.get('lessons') or []
+    n, need = card.get('sentiment_calls_scored') or 0, card.get('needed_before_any_verdict') or 60
+    verdicts = {'TOO_FEW_TO_JUDGE': 'Too few to judge', 'BETTER_THAN_A_COIN_FLIP': 'Better than a coin flip',
+                'WORSE_THAN_A_COIN_FLIP': 'Worse than a coin flip', 'NO_EVIDENCE_IT_BEATS_A_COIN_FLIP': 'No better than a coin flip'}
+    waiting = sum(1 for c in calls if not c.get('scored_day'))
+    tiles = (('Calls scored', f'{n} of {need}', 'needed before any verdict'),
+             ('Hit rate', f'{card["hit_rate_pct"]:.0f}%' if card.get('hit_rate_pct') is not None else '—', verdicts.get(card.get('verdict'), 'No calls scored yet')),
+             ('Waiting for the next close', str(waiting), 'scored when that session ends'),
+             ('Lessons carried forward', str(len(lessons)), 'shown to the team for five sessions'))
+    out = '<div class="an-kpis">' + ''.join(f'<div class="an-kpi"><span>{esc(t)}</span><b>{esc(v)}</b><small>{esc(s)}</small></div>' for t, v, s in tiles) + '</div>'
+    steps = (('1', 'After the close', 'Each news call (positive or negative on a ticker) and the regime label is written down.'),
+             ('2', 'Next close', 'Code scores each call against what the ticker actually did, and against SPY.'),
+             ('3', 'Next notes', 'Every agent gets yesterday’s note, how its calls turned out, the running record and open lessons.'),
+             ('4', f'At {need} scored calls', 'The record may say whether the calls beat a coin flip. Only then is it evidence for a signed rule change.'))
+    out += ('<section class="v10-panel"><h3>How the desk learns <small>advisory only; the trading rules change only by a signed amendment</small></h3>'
+            '<ol class="mem-steps">' + ''.join(f'<li><i>{k}</i><b>{esc(t)}</b><p>{esc(x)}</p></li>' for k, t, x in steps) + '</ol></section>')
+    sent = [c for c in calls if c.get('kind') == 'sentiment']
+    if sent:
+        rows = ''
+        for c in sent[:30]:
+            ret, spy = c.get('next_day_return_pct'), c.get('spy_return_pct')
+            result = ('<span class="an-sent">waiting</span>' if not c.get('scored_day') else
+                      '<span class="an-sent pos">hit</span>' if c.get('hit') else '<span class="an-sent neg">miss</span>')
+            rows += (f'<tr><td>{esc(short_time(c.get("day") + "T16:00:00-04:00", False) if c.get("day") else "")}</td><td>{esc(SEAT_NAMES.get(c.get("seat"), c.get("seat")))}</td>'
+                     f'<td><b>{esc(c.get("ticker"))}</b></td><td><span class="an-sent {SENT_CLS.get(c.get("call"), "")}">{esc(c.get("call"))}</span></td>'
+                     f'<td class="num {"pos" if (ret or 0) > 0 else "neg" if (ret or 0) < 0 else ""}">{pct(ret) if ret is not None else "—"}</td>'
+                     f'<td class="num">{pct(spy) if spy is not None else "—"}</td><td>{result}</td></tr>')
+        out += ('<section class="v10-panel"><h3>Calls and how they turned out <small>newest first · next-session close-to-close move</small></h3>'
+                '<div class="table-wrap"><table class="mini"><thead><tr><th>Called</th><th>Agent</th><th>Ticker</th><th>Call</th><th>Next day</th><th>SPY</th>'
+                f'<th>Result</th></tr></thead><tbody>{rows}</tbody></table></div></section>')
+    else:
+        out += ('<section class="v10-panel"><h3>Calls and how they turned out</h3><p class="v10-empty">No calls recorded yet. The first ones are written after '
+                'the next after-close job and scored at the close after that.</p></section>')
+    out += ('<section class="v10-panel"><h3>Lessons carried forward <small>from Mojo Jojo, about process, never about one win or loss</small></h3>'
+            + ('<ul class="mem-lessons">' + ''.join(f'<li><small>{esc(short_time(x.get("day") + "T16:00:00-04:00", False))} · {esc(x.get("job"))}</small>'
+                                                     f'<p>{esc(x.get("lesson"))}</p>' + (f'<span>Check next: {esc(x.get("check_next"))}</span>' if x.get('check_next') else '')
+                                                     + '</li>' for x in lessons) + '</ul>' if lessons else '<p class="v10-empty">None yet.</p>') + '</section>')
+    reg = card.get('regime_avg_abs_next_day_move_pct') or {}
+    if reg:
+        out += ('<section class="v10-panel"><h3>Regime label, checked out of sample <small>average size of VTI’s move the day after each label</small></h3>'
+                '<dl class="v10-stats">' + ''.join(f'<div><dt>{esc(k.capitalize())} · {v.get("sessions")} session{"s" if v.get("sessions") != 1 else ""}</dt><dd>{pct(v.get("avg_abs_move_pct"), False)}</dd></div>'
+                                                   for k, v in reg.items()) + '</dl></section>')
+    return out
+
+
 def _kpis(a):
     r, g, sp = a.get('regime') or {}, a.get('guard') or {}, a.get('spent') or {}
     exits = [e for e in g.get('exits') or [] if e.get('status') == 'OK']
@@ -369,7 +433,7 @@ def _kpis(a):
     return '<div class="an-kpis">' + ''.join(f'<div class="an-kpi"><span>{esc(t)}</span><b>{esc(v)}</b><small>{esc(n)}</small></div>' for t, v, n in tiles) + '</div>'
 
 
-TABS = (('an-brief', 'Brief', 'The note you read'), ('an-team', 'Team', 'What each agent said'), ('an-guard', 'Exit guard', 'Protect gains, stop losses'),
+TABS = (('an-brief', 'Brief', 'The note you read'), ('an-team', 'Team', 'What each agent said'), ('an-memory', 'Memory', 'What carries forward'), ('an-guard', 'Exit guard', 'Protect gains, stop losses'),
         ('an-regime', 'Regime', 'Calm, normal or stressed'), ('an-sizing', 'Sizing', 'Kelly vs actual'), ('an-tape', 'Tape', 'Trend or chop, per name'),
         ('an-news', 'News', 'Headlines the team read'))
 
@@ -407,6 +471,8 @@ def render(state):
         head, _kpis(a), f'<nav class="v10-tabs an-tabs" role="tablist" aria-label="Analyst desk sections">{tabs}</nav>',
         _panel('an-brief', 'Bubbles writes two short notes a day from everything the team produced: one after the 10:00 run, one after the close.', brief, True),
         _panel('an-team', 'Each agent has one job and writes every trading day. Mojo Jojo’s job is to find fault with the others.', _team(a.get('team'))),
+        _panel('an-memory', 'What the team carries from one day to the next. Calls made after the close are scored by code at the next close, '
+               'and the record must be long enough before it is allowed to mean anything.', _memory(a.get('memory'))),
         _panel('an-guard', 'For each holding: where a volatility-aware stop would sit tonight and whether it would sell. The stop only ever moves up. '
                'Shadow only; it becomes real only if you sign it in.', _guard_cards(a.get('guard'))),
         _panel('an-regime', 'A statistical model labels the whole market from VTI’s daily moves and is refitted every night.', _regime(a.get('regime'))),

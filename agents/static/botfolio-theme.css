@@ -463,3 +463,20 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 .agent-desk .rb-toc a{font-size:var(--fs-xs)!important;font-weight:500!important;padding:5px 11px!important;border-radius:8px!important;color:var(--text-3)!important;background:transparent!important;border:1px solid var(--hair)!important}
 .agent-desk .rb-toc a:hover{color:var(--text)!important;border-color:rgba(207,211,219,.45)!important}
 .agent-desk .ar>header dl,.agent-desk .ar-facts{margin-top:18px;padding:16px 20px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+
+/* ---------- Analyst: memory ---------- */
+.agent-desk .mem-steps{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
+.agent-desk .mem-steps li{position:relative;padding:0 20px 0 0;display:grid;grid-template-columns:26px 1fr;column-gap:10px;row-gap:2px;align-items:baseline}
+.agent-desk .mem-steps li+li{padding-left:20px;border-left:1px solid var(--hair)}
+.agent-desk .mem-steps i{grid-row:span 2;font-style:normal;font-family:var(--bf-mono);font-size:var(--fs-label);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--hair);color:var(--text-3);align-self:start}
+.agent-desk .mem-steps b{font-size:var(--fs-sm)!important;color:var(--text)}
+.agent-desk .mem-steps p{margin:0;font-size:var(--fs-xs);line-height:1.5;color:var(--text-3)}
+.agent-desk .mem-lessons{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.agent-desk .mem-lessons li{padding:12px 0;border-top:1px solid var(--hair-2)}
+.agent-desk .mem-lessons li:first-child{border-top:0;padding-top:2px}
+.agent-desk .mem-lessons small{font-family:var(--bf-mono);font-size:var(--fs-label);color:var(--text-4);text-transform:uppercase;letter-spacing:.08em}
+.agent-desk .mem-lessons p{margin:4px 0;font-size:var(--fs-body);color:var(--text)}
+.agent-desk .mem-lessons span{font-size:var(--fs-sm);color:var(--text-3)}
+@media (max-width:900px){.agent-desk .mem-steps{grid-template-columns:1fr 1fr;gap:14px 0}}
+@media (max-width:560px){.agent-desk .mem-steps{grid-template-columns:1fr}.agent-desk .mem-steps li+li{padding-left:0;border-left:0}}

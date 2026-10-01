@@ -201,7 +201,7 @@ def test_history_page_groups_each_day_and_orders_the_run_before_its_fills():
     st = state()
     html = history_page.render(st)
     assert 'Monday, October 5' in html and html.count('class="v10-panel hd"') == 1
-    assert html.index('Official run') < html.index('Bought SOXX') < html.index('Protective check')
+    assert html.index('<b>Official run</b>') < html.index('<b>Bought SOXX</b>') < html.index('<b>Protective check</b>')
     assert '2.32209 shares at $566.64 · AI alone (Lane A)' in html and 'Nothing sold. Still holding SOXX.' in html
     assert 'Bubbles · Morning note' in html and 'Blossom wrote their daily notes.' in html
     assert 'Run details' in html and ACCOUNT not in html
@@ -222,3 +222,22 @@ def test_analyst_brief_has_a_sub_tab_per_note_and_opens_the_latest():
     assert '1 headline</span>' in html and 'href="https://example.com/a"' in html
     only_close = analyst_page.render({'analyst': {**a, 'morning': None}, 'portfolio': {}})
     assert 'Not written yet' in only_close and 'Written after the 10:00 AM ET official run completes.' in only_close
+
+
+def test_analyst_memory_tab_shows_the_record_without_overclaiming():
+    from agents.desk import analyst_page
+    mem = {'scorecard': {'sentiment_calls_scored': 5, 'hits': 4, 'hit_rate_pct': 80.0, 'needed_before_any_verdict': 60, 'verdict': 'TOO_FEW_TO_JUDGE',
+                         'calls_waiting_for_next_close': 2, 'regime_avg_abs_next_day_move_pct': {'calm': {'sessions': 1, 'avg_abs_move_pct': 0.27}}},
+           'calls': [{'day': '2026-10-05', 'seat': 'bubbles', 'kind': 'sentiment', 'ticker': 'SOXX', 'call': 'positive', 'scored_day': '2026-10-06',
+                      'next_day_return_pct': 1.2, 'spy_return_pct': 0.3, 'hit': True},
+                     {'day': '2026-10-06', 'seat': 'biscuit', 'kind': 'sentiment', 'ticker': 'XLF', 'call': 'negative', 'scored_day': None},
+                     {'day': '2026-10-06', 'seat': 'model', 'kind': 'regime', 'ticker': 'VTI', 'call': 'calm', 'scored_day': None}],
+           'lessons': [{'day': '2026-10-05', 'job': 'close', 'lesson': 'Name the session the bars cover <b>.', 'check_next': 'as_of'}]}
+    html = analyst_page.render({'analyst': {'exists': True, 'team': {}, 'memory': mem}, 'portfolio': {}})
+    assert 'id="an-memory"' in html and '5 of 60' in html and 'Too few to judge' in html and '80%' in html
+    assert '>hit<' in html and '>waiting<' in html and 'Buttercup' in html and 'Name the session the bars cover &lt;b&gt;.' in html
+    assert 'Calm · 1 session<' in html and 'the trading rules change only by a signed amendment' in html
+    empty = analyst_page.render({'analyst': {'exists': True, 'team': {}}, 'portfolio': {}})
+    assert 'No calls recorded yet' in empty and '0 of 60' in empty
+    pkt = ask_page.build_packet({**state(), 'analyst': {**state()['analyst'], 'memory': mem}}, 'What has the desk learned?', 'Analyst page')
+    assert pkt['memory']['verdict'] == 'TOO_FEW_TO_JUDGE' and pkt['memory']['lessons'][0]['check_next'] == 'as_of'
