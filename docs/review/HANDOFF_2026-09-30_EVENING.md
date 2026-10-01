@@ -14,8 +14,7 @@ credentials, codes, tokens or account numbers. Paper only: real orders are block
   0.4%/yr after tax vs VTI 8.3%; the live 10% drawdown latch (`peak_breaker_latched`, never cleared)
   froze buying in July 2010. Signal alone 1.7%/yr, Sharpe 0.20 vs 0.54. Independent re-implementation
   agrees. 252-session momentum looks better (≈VTI after costs) but is a post-hoc pick: shadow-test only.
-- Nightly screen service install failed: Permission denied on /Users/Shared/RobinhoodShadow/launch
-  (needs `sudo`). Operator asked to rerun with sudo.
+- Nightly screen service INSTALLED 20:56 ET (sudo, during a pause; resumed, no stop flags). First run 2026-10-01 16:50 ET.
 - Follow-up found: Robinhood daily bars begin 00:00Z, so ET conversion labels each session one day
   early (live features are still correct: the 10:00 run used the prior session's close). Affects
   date-keyed lookups: option expiry-close settlement and the 20-session backstop count (±1).
