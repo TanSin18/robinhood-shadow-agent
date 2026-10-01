@@ -1,0 +1,22 @@
+{
+  "source_commit": "87f88bce2a5bb35d900300e89b63ef8d379c7c08",
+  "installed_base_commit": "bc043a5",
+  "before_source_fingerprint": "d9e592979635b64a386b0b2c1a2f41fc7852afdd10b38aa0a5c0f372ed3af9c5",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/ai_trader/model.py": {
+      "before_sha256": "56907785711a47dbda28ec1f0be0d9659106a1e92ce41bf3704afaa1b08e0c14",
+      "after_sha256": "8ac213f2312c2a458e1b889a86bafb1b6fb9b89de36df9fb1bda2755f0cbf41c"
+    },
+    "agents/analyst/commentary.py": {
+      "before_sha256": "1acc8add915100b602c74e3ffbc4b776b8a49223caf37162ce38af4e593222bc",
+      "after_sha256": "22d9f49fe96342f3afdd80f937e4d817367e7e64cc8e7762ba73a529fbb7c363"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": "b0f9aa2247e06bb24a6cea0b91029af69f869227e680bd9770a463110f544975",
+      "after_sha256": "5705a7f854d288fdaa3fe8a62ed1d277d67a650ae49eb9ea2668b43039f85923"
+    }
+  },
+  "root_files": {}
+}
