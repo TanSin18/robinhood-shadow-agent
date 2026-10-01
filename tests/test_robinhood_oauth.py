@@ -91,7 +91,7 @@ def test_keychain_payload_is_json_not_a_plaintext_side_file(tmp_path) -> None:
 def test_official_oauth_configuration_is_pinned() -> None:
     from broker_proxy.config import load_broker_proxy_config
 
-    config = load_broker_proxy_config("config/broker-proxy.yaml", operator_uid=os.getuid())
+    config = load_broker_proxy_config("config/broker-proxy.yaml", operator_uid=os.getuid() or 501)
 
     assert config.server_url == "https://agent.robinhood.com/mcp/trading"
     assert config.requested_scope == "internal"
@@ -106,7 +106,7 @@ def test_official_oauth_configuration_is_pinned() -> None:
 def test_proxy_configuration_is_separate_from_main_application() -> None:
     from broker_proxy.config import load_broker_proxy_config
 
-    proxy = load_broker_proxy_config("config/broker-proxy.yaml", operator_uid=os.getuid())
+    proxy = load_broker_proxy_config("config/broker-proxy.yaml", operator_uid=os.getuid() or 501)
     main = load_config("config/settings.yaml")
 
     assert proxy.proxy_user == "robinhoodproxy"

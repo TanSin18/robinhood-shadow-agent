@@ -28,7 +28,10 @@ def test_authorization_cli_rejects_main_user_before_oauth(monkeypatch, capsys):
     import os, sys
     from scripts import authorize_robinhood
 
+    import pwd
     monkeypatch.setattr(os, 'geteuid', lambda: 501)
+    # The dedicated proxy account exists on the operator's Mac; model it so the check is portable.
+    monkeypatch.setattr(pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=502, pw_gid=20, pw_name='robinhoodproxy'))
     monkeypatch.setattr(sys, 'argv', ['authorize_robinhood'])
     async def forbidden():
         raise AssertionError('OAuth was entered from the main user')

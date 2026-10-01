@@ -43,6 +43,15 @@ def _peer_uid(connection: socket.socket) -> int:
                 return int(uid.value)
         except (AttributeError, OSError):
             pass
+    # Linux: the kernel's SO_PEERCRED (pid, uid, gid) for the connected Unix socket.
+    if sys.platform.startswith("linux") and hasattr(socket, "SO_PEERCRED"):
+        try:
+            import struct
+            _pid, uid, _gid = struct.unpack("3i", connection.getsockopt(
+                socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+            return int(uid)
+        except (OSError, struct.error):
+            pass
     raise ProtocolError("PEER_ID_UNAVAILABLE", "peer identity is unavailable")
 
 
