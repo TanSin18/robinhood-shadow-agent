@@ -1,0 +1,98 @@
+{
+  "source_commit": "8cd953614739508e311e095e7e3a3d4fac844bb7",
+  "installed_base_commit": "c36f4ad",
+  "before_source_fingerprint": "5a4419569a83cdcc12f62d4babff5bd8a4d71141e1bce8c04bf5882e56a4a378",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/ai_trader/__init__.py": {
+      "before_sha256": null,
+      "after_sha256": "aafbcc99fb7038fb598feaa6634a9b0bfaa860b3696caa384f8d7accd7351895"
+    },
+    "agents/ai_trader/cli.py": {
+      "before_sha256": null,
+      "after_sha256": "9c2e5b1ce9f43f6c8be6af60e8d261c6aa811b8118ee42f3ecd6631c5c54840f"
+    },
+    "agents/ai_trader/control.py": {
+      "before_sha256": null,
+      "after_sha256": "4c921b6603ac1dce8e0424dc4398691fb1f9bff95bb97810b53e8e598df8baaf"
+    },
+    "agents/ai_trader/cycle.py": {
+      "before_sha256": null,
+      "after_sha256": "fb65b2cd40aebd6dcc0372477a356962b17d07580318f5c227a66dde5555ab9a"
+    },
+    "agents/ai_trader/hook.py": {
+      "before_sha256": null,
+      "after_sha256": "2ab2ee6e7157854ff8ec64ce0d2c04d11010b37fe32504318f07d71b2edb631f"
+    },
+    "agents/ai_trader/model.py": {
+      "before_sha256": null,
+      "after_sha256": "8c2f3da6533df4d6342c69e955fc560242ee01339c678c517b57a0af4385b3f4"
+    },
+    "agents/ai_trader/risk.py": {
+      "before_sha256": null,
+      "after_sha256": "f9efc7545b2405e0eb2873d818bc7368d6d1aa9d40ddbd01e8d344688bbe65fd"
+    },
+    "agents/ai_trader/scoring.py": {
+      "before_sha256": null,
+      "after_sha256": "3a7224f2cf572de482b6947faf0c0600470002dfeca0daa0a30e9edf7277b550"
+    },
+    "agents/ai_trader/seats.py": {
+      "before_sha256": null,
+      "after_sha256": "96ea8a1cbc51b45f216ca7ea70801c7e47b2e6bd4171bc5b13cf81dc52846734"
+    },
+    "agents/ai_trader/spec.py": {
+      "before_sha256": null,
+      "after_sha256": "f5f667d19d6182dd15d575c358f40b1ecf8c94f674b1ff6d9d39c9733f4bd2b2"
+    },
+    "agents/ai_trader/store.py": {
+      "before_sha256": null,
+      "after_sha256": "3a1a0d851857139ef45e6dff4bc62dcbcd2b3b79fd9cc5200f5fbc5ebb03efa4"
+    },
+    "agents/ai_trader/tools.py": {
+      "before_sha256": null,
+      "after_sha256": "d42a0e60164887a2edc7640daac71eb1e970a60a4d25f1a234b22faf32185edc"
+    },
+    "agents/daily_cycle.py": {
+      "before_sha256": "054c6933dfc71d88f8f965495d230c9463e30d7c10328f6d592808537aacc94d",
+      "after_sha256": "1c6a698e569946bc403de6864d2c32df7541eb02a1f067f77c2e01145ef9e014"
+    },
+    "agents/dashboard_view.py": {
+      "before_sha256": "79da98b9f192b989f5fb422affae5bb2ebcb1447d7ebbd4e17a7a03455b60fbb",
+      "after_sha256": "02b95d61e5e76b418b6bfc45fb2f98c2183dedeb30aabbcf74c7b17b190704da"
+    },
+    "broker_proxy/server.py": {
+      "before_sha256": "54e436759ed22edeab9c814c3444c8509d7680f5f9151944decbc17cf8d0b906",
+      "after_sha256": "6aabe8e60b2c40f6e30988b1b00625a7de52304eaad3ec1367b520001ccea29e"
+    },
+    "research/backtest_etf_rule.py": {
+      "before_sha256": "6ea629847e52a416bee0a6b8d7d342d798ada78c07d84096e1bf04742bbffd3d",
+      "after_sha256": "b5b974e896a49fb6ecf1acef14c4d1d222656d029de1c81a33b9506508cc8536"
+    },
+    "research/recipes/ai_trader_fwd_v1.yaml": {
+      "before_sha256": null,
+      "after_sha256": "a5e85e29cf27042612529fdec06f6cf500d20bbbeeb789c7b82fceead9facc83"
+    },
+    "tests/test_ai_trader.py": {
+      "before_sha256": null,
+      "after_sha256": "7a315d1575f65c63ac7bf3a7df1ee49adf2dd653c793eb9e75c33bca2c7e6b1e"
+    },
+    "tests/test_backtest_etf_rule.py": {
+      "before_sha256": "8a17387bb4016bc1e36b1074e672e79c6b0d58917552c1fd16bf20627e892946",
+      "after_sha256": "b76e5b04f7dc5b7e6cb55ed6d62fce73bc368c87273dac885735246573a897f9"
+    },
+    "tests/test_installed_isolation.py": {
+      "before_sha256": "3ffcbd3f97f8c10ef0ec6508c30c4247e981bbda538cbc75590394626b128b0e",
+      "after_sha256": "2341c503ae833ec828652d5d0bf5fbdcaf3a3bb7a29bab0b337eb1527c472c8f"
+    },
+    "tests/test_proxy_identity_guard.py": {
+      "before_sha256": "4783cebc90af55aa0bcdd5279af24dae4c5415e8283da14c04cf527cd4933c64",
+      "after_sha256": "5b57e1bfdd83e6eb4c41b22e2e89840e1e71d899dbcb73db2727c67fdc8755fe"
+    },
+    "tests/test_robinhood_oauth.py": {
+      "before_sha256": "f5902505833641f09cd4a84d7f6f04bc5399ab2384fdf89568d1540c48a934a1",
+      "after_sha256": "bc7e1cebf387eb53ea4ea5e95b8acf8687f3cfcdaad508a65915befe5087009a"
+    }
+  },
+  "root_files": {}
+}

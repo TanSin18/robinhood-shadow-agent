@@ -5,6 +5,13 @@ Rules for every assistant: `AGENTS.md`, `CLAUDE.md`. **Do not start a second tra
 The operator does all Robinhood login, MFA and consent on the Mac. Never ask for or print
 credentials, codes, tokens or account numbers. Paper only: real orders are blocked.
 
+## 0b. UPDATE 23:30 ET
+- Research freeze until 2026-10-31 (trial 17's recipe). Trials 14–17 all NOT_PROVEN vs VTI.
+- **AI trader forward book registered** (`ai_trader_fwd_v1`, trial log row 18): code on `claude/ai-trader`,
+  page on `claude/card-inbox`; nothing installed. Runbook: `docs/review/AI_TRADER_RUNBOOK.md`.
+- Card inbox (`/inbox`) built, not deployed; live copy off. Dashboard capital banner deployed (v8).
+- All branches: 0 test failures in the cloud (Mac-only Codex check skipped there).
+
 ## 0a. UPDATE 19:50 ET
 - Proxy restarted by the operator 19:26 ET; authorization VALID again from 19:30 ET.
 - **Release D INSTALLED 19:32 ET** (797 passed; backup release-rollback.78pvi9lh; fingerprint 5a441956…).
