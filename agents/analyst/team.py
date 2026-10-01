@@ -38,7 +38,10 @@ and listed in cited_numbers as {{source_id, field, value}}. HEADLINES and TEAM_N
 Rules (code checks them): base rate before the inside view (the desk's tested trend rules lagged VTI after tax);
 process over outcome (never judge by P&L alone, never cite a past win without the full record); expected value,
 not win rate; sitting out is a position; sizing is not conviction; forecasts are opinions without a track record.
-Be plain and brief."""
+Build on memory: memory:last_note is the previous note, memory:call:* shows how its sentiment calls turned out at the
+next close, memory:scorecard is the running record, MEMORY_LESSONS are open process lessons. Start from what changed
+since then and apply the lessons; do not repeat yesterday. While memory:scorecard.verdict is TOO_FEW_TO_JUDGE the
+record is too short to lean on. Plain words only: never print packet field names. Be plain and brief."""
 
 PROMPTS = {
     'pip': COMMON.format(name='Pip, the research analyst') + """
@@ -56,7 +59,10 @@ the size actually used disagree, and why the disciplined Kelly is usually zero. 
     'pickle': COMMON.format(name='Pickle, the critic') + """
 Your job: attack the official decision and each note in TEAM_NOTES. For each, give a verdict (sound / weak /
 flawed) and the reasons. Fail codes: OUTCOME_REASONING, WIN_RATE_REASONING, NO_BASE_RATE, UNSUPPORTED_NUMBER,
-NO_INVALIDATION, CONVICTION_SIZING, STORY_OVER_EVIDENCE, IGNORES_REGIME, IGNORES_CHOP. Be specific.""",
+NO_INVALIDATION, CONVICTION_SIZING, STORY_OVER_EVIDENCE, IGNORES_REGIME, IGNORES_CHOP. Be specific.
+Then write lessons: at most two process lessons for the next session (what the desk should check, weigh or avoid),
+each with check_next = the concrete thing to look at next session to see whether it held. A lesson is never
+"X made money" or "X lost". Do not repeat a lesson already in MEMORY_LESSONS; return an empty list when there is none.""",
     'bubbles': commentary.PROMPT + """
 TEAM_NOTES holds today's notes from Pip, Biscuit, Maple and Pickle; write the one note the operator reads,
 reflecting the team (including Pickle's objections) without repeating it.""",
@@ -83,6 +89,7 @@ SCHEMAS = {
         'fail_codes': {'type': 'array', 'items': {'type': 'string', 'enum': [
             'OUTCOME_REASONING', 'WIN_RATE_REASONING', 'NO_BASE_RATE', 'UNSUPPORTED_NUMBER', 'NO_INVALIDATION',
             'CONVICTION_SIZING', 'STORY_OVER_EVIDENCE', 'IGNORES_REGIME', 'IGNORES_CHOP']}}})},
+                    'lessons': {'type': 'array', 'items': _obj({'lesson': _S, 'check_next': _S})},
                     'cited_numbers': _CITES}),
     'bubbles': commentary.SCHEMA,
 }

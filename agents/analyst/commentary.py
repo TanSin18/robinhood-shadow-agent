@@ -33,7 +33,12 @@ Rules you must follow (code checks them):
 - Sitting out is a position: a day with no trade is a normal, good outcome when nothing qualifies.
 - Sizing is not conviction: never suggest a bigger size because something looks strong.
 - Forecasts and targets are opinions unless the packet shows how often similar forecasts came true.
-- If the packet's as_of.stale is true, say plainly that the daily bars are through as_of.daily_bars_through, not today."""
+- If the packet's as_of.stale is true, say plainly that the daily bars are through as_of.daily_bars_through, not today.
+- Build on memory: memory:last_note is the previous note, memory:call:* is how its sentiment calls turned out at the next
+  close, memory:scorecard is the running record and MEMORY_LESSONS are open process lessons. Say what changed since the
+  last note and whether its watch items played out. Do not repeat it. While memory:scorecard.verdict is TOO_FEW_TO_JUDGE,
+  say the record is too short to trust; never present past hits as proof.
+- Plain words only: never print packet field names (write "the calm state", not "p_calm" or "calm_ann_vol_pct")."""
 
 _S = {'type': 'string'}
 _NOTE = {'type': 'object', 'additionalProperties': False, 'required': ['ticker', 'sentiment', 'relevance', 'note', 'headline_ids'],
@@ -100,14 +105,28 @@ def build(kind, pkt):
 
 
 def _values(pkt):
+    """Every number in the packet's records (nested records and lists included; text is not scanned)."""
     vals = []
-    for v in pkt.values():
-        if isinstance(v, dict):
+
+    def walk(v, depth=0):
+        if isinstance(v, bool) or v is None or depth > 4:
+            return
+        if isinstance(v, (int, float)):
+            vals.append(float(v))
+        elif isinstance(v, dict):
             for x in v.values():
-                try:
-                    vals.append(float(x))
-                except (TypeError, ValueError):
-                    pass
+                walk(x, depth + 1)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                walk(x, depth + 1)
+        elif isinstance(v, str):
+            try:
+                vals.append(float(v))
+            except ValueError:
+                pass
+    for k, v in pkt.items():
+        if k != 'HEADLINES_UNTRUSTED':
+            walk(v)
     return vals
 
 

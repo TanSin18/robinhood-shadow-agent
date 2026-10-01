@@ -168,6 +168,7 @@ class _Client:
                'biscuit': {'summary': 'No relevant news.', 'news': [], 'cited_numbers': []},
                'maple': {'portfolio_read': 'Mostly cash.', 'points': [], 'cited_numbers': []},
                'pickle': {'verdicts': [{'target': 'official_decision', 'verdict': 'sound', 'reasons': ['rule followed'], 'fail_codes': []}],
+                          'lessons': [{'lesson': 'Check the chop label before trusting a momentum rank.', 'check_next': 'Is SOXX still labelled trending?'}],
                           'cited_numbers': []},
                'bubbles': {'headline': 'Chips lead', 'market_read': 'Quiet tape.', 'decision_read': 'The desk rule bought SOXX.',
                            'regime_read': '', 'auction_read': '', 'news': [], 'watch': ['SOXX trend'], 'cited_numbers': []}}[seat]
@@ -510,3 +511,72 @@ def test_cli_rerun_lets_todays_job_run_once_more(tmp_path, capsys):
     assert store.meta('close_done') != day and store.meta(f'close_attempts:{day}') == '0' and store.meta('morning_done') == day
     with pytest.raises(SystemExit):
         cli.main(['rerun', '--official-database', str(official), '--path', str(path)])
+
+
+def test_memory_scores_yesterdays_calls_and_feeds_them_back(tmp_path):
+    from agents.analyst import memory
+    official = _official(tmp_path)
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', official)
+    day1 = datetime(2026, 10, 5, 20, 30, tzinfo=timezone.utc)
+    store.add('notes', '2026-10-05', {'headline': 'Chips firm, banks soft.', 'decision_read': 'The desk held SOXX.', 'watch': ['SOXX trend'],
+                                      'news': [{'ticker': 'SOXX', 'sentiment': 'positive', 'note': 'AI demand.'},
+                                               {'ticker': 'XLF', 'sentiment': 'negative', 'note': 'Bank worries.'},
+                                               {'ticker': 'META', 'sentiment': 'mixed', 'note': 'Not a call.'}]}, day1, kind='close', model='m', checks_json={})
+    store.add('notes', '2026-10-05', {'summary': 's', 'news': [{'ticker': 'SOXX', 'sentiment': 'positive', 'note': 'Same view.'}]}, day1,
+              kind='close:biscuit', model='m', checks_json={})
+    store.add('notes', '2026-10-05', {'verdicts': [], 'lessons': [{'lesson': 'Check the chop label before trusting a rank.', 'check_next': 'SOXX label'},
+                                                                 {'lesson': 'Say when bars are stale.', 'check_next': 'as_of'},
+                                                                 {'lesson': 'A third one is dropped.', 'check_next': ''}]}, day1,
+              kind='close:pickle', model='m', checks_json={})
+    kept = memory.record(store, '2026-10-05', 'close', '2026-10-05', day1, regime='calm')
+    assert kept == {'calls': 4, 'lessons': 2}                                    # two Bubbles calls, one Buttercup call, the regime label; mixed is not a call
+    assert memory.record(store, '2026-10-05', 'close', '2026-10-05', day1, regime='calm')['lessons'] == 0      # a rerun adds nothing twice
+    bars = {'SOXX': [{'day': '2026-10-05', 'close': 100.0}], 'XLF': [{'day': '2026-10-05', 'close': 50.0}],
+            'SPY': [{'day': '2026-10-05', 'close': 400.0}], 'VTI': [{'day': '2026-10-05', 'close': 200.0}]}
+    assert memory.score(store, bars) == 0                                        # the next session has not closed yet
+    card = memory.scorecard(store)
+    assert card['sentiment_calls_scored'] == 0 and card['verdict'] == 'TOO_FEW_TO_JUDGE' and card['calls_waiting_for_next_close'] == 4
+    for t, c in (('SOXX', 102.0), ('XLF', 50.5), ('SPY', 402.0), ('VTI', 201.0)):
+        bars[t].append({'day': '2026-10-06', 'close': c})
+    assert memory.score(store, bars) == 4 and memory.score(store, bars) == 0
+    card = memory.scorecard(store)
+    assert card['sentiment_calls_scored'] == 3 and card['hits'] == 2 and card['hit_rate_pct'] == 66.7 and card['verdict'] == 'TOO_FEW_TO_JUDGE'
+    assert card['avg_next_day_pct_after_positive'] == 2.0 and card['avg_next_day_pct_after_negative'] == 1.0
+    assert card['regime_avg_abs_next_day_move_pct'] == {'calm': {'sessions': 1, 'avg_abs_move_pct': 0.5}}
+    block = memory.block(store, '2026-10-06')
+    assert block['memory:last_note']['headline'] == 'Chips firm, banks soft.' and block['memory:last_note']['watch'] == ['SOXX trend']
+    assert block['memory:call:SOXX'] == {'id': 'memory:call:SOXX', 'called_on': '2026-10-05', 'call': 'positive', 'scored_on': '2026-10-06',
+                                         'next_day_return_pct': 2.0, 'spy_return_pct': 0.5, 'hit': True}
+    assert block['memory:call:XLF']['hit'] is False and 'memory:call:META' not in block
+    assert block['memory:scorecard']['needed_before_any_verdict'] == 60
+    assert [x['lesson'] for x in block['MEMORY_LESSONS']] == ['Say when bars are stale.', 'Check the chop label before trusting a rank.']
+    out = {'headline': 'SOXX rose 2% after the positive call; the record is too short to trust.', 'news': [], 'watch': [],
+           'cited_numbers': [{'source_id': 'memory:call:SOXX', 'field': 'next_day_return_pct', 'value': 2.0}]}
+    assert commentary.check(out, block)['ok']
+
+
+def test_scorecard_gives_a_verdict_only_with_enough_calls(tmp_path):
+    from agents.analyst import memory
+    store = AnalystStore(tmp_path / 'diag' / 'analyst' / 'analyst.db', _official(tmp_path))
+    memory.ensure(store)
+    with store.connect() as db:
+        for i in range(60):
+            db.execute('INSERT INTO calls(day,at,seat,kind,ticker,call,basis_day,note,scored_day,outcome_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                       (f'd{i}', '', 'bubbles', 'sentiment', 'SOXX', 'positive', '', '', 'x', json.dumps({'next_day_return_pct': 1.0, 'hit': i < 33})))
+    assert memory.scorecard(store)['verdict'] == 'NO_EVIDENCE_IT_BEATS_A_COIN_FLIP'          # 33 of 60 is inside coin-flip range
+    with store.connect() as db:
+        db.execute("UPDATE calls SET outcome_json=? WHERE day IN ('d33','d34','d35','d36','d37','d38','d39','d40')", (json.dumps({'next_day_return_pct': 1.0, 'hit': True}),))
+    assert memory.scorecard(store)['verdict'] == 'BETTER_THAN_A_COIN_FLIP'                   # 41 of 60
+
+
+def test_close_job_carries_memory_into_the_packet_and_records_lessons(tmp_path):
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    store = AnalystStore(path, official)
+    store.add('notes', '2026-10-02', {'headline': 'Friday note', 'watch': ['VTI'], 'news': []}, NOW_PM - timedelta(days=3), kind='close', model='m', checks_json={})
+    client = _Client()
+    out = hook.tick(_Inbox(official), _Config(), NOW_PM, path=path, client_factory=lambda: client, opener=_no_net, reader_factory=lambda: _Reader())
+    assert out['close']['memory']['lessons'] == 1 and out['close']['memory']['calls'] >= 1      # the critic's lesson and at least the regime label
+    assert all('"memory:last_note"' in p and 'Friday note' in p and '"memory:scorecard"' in p for p in client.prompts)
+    from agents.analyst import memory
+    assert memory.lessons(store, '2026-10-05')[0]['lesson'].startswith('Check the chop label')

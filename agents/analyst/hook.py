@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from . import auction, commentary, guard, kelly, news, regime, team
+from . import auction, commentary, guard, kelly, memory, news, regime, team
 from .store import AnalystStore, default_path
 
 ET = ZoneInfo('America/New_York')
@@ -193,12 +193,17 @@ def morning(store, official_db, now, client, *, opener=None, prices=None, contac
     pkt = commentary.packet('morning', decision=view['decision'], features=view['features'], regime=reg,
                             guard=grd.get('exits'), chop=grd.get('chop'),
                             kelly=(kel or {}).get('tickers'), auction=(auc or {}).get('tickers'), holdings=view['holdings'], headlines=items)
-    return {'news_items': len(items), 'news_problems': len(problems), 'note': _note(store, 'morning', pkt, client, day, now, prices)}
+    pkt.update(memory.block(store, day))            # yesterday's note, how its calls turned out, the scorecard, open lessons
+    note = _note(store, 'morning', pkt, client, day, now, prices)
+    kept = memory.record(store, day, 'morning', None, now)
+    store.set_meta('scorecard', json.dumps(memory.scorecard(store)))
+    return {'news_items': len(items), 'news_problems': len(problems), 'note': note, 'memory': kept}
 
 
 def close(store, official_db, config, now, client, *, reader_factory=None, opener=None, prices=None, contact=None):
     day = now.astimezone(ET).date().isoformat()
     bars = read_bars(reader_factory, store.path, config, now)
+    scored = memory.score(store, bars)             # yesterday's calls against what the market then did
     vti = merged_closes(long_history(official_db), [(b['day'], b['close']) for b in bars.get('VTI') or []])
     fit = regime.fit(regime.log_returns(vti))
     labels = fit.pop('_labels', {}) if isinstance(fit, dict) else {}
@@ -241,8 +246,15 @@ def close(store, official_db, config, now, client, *, reader_factory=None, opene
                             holdings=view['holdings'], headlines=items)
     pkt['as_of'] = {'id': 'as_of', 'note_written_on': day, 'daily_bars_through': bars_through,
                     'stale': bars_through != day}        # the model must say so when the bars are a session behind
+    pkt.update(memory.block(store, day))
+    note = _note(store, 'close', pkt, client, day, now, prices)
+    # Calls are written down only when today's bar is in: a note written on stale bars already knows today's move,
+    # and scoring it on that move would flatter the record.
+    kept = memory.record(store, day, 'close', bars_through if bars_through == day else None, now,
+                         regime=fit.get('current') if fit.get('status') == 'OK' else None)
+    store.set_meta('scorecard', json.dumps(memory.scorecard(store)))       # the dashboard reads this; one place computes it
     return {'regime': fit.get('current'), 'regime_status': fit.get('status'), 'bars_through': bars_through, 'bars': {t: len(b) for t, b in bars.items() if len(b) < 200},
-            'news_items': len(items), 'note': _note(store, 'close', pkt, client, day, now, prices)}
+            'news_items': len(items), 'note': note, 'memory': {'calls_scored': scored, **kept}}
 
 
 def _todays_bar_ready(store, reader_factory, path, config, now):
