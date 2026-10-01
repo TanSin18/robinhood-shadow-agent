@@ -1,0 +1,68 @@
+/* How it works (/guide). Uses the desk tokens: --bg --card --border --text --text-3 --cyan --violet --amber --ok. */
+.gd:not(.gd-js) .gd-demo{display:none}
+.gd{max-width:1180px;display:flex;flex-direction:column;gap:40px}
+.gd h1{font-size:clamp(28px,3.4vw,42px);letter-spacing:-.03em;line-height:1.1;margin:6px 0 14px;text-wrap:balance}
+.gd h2{font-size:22px;letter-spacing:-.02em;margin:0 0 6px}
+.gd h3{font-size:18px;margin:0;letter-spacing:-.01em}
+.gd h4{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin:14px 0 6px;font-weight:600}
+.gd-eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--violet);margin:0}
+.gd-lede{font-size:17px;max-width:70ch;color:var(--text);margin:0}
+.gd-hero{padding:clamp(22px,3vw,36px);border:1px solid var(--border);border-radius:20px;background:var(--card)}
+.gd-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:22px 0 0}
+.gd-facts div{border-top:1px solid var(--border);padding-top:10px;min-width:0}
+.gd-facts dt{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+.gd-facts dd{margin:4px 0 0;font-size:14px}
+.gd-section{display:flex;flex-direction:column;gap:14px;min-width:0}
+.gd-section-head p{margin:0;color:var(--text-3);max-width:75ch}
+.gd-diagram{overflow-x:auto;border:1px solid var(--border);border-radius:16px;background:var(--card);padding:10px}
+.gd-svg{display:block;width:100%;min-width:900px;height:auto}
+.gd-edge{fill:none;stroke:var(--text-3);stroke-width:1.6;opacity:.65}
+.gd-arrowhead{fill:var(--text-3)}
+.gd-edge-label{fill:var(--text-3);font-size:11.5px;text-anchor:middle}
+.gd-node{cursor:pointer;text-decoration:none}
+.gd-node-box{fill:var(--bg);stroke:var(--border);stroke-width:1.5}
+.gd-node-title{fill:var(--text);font-size:13px;font-weight:600;text-anchor:middle}
+.gd-node-sub{fill:var(--text-3);font-size:10.5px;text-anchor:middle}
+.gd-kind-code .gd-node-box{stroke:var(--cyan)}
+.gd-kind-gate .gd-node-box{stroke:var(--amber)}
+.gd-kind-ai .gd-node-box{stroke:var(--violet)}
+.gd-kind-you .gd-node-box{stroke:var(--ok)}
+.gd-node:hover .gd-node-box,.gd-node:focus-visible .gd-node-box{stroke-width:2.5}
+.gd-node.is-current .gd-node-box{stroke-width:3.5;fill:var(--card)}
+.gd-edge.is-current{stroke:var(--violet);opacity:1;stroke-width:2.4;stroke-dasharray:6 5}
+.gd-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0;font-size:13px;color:var(--text-3)}
+.gd-key:before{content:'';display:inline-block;width:12px;height:12px;border-radius:3px;border:2px solid var(--cyan);margin-right:6px;vertical-align:-1px}
+.gd-key.gd-kind-gate:before{border-color:var(--amber)}.gd-key.gd-kind-ai:before{border-color:var(--violet)}.gd-key.gd-kind-you:before{border-color:var(--ok)}
+.gd-demo{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.gd-btn{font:inherit;font-size:14px;min-height:40px;padding:8px 16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+.gd-btn:hover{border-color:var(--violet)}
+.gd-btn-main{background:var(--violet);border-color:var(--violet);color:var(--bg);font-weight:600}
+.gd-btn-quiet[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+.gd-btn:focus-visible,.gd-node:focus-visible{outline:2px solid var(--violet);outline-offset:3px}
+.gd-demo-status{font-size:13px;color:var(--text-3);margin-left:6px}
+.gd-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px}
+.gd-step{border:1px solid var(--border);border-radius:16px;padding:20px 22px;background:var(--card);min-width:0;scroll-margin-top:24px}
+.gd-step.is-current{border-color:var(--violet);box-shadow:0 0 0 2px var(--violet)}
+.gd-step-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.gd-num{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-3)}
+.gd-who{margin-left:auto;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--cyan);color:var(--cyan)}
+.gd-who-ai{border-color:var(--violet);color:var(--violet)}.gd-who-you{border-color:var(--ok);color:var(--ok)}
+.gd-plain{margin:12px 0 0;font-size:15px}
+.gd-checks{margin:0;padding-left:20px;font-size:14px}.gd-checks li{padding:3px 0}
+.gd-example{margin:14px 0 0;padding:10px 14px;border-radius:10px;border:1px dashed var(--border);font-size:14px}
+.gd-example strong{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-bottom:2px}
+.gd-trader{margin-top:12px;border-top:1px solid var(--border);padding-top:8px;font-size:14px}
+.gd-trader summary{cursor:pointer;color:var(--violet);min-height:32px;align-content:center}
+.gd-trader p{margin:6px 0 0;color:var(--text-3);overflow-wrap:anywhere}
+.gd-two{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px}
+.gd-table{overflow-x:auto}
+.gd table{border-collapse:collapse;width:100%;font-size:14px}
+.gd th,.gd td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--border)}
+.gd thead th{font-size:12px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.gd tbody th{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+.gd-challenges{margin:0;padding-left:20px;display:grid;gap:6px;max-width:90ch}
+.gd-glossary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px 24px;margin:0}
+.gd-glossary div{border-top:1px solid var(--border);padding-top:8px;min-width:0}
+.gd-glossary dt{font-weight:600}.gd-glossary dd{margin:2px 0 0;color:var(--text-3);font-size:14px}
+@media(max-width:900px){.gd-two{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:no-preference){.gd-edge.is-current{animation:gd-flow 1s linear infinite}@keyframes gd-flow{to{stroke-dashoffset:-22}}.gd-step{transition:border-color .2s,box-shadow .2s}}

@@ -53,7 +53,12 @@ def make_server(inbox, port=8765, **options):
             if path in dict(ROUTES):
                 self.desk_response = True
                 try:
-                    state = snapshot(inbox.path)
+                    try:
+                        state = snapshot(inbox.path)
+                    except Exception:
+                        if path != '/guide':
+                            raise
+                        state = {'preview': True}   # the walkthrough needs no records
                     body = render(path, state, None, '')
                     # One navigation (sidebar) covers Approvals/History/Results/Controls; no second banner.
                     body = body.replace('<p class="desk-preview" role="status">Preview — view only · No approvals, controls or broker connection</p>', '')

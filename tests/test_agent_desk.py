@@ -8,7 +8,7 @@ from pathlib import Path
 
 def test_seven_routes_are_readable_without_script_and_safety_is_explicit():
     page = shell('Today', '<p>Recorded content</p>', '/', {'paused': True})
-    assert len(ROUTES) == 8
+    assert len(ROUTES) == 9
     for path, label in ROUTES:
         assert f'href="{path}"' in page
         assert label in page
@@ -57,3 +57,15 @@ def test_self_hosted_fonts_and_original_avatars_exist():
 def test_incident_cannot_show_green_safety_status_when_pause_flag_false():
     result = shell('Today', '', state={'paused': False, 'tripwire': [{'incident_id': 'incident'}]})
     assert 'Safety stop or pause active' in result
+
+
+def test_guide_walks_through_every_step_and_needs_no_records():
+    from agents.desk.router import render
+    from agents.desk import guide_content as C
+    html = render('/guide', {'preview': True}, None, '')
+    for step in C.STEPS:
+        assert f'id="step-{step["id"]}"' in html
+    for key, *_ in C.FLOW:
+        assert f'href="#step-{key}"' in html
+    assert '/assets/guide.css' in html and '/assets/guide.js' in html
+    assert ' style=' not in html and '<script>' not in html   # strict CSP: no inline style or script

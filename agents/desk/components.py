@@ -4,14 +4,14 @@ from .team import TEAM
 
 ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & charts'), ('/portfolio', 'Portfolio'),
           ('/money', 'Road to money'), ('/scoreboard', 'Is the AI working?'),
-          ('/controls', 'Controls'), ('/health', 'Tweaks and health'))
+          ('/controls', 'Controls'), ('/health', 'Tweaks and health'), ('/guide', 'How it works'))
 
 
 # One navigation for the whole dashboard. Operational views (Approvals, History,
 # Results, Controls) are served by the unchanged operational page at /legacy.
 NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'),
        ('/room', 'Decision room', ''), ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
-       ('/legacy#controls', 'Controls', 'controls'))
+       ('/legacy#controls', 'Controls', 'controls'), ('/guide', 'How it works', ''))
 
 
 def nav_links(path):
@@ -46,6 +46,7 @@ def shell(title, body, path='/', state=None):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} · Agent Desk</title><link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/agent-desk.css">
 {'<link rel="stylesheet" href="/assets/agent-polish.css"><link rel="stylesheet" href="/assets/agent-scene.css"><link rel="stylesheet" href="/assets/agent-compact.css">' if state.get('preview') else ''}
+{'<link rel="stylesheet" href="/assets/guide.css"><script src="/assets/guide.js" defer></script>' if path == '/guide' else ''}
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
 <header class="desk-header"><a class="desk-brand" href="/">↗ Agent Desk</a><nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
