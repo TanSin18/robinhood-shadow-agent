@@ -1,0 +1,34 @@
+{
+  "source_commit": "bb2fd9e5f5b6f08a5731eefbe887ad393e1dc83b",
+  "installed_base_commit": "d7a9472",
+  "before_source_fingerprint": "add36ea151d3e053235ca471a9b5853045a34943463e7a3a706823457d458b9e",
+  "expected_after_source_fingerprint": null,
+  "active_preregistration_sha256": "39375034732a5ee14b2efb1d13e3c165438140255f1dc95ef25680d136a66075",
+  "files": {
+    "agents/analyst/ask.py": {
+      "before_sha256": null,
+      "after_sha256": "d41903608d5f3256f200d714f13031a9ed5af36d47a0f0171f2070564cfddf5c"
+    },
+    "agents/analyst/commentary.py": {
+      "before_sha256": "6c7e072bf8e4d2e4733546d6aa3861471e5bcd0798bc91aea12fc28523c5af43",
+      "after_sha256": "0216a6c35e6e0f1a62c4e5ebcc438ba67c939d4724c3513c69d49f51912bcc55"
+    },
+    "agents/analyst/hook.py": {
+      "before_sha256": "3d3b5b1aa423cb1675c8980fb35ac2821db65088974dfd6f1cd3a60b6223ac9c",
+      "after_sha256": "6af55d93286713657ddd4e4112120f901bb1fc2fcd9ba9a9b97441658dc7a524"
+    },
+    "agents/v16_policy.py": {
+      "before_sha256": "6a66ce0dc46735c26bffbb99eccc39e01de1a7d4d218e0c37ed433f9c3461a69",
+      "after_sha256": "820c40d4bf55d24a5723b4a1e602718b83359c20ccdab5a08dd4605b7dbbbdff"
+    },
+    "tests/test_analyst.py": {
+      "before_sha256": "426519e9e3cbc681d666b36d30652d7f2a4b6e2c795427a086f99fd07c001e75",
+      "after_sha256": "37c0eb56f6596080a97b026795eacbecb77f3562875a2fe6d7527d2aa291e62e"
+    },
+    "tests/test_v16_policy.py": {
+      "before_sha256": "676ad0d4fe51c2d71d7f086a07b65015aa7c44597f4a35700815b862c70b86ee",
+      "after_sha256": "3983c5b29aeec74b386f03c0ea35e8a796f124e01c8a70a01103e5708ad0659f"
+    }
+  },
+  "root_files": {}
+}
