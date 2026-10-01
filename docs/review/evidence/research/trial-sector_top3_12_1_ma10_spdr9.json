@@ -1,0 +1,200 @@
+{
+ "trial_id": 17,
+ "dataset": {
+  "bars_sha256": "57f6fab28109eafb8f4525f253a07c5cf2453ecc2d27c4d81a638e5cbadbcdcc",
+  "bars_file": "bars.csv",
+  "symbols": {
+   "XLB": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLC": {
+    "first_session": "2018-06-19",
+    "last_session": "2026-09-29",
+    "sessions": 2081
+   },
+   "XLE": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLF": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLI": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLK": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLP": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLRE": {
+    "first_session": "2015-10-08",
+    "last_session": "2026-09-29",
+    "sessions": 2759
+   },
+   "XLU": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLV": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   },
+   "XLY": {
+    "first_session": "2005-01-03",
+    "last_session": "2026-09-29",
+    "sessions": 5468
+   }
+  },
+  "missing_symbols": [],
+  "first_session": "2005-01-03",
+  "last_session": "2026-09-29",
+  "span_years": 21.74,
+  "session_labels_shifted_plus_one_day": true,
+  "adjustment": "split_only_price_return_no_dividends",
+  "label": "CERTIFIED_ETF_HISTORY"
+ },
+ "recipe": {
+  "id": "sector_top3_12_1_ma10_spdr9",
+  "version": 1,
+  "sha256": "3d04a7e36ead4b5eb9e6b116669ab857774d14db86462a6721330b5b07089420"
+ },
+ "capital": 25000.0,
+ "start_session": "2006-01-04",
+ "end_session": "2026-09-29",
+ "strategy": {
+  "cagr_after_all_tax": 0.0507,
+  "cagr_pre_liquidation": 0.0519,
+  "ann_vol": 0.1478,
+  "sharpe_rf0": 0.418,
+  "max_drawdown": 0.2454,
+  "trades": 567,
+  "invested_share_of_days": 0.855,
+  "tax_paid": 13390.37,
+  "cost_paid": 4382.67,
+  "drawdown_latch_on": null,
+  "calendar_returns": {
+   "2006": -0.0105,
+   "2007": 0.0746,
+   "2008": -0.1119,
+   "2009": 0.2008,
+   "2010": -0.0219,
+   "2011": -0.0036,
+   "2012": 0.0385,
+   "2013": 0.3345,
+   "2014": 0.045,
+   "2015": -0.0682,
+   "2016": 0.0152,
+   "2017": 0.1399,
+   "2018": -0.0357,
+   "2019": 0.095,
+   "2020": 0.1322,
+   "2021": 0.0922,
+   "2022": -0.1078,
+   "2023": 0.0611,
+   "2024": 0.1839,
+   "2025": 0.0806,
+   "2026": 0.0474
+  }
+ },
+ "vti": {
+  "cagr_after_all_tax": 0.0831,
+  "cagr_pre_liquidation": 0.0901,
+  "ann_vol": 0.1979,
+  "sharpe_rf0": 0.535,
+  "max_drawdown": 0.5665
+ },
+ "excess_vs_vti": {
+  "annual_excess_log_growth": -0.0355,
+  "ci90": [
+   -0.0807,
+   0.0094
+  ],
+  "share_of_draws_above_zero": 0.087,
+  "block_days": 21,
+  "draws": 2000,
+  "note": "pre-tax daily equity, so tax timing is excluded",
+  "daily_information_ratio": -0.01523,
+  "annualized_information_ratio": -0.242
+ },
+ "walk_forward": {
+  "folds": 249,
+  "share_positive": 0.462,
+  "mean_monthly_excess_log": -0.00295,
+  "worst_month": {
+   "month": "2020-04",
+   "strategy": -0.01354,
+   "vti": 0.13133,
+   "excess_log": -0.13703
+  },
+  "best_month": {
+   "month": "2008-10",
+   "strategy": -0.00102,
+   "vti": -0.17478,
+   "excess_log": 0.19108
+  },
+  "by_year": {
+   "2006": -0.1169,
+   "2007": 0.0373,
+   "2008": 0.365,
+   "2009": -0.0481,
+   "2010": -0.1633,
+   "2011": 0.006,
+   "2012": -0.0929,
+   "2013": 0.0193,
+   "2014": -0.0559,
+   "2015": -0.0545,
+   "2016": -0.0853,
+   "2017": -0.0432,
+   "2018": 0.0363,
+   "2019": -0.1576,
+   "2020": -0.0494,
+   "2021": -0.1273,
+   "2022": 0.1193,
+   "2023": -0.1565,
+   "2024": -0.0314,
+   "2025": -0.0682,
+   "2026": -0.0663
+  }
+ },
+ "deflated_sharpe": {
+  "probability": 0.0415,
+  "benchmark_sr_daily": 0.00864,
+  "trials_counted": 17
+ },
+ "verdict": "NOT_PROVEN",
+ "pass_rule": "certified dataset AND 90% interval of excess > 0 AND deflated Sharpe probability >= 0.95 AND after-tax CAGR above VTI",
+ "promotion": "never automatic: a PASS only allows a shadow (Adventure) run; Official needs a signed amendment",
+ "aim": "Extra money versus the easy standalone alternative: beat VTI buy-and-hold after costs and tax. Scored only on the harness pass rule (certified data, 90% interval of excess over VTI above zero, deflated Sharpe probability >= 0.95 counting every trial in the log, after-tax CAGR above VTI). Beating cash or having a smaller drawdown is reported but is not a pass.",
+ "stopping_rule": "This is trial 17 only. If it is NOT_PROVEN (or INCONCLUSIVE), no more research trials until 2026-10-31. A VTI-only trend-to-cash recipe may be considered in November as a new, hashed trial.",
+ "slots_filled_share": {
+  "0": 0.072,
+  "1": 0.06,
+  "2": 0.096,
+  "3": 0.771
+ },
+ "periods_cagr_pre_tax": {
+  "first_half": {
+   "strategy": 0.0408,
+   "vti": 0.0517
+  },
+  "second_half": {
+   "strategy": 0.0635,
+   "vti": 0.1283
+  }
+ }
+}
