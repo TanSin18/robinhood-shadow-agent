@@ -480,3 +480,5 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 .agent-desk .mem-lessons span{font-size:var(--fs-sm);color:var(--text-3)}
 @media (max-width:900px){.agent-desk .mem-steps{grid-template-columns:1fr 1fr;gap:14px 0}}
 @media (max-width:560px){.agent-desk .mem-steps{grid-template-columns:1fr}.agent-desk .mem-steps li+li{padding-left:0;border-left:0}}
+@media (max-width:700px){.agent-desk .v10-activity li{grid-template-columns:1fr;gap:2px}.agent-desk .v10-limits{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.agent-desk main{overflow-x:clip}.agent-desk .rb-body,.agent-desk .rb-rule,.agent-desk .rb-stage{min-width:0;overflow-wrap:anywhere}}
