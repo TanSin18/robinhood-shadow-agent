@@ -57,7 +57,8 @@ def make_server(inbox, port=8765, **options):
         def do_POST(self):
             self.desk_response = False
             self.desk_forms = False
-            if urlsplit(self.path).path != '/inbox/answer':
+            target = urlsplit(self.path).path
+            if target not in ('/inbox/answer', '/firm/answer'):
                 return super().do_POST()
             import hmac
             from datetime import datetime, timezone
@@ -73,14 +74,26 @@ def make_server(inbox, port=8765, **options):
                 form = parse_qs(self.rfile.read(length).decode(), max_num_fields=4)
                 if any(len(v) != 1 for v in form.values()) or not hmac.compare_digest(form.get('csrf', [''])[0], inbox_csrf):
                     return self.send(403, 'Invalid request token')
-                from agents.cards import LIVE_COPY_ENABLED, CardStore, default_path
                 answer = form.get('answer', [''])[0]
+                if target == '/firm/answer':
+                    from agents.ai_trader import cycle as firm_cycle
+                    from agents.ai_trader.hook import default_path as firm_path
+                    from agents.ai_trader.store import TraderStore
+                    if not firm_path(inbox.path).is_file():
+                        return self.send(404, 'The AI trader is not set up. <a href="/firm">Back</a>')
+                    store = TraderStore(firm_path(inbox.path), inbox.path)
+                    firm_cycle.decide(store, form.get('card', [''])[0], answer, now=datetime.now(timezone.utc),
+                                      cut_fraction=0.5 if answer == 'CUT' else None)
+                    self.send_response(303); self.send_header('Location', '/firm'); self.send_header('Content-Length', '0'); self.end_headers()
+                    return
+                from agents.cards import LIVE_COPY_ENABLED, CardStore, default_path
                 if answer == 'may_copy_live' and not LIVE_COPY_ENABLED:
                     return self.send(409, 'Live copy is off until the account safety check accepts acknowledgements. <a href="/inbox">Back</a>')
                 CardStore(default_path(inbox.path), inbox.path).answer(form.get('card', [''])[0], answer,
                                                                        at=datetime.now(timezone.utc))
             except Exception as error:
-                return self.send(400, f'Answer not recorded ({type(error).__name__}). <a href="/inbox">Back to Inbox</a>')
+                back = '/firm' if target == '/firm/answer' else '/inbox'
+                return self.send(400, f'Answer not recorded ({type(error).__name__}). <a href="{back}">Back</a>')
             self.send_response(303)
             self.send_header('Location', '/inbox')
             self.send_header('Content-Length', '0')
@@ -98,7 +111,7 @@ def make_server(inbox, port=8765, **options):
                 return super().do_GET()
             if path in dict(ROUTES):
                 self.desk_response = True
-                self.desk_forms = path == '/inbox'
+                self.desk_forms = path in ('/inbox', '/firm')
                 try:
                     try:
                         state = snapshot(inbox.path)
@@ -106,7 +119,7 @@ def make_server(inbox, port=8765, **options):
                         if path != '/guide':
                             raise
                         state = {'preview': True}   # the walkthrough needs no records
-                    if path == '/inbox':
+                    if path in ('/inbox', '/firm'):
                         state = {**state, 'inbox_csrf': inbox_csrf}
                     body = render(path, state, None, '')
                     # One navigation (sidebar) covers Approvals/History/Results/Controls; no second banner.

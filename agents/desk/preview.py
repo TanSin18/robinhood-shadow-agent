@@ -148,7 +148,12 @@ def snapshot(path,*,now=None):
         card_inbox=read_view(default_path(path))
     except Exception as error:
         card_inbox={'cards':[],'journal':[],'acks':[],'error':type(error).__name__}
-    return {'preview':True,'card_inbox':card_inbox,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
+    try:
+        from .firm_page import load as load_firm
+        firm=load_firm(path)
+    except Exception as error:
+        firm={'exists':False,'error':type(error).__name__}
+    return {'preview':True,'card_inbox':card_inbox,'firm':firm,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
         'decision_room':rooms,'paused':(Path(path).parent/'STOP_TRADING').exists(),
         'accounts':[], 'reports':[], 'tripwire':[],
         'handoffs':[public(json.loads(r['payload_json'])) for r in handoff_rows]}

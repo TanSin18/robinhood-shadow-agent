@@ -4,12 +4,12 @@ from .team import TEAM
 
 ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & charts'), ('/portfolio', 'Portfolio'),
           ('/money', 'Road to money'), ('/scoreboard', 'Is the AI working?'),
-          ('/controls', 'Controls'), ('/health', 'Tweaks and health'), ('/guide', 'How it works'), ('/inbox', 'Inbox'))
+          ('/controls', 'Controls'), ('/health', 'Tweaks and health'), ('/guide', 'How it works'), ('/inbox', 'Inbox'), ('/firm', 'AI trader'))
 
 
 # One navigation for the whole dashboard. Operational views (Approvals, History,
 # Results, Controls) are served by the unchanged operational page at /legacy.
-NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/inbox', 'Inbox', ''),
+NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/inbox', 'Inbox', ''), ('/firm', 'AI trader', ''),
        ('/room', 'Decision room', ''), ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
        ('/legacy#controls', 'Controls', 'controls'), ('/guide', 'How it works', ''))
 

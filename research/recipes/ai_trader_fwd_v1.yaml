@@ -1,0 +1,96 @@
+# Forward experiment (pre-registered 2026-09-30, before any AI-trader decision exists).
+# The harness and the AI-trader runtime hash this file's bytes. Any edit, including any prompt
+# change, model change, universe change or rule change, is a new trial (ai_trader_fwd_v2 ...).
+aim: >-
+  Find out whether a team of AI models, picking trades like a discretionary trader inside hard
+  code-owned risk limits, makes money relative to buy-and-hold VTI after spreads, the AI bill and
+  an estimated short-term tax haircut, and whether it beats a matched random control. Forward paper
+  only: language models cannot be backtested honestly because they were trained on the outcomes.
+stopping_rule: >-
+  No rule or prompt changes during the run. Evaluate at 12 months (2027-10-05) or 200 closed
+  trades in book A, whichever comes first. Abort early only on an operational fault or if the
+  operator retires the book; an abort is reported, never a pass.
+recipe:
+  id: ai_trader_fwd_v1
+  version: 1
+  kind: forward_paper_experiment
+  status: research_only_never_official
+  engine: ai_trader_forward
+  start_not_before: '2026-10-05'
+  start_conditions:
+    - first official v1.5/v1.6 scheduled run on 2026-10-01 completed and recorded
+    - operator switches the book from WATCH_ONLY to PAPER (recorded with a timestamp)
+books:
+  capital_usd_each: '25000.00'
+  A: {name: ai_alone, picks: ai_team, fills: immediate_after_critic_and_risk}
+  B: {name: ai_plus_operator, picks: ai_team, fills: only_on_operator_yes, operator_may: [skip, cut_size], operator_may_not: [add_size, add_name], unanswered_by_deadline: skip}
+  C: {name: matched_random, picks: seeded_random_from_same_universe, matching: same_entry_day_same_notional_fraction_same_exit_day_as_its_A_trade, seed: 'ai_trader_fwd_v1:2026-09-30'}
+  official_line: scoreboard_reference_only_never_an_arm
+universe:
+  tradable: [AAPL, AMZN, GLD, GOOGL, META, MSFT, NVDA, QQQ, SOXX, SPY, TLT, VTI, XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY]
+  sp500_shortlist: watch_cards_only_in_v1
+  instruments: long_shares_and_fractional_shares_only
+  options: off_until_50_closed_stock_trades_then_a_separate_hashed_trial
+seats:
+  scout: {model: gpt-5.4-nano-2026-03-17, does: read the tool packet and name zero to three candidates from the tradable list with sources, may_not: [invent names off the list, use remembered history as research]}
+  pm: {model: gpt-5.4-mini-2026-03-17, does: turn one candidate into a ticket, may_not: [set size, retry after a critic fail]}
+  critic: {model: gpt-5.4-2026-03-05, does: attack each ticket against the policy and the tool numbers, may_not: [approve on conviction]}
+  risk: {model: none_code_only, does: size, caps, stops, exits}
+  clerk: {model: none_code_only, does: journal, similar-trade retrieval, post-mortem draft}
+  operator: {does: yes / no / skip / cut on book B, may_not: [add size, add a name]}
+router:
+  order: [code_prechecks, scout, pm, code_ticket_checks, critic]
+  scout_says_nothing: stop_at_scout
+  critic_runs_only_on_tickets_that_pass_code_checks: true
+budget:
+  daily_cap_usd: '2.00'
+  unused_rolls_over: false
+  reserve_before_each_call: registered_token_envelope_bound
+  exhausted: no_new_tickets_today_management_defaults_apply
+  envelopes:
+    scout: {max_input_tokens: 16000, max_output_tokens: 3000, reasoning: low}
+    pm: {max_input_tokens: 8000, max_output_tokens: 2500, reasoning: medium}
+    critic: {max_input_tokens: 10000, max_output_tokens: 2500, reasoning: medium}
+    manage: {max_input_tokens: 8000, max_output_tokens: 2000, reasoning: low}
+tools_for_seats:
+  delivery: precomputed_by_code_and_embedded_in_the_packet_no_live_tool_calls
+  list: [get_quote, get_features, get_screen_row, get_open_risk, get_journal_similar]
+  news: none_in_v1
+ticket_fields:
+  required: [ticker, setup_tag, thesis, invalidation_price, time_stop_sessions, false_tomorrow_if, sources, cited_numbers]
+  thesis_max_sentences: 3
+  time_stop_sessions_max: 20
+  invalidation_must_be_below_entry_reference: true
+  cited_numbers_must_match_tools: true
+  sources_must_be_tool_ids: true
+critic_fail_codes: [NOT_IN_UNIVERSE, NO_INVALIDATION, NUMBERS_NOT_IN_TOOLS, WEEKLY_LOSS_HIT, SIZE_OVER_CAP, ALREADY_HELD, THESIS_UNSUPPORTED, POLICY_VIOLATION]
+retry_after_critic_fail: forbidden_same_day_same_ticker
+risk:
+  max_fraction_per_name: '0.05'
+  max_names: 5
+  entries_per_day_max: 2
+  daily_book_loss_stop: '0.03'
+  weekly_book_loss_stop: '0.06'
+  stops_block: new_entries_only_exits_always_allowed
+  pyramiding: forbidden
+  fills: {buy: ask_times_1.001, sell: bid, limit_band: '0.005'}
+  settlement: T_plus_1
+exits_owned_by_code:
+  - invalidation_price_from_the_ticket (checked at the 10:00 run and the 15:50 check; gaps fill at the next check)
+  - time_stop_sessions_from_the_ticket
+  - v1.6 protective rule at 15:50 (8% below average cost, or bid at or below the 200-session average)
+  - two consecutive sessions without a management card
+management:
+  daily_card_per_holding: [hold, trim, exit]
+  silent_hold: forbidden
+  missing_card: flag_UNREVIEWED_then_exit_after_two_consecutive_sessions
+  adding_size: forbidden
+scoring:
+  lines: [VTI_buy_and_hold, Official_paper_lane_A, matched_random_C, cash]
+  after: [spread_paid_in_fills, AI_bill_charged_to_A_and_B, estimated_35pct_short_term_tax_on_positive_gains]
+  pass_rule: >-
+    Book A's 90% block-bootstrap interval of daily excess log growth over VTI lies above zero after
+    all costs, with at least 200 closed trades or 252 sessions. Reported alongside A vs C; if A
+    does not beat C, the result is labelled LUCK_OR_BETA even if it beats VTI.
+  unlocks_live_money: false
+live_copy: off_until_tripwire_reads_acknowledgements_and_the_1200_cap_is_designed
