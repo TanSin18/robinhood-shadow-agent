@@ -1,5 +1,8 @@
 # Robinhood Shadow Agent
 
+> **New here? Start with [docs/SYSTEM_WALKTHROUGH.md](docs/SYSTEM_WALKTHROUGH.md)** — how the whole system works, step by step, for beginners and traders.
+
+
 Private, paper-only investment-research project. **Real orders are blocked.**
 
 Current deployment and shared reviewer channel: [CODEX_STATUS](docs/review/CODEX_STATUS.md).
