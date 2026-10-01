@@ -59,7 +59,9 @@ class BudgetedModels:
         except Exception as error:   # uncertain call: keep the full reservation charged
             with self.store.connect() as db:
                 db.execute("UPDATE budget SET status='UNCERTAIN_KEPT_RESERVATION', actual=reserved WHERE id=?", (row_id,))
-            raise ModelError(type(error).__name__) from None
+            # Keep our own reason (e.g. INPUT_TOKEN_CAP); otherwise only the exception class, never its text.
+            reason = str(error) if isinstance(error, ModelError) and str(error) else type(error).__name__
+            raise ModelError(reason) from None
         if not isinstance(tin, int) or not isinstance(tout, int) or tin > envelope['max_input_tokens'] or tout > envelope['max_output_tokens']:
             with self.store.connect() as db:
                 db.execute("UPDATE budget SET status='ENVELOPE_VIOLATION', actual=reserved WHERE id=?", (row_id,))

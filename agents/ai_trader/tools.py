@@ -88,6 +88,14 @@ def packet(snapshot, tickers, book, marks, spec, store, now):
     return tools
 
 
+def subset(tools, tickers, context=('VTI',)):
+    """The part of a packet a single-name seat needs: those names, a benchmark, and the book's risk.
+
+    Citations are still checked against the full packet, so nothing a seat may cite is lost."""
+    keep = set(tickers) | set(context)
+    return {k: v for k, v in tools.items() if k == 'risk:book' or k.split(':', 1)[-1] in keep}
+
+
 def number_in_tools(tools, tool_id, field, value, tolerance=0.005):
     """A cited number must exist in that tool output and match (relative 0.5% or 0.01 absolute)."""
     out = tools.get(tool_id)

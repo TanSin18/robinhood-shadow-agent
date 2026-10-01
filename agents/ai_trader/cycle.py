@@ -149,6 +149,11 @@ def code_exits(store, spec, snapshot, now, *, protective=False):
 
 
 # ---------------------------------------------------------------- morning run
+def _seat_error(store, seat, error, now):
+    """Journal why a seat stopped (reason code or exception class only; never response text)."""
+    store.journal('seat_error', {'seat': seat, 'error': type(error).__name__, 'reason': str(error)[:80]}, now)
+
+
 def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, started=None):
     _prepare(store, spec, snapshot)
     started = started if started is not None else _time.monotonic()
@@ -184,6 +189,7 @@ def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, s
                                seats.SCHEMAS['manage'])['cards']
         except (BudgetExhausted, ModelError) as error:
             cards, report['stopped'] = [], f'MANAGE_{type(error).__name__}'
+            _seat_error(store, 'manage', error, now)
         by_ticker = {c['ticker']: c for c in cards if c['ticker'] in held}
         for name in ('A', 'B'):
             book = store.book(name)
@@ -231,6 +237,7 @@ def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, s
         scout = models.run('scout', seats.build('scout', spec=spec, tools=pack, extra={}), seats.SCHEMAS['scout'])
     except (BudgetExhausted, ModelError) as error:
         report['stopped'] = f'SCOUT_{type(error).__name__}'
+        _seat_error(store, 'scout', error, now)
         return _close_day(store, spec, snapshot, now, report)
     seen, candidates = set(), []
     for cand in scout['candidates']:
@@ -249,9 +256,11 @@ def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, s
             report['stopped'] = 'PM_TIME_BUDGET'
             break
         try:
-            ticket = models.run('pm', seats.build('pm', spec=spec, tools=pack, extra={'candidate': cand}), seats.SCHEMAS['pm'])
+            ticket = models.run('pm', seats.build('pm', spec=spec, tools=tools.subset(pack, [cand['ticker']]),
+                                                  extra={'candidate': cand}), seats.SCHEMAS['pm'])
         except (BudgetExhausted, ModelError) as error:
             report['stopped'] = f'PM_{type(error).__name__}'
+            _seat_error(store, 'pm', error, now)
             break
         ticket['ticker'] = cand['ticker']
         fresh_quote = tools.get_quote(snapshot, cand['ticker'], now)
@@ -266,10 +275,11 @@ def morning(store, spec, snapshot, client, now, *, prices=None, sessions=None, s
         try:
             if not time_left():
                 raise BudgetExhausted('time')
-            verdicts = models.run('critic', seats.build('critic', spec=spec, tools=pack, extra={
+            verdicts = models.run('critic', seats.build('critic', spec=spec, tools=tools.subset(pack, [tk['ticker'] for _, tk in tickets]), extra={
                 'tickets': [{'ticket_id': tid, **tk} for tid, tk in tickets]}), seats.SCHEMAS['critic'])['tickets']
         except (BudgetExhausted, ModelError) as error:
             verdicts, report['stopped'] = [], f'CRITIC_{type(error).__name__}'
+            _seat_error(store, 'critic', error, now)
         by_id = {v['ticket_id']: v for v in verdicts}
         for tid, tk in tickets:
             v = by_id.get(tid) or {'verdict': 'fail', 'fail_codes': ['POLICY_VIOLATION'], 'reason': 'no critic verdict'}

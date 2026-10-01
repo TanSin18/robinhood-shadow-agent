@@ -444,3 +444,38 @@ def test_watch_only_days_are_not_scored(tmp_path):
     morning(s, FakeClient())
     with s.connect() as db:
         assert db.execute('SELECT count(*) FROM book_values').fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------- Oct 1 watch-only finding
+def test_pm_and_critic_see_only_their_names_plus_benchmark_and_risk(tmp_path):
+    s = store_at(tmp_path, 'WATCH_ONLY')
+    seen = {}
+
+    class Spy(FakeClient):
+        def __call__(self, model, prompt, schema, envelope):
+            seat = next(k for k, p in seats.PROMPTS.items() if prompt.startswith(p))
+            seen[seat] = set(json.loads(prompt.split('PACKET (JSON):\n', 1)[1])['tools'])
+            return super().__call__(model, prompt, schema, envelope)
+
+    morning(s, Spy())
+    names = lambda ids: {i.split(':', 1)[1] for i in ids if i != 'risk:book'}
+    assert names(seen['pm']) <= {'SOXX', 'VTI'} and 'risk:book' in seen['pm']
+    assert names(seen['critic']) <= {'SOXX', 'VTI'}
+    assert len(names(seen['scout'])) == len(SPEC.universe)       # the Scout still sees the whole list
+
+
+def test_seat_failure_reason_is_journaled(tmp_path):
+    from agents.ai_trader.model import ModelError
+    s = store_at(tmp_path, 'WATCH_ONLY')
+
+    class CapPM(FakeClient):
+        def __call__(self, model, prompt, schema, envelope):
+            if prompt.startswith(seats.PROMPTS['pm']):
+                raise ModelError('INPUT_TOKEN_CAP')
+            return super().__call__(model, prompt, schema, envelope)
+
+    r = morning(s, CapPM())
+    assert r['stopped'] == 'PM_ModelError'
+    with s.connect() as db:
+        rows = [json.loads(p) for k, p in db.execute("SELECT kind, payload_json FROM journal") if k == 'seat_error']
+    assert rows == [{'seat': 'pm', 'error': 'ModelError', 'reason': 'INPUT_TOKEN_CAP'}]
