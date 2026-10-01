@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 from agents.inbox_web import make_server as operational_server
 from .preview import snapshot, ASSETS
 from .router import render
-from .components import ROUTES, nav_links
+from .components import ROUTES, nav_links, brand
 
 
 def make_server(inbox, port=8765, **options):
@@ -48,7 +48,7 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('<body ', '<body class="legacy-skin" ', 1)
                 import re
                 content = re.sub(r'<a class="brand" href="/legacy"[^>]*>.*?</a>\s*<p class="rail-caption">[^<]*</p>',
-                                 '<a class="brand desk-brand bf-brand" href="/"><img src="/assets/botfolio-logo.svg" width="30" height="30" alt="">Botfolio</a>', content, count=1, flags=re.S)
+                                 brand().replace('class="desk-brand', 'class="brand desk-brand', 1), content, count=1, flags=re.S)
                 content = re.sub(r'<nav class="desktop-nav"[^>]*>.*?</nav>',
                                  '<nav class="desktop-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
                 content = re.sub(r'<nav class="phone-nav"[^>]*>.*?</nav>(?=</body>)',

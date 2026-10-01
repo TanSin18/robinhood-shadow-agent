@@ -1,6 +1,6 @@
 /* Agent Desk v10: Portfolio (paper + real tabs), Rule book and Architecture.
    Uses the desk tokens (--bg --card --border --text --text-3 --cyan --violet --amber --green --red). */
-:root{--v10-up:#3fd08f;--v10-down:#ff7a5c;--v10-flat:#b8b5af;--v10-s0:#5accd8;--v10-s1:#ffcd29;--v10-s2:#f5834a;--v10-s3:#ff8fb3;--v10-s4:#7fe0c4;--v10-s5:#c9d36b;--v10-cash:#716f6a}
+:root{--v10-up:#3fd08f;--v10-down:#ff7a5c;--v10-flat:#b8b5af;--v10-s0:#5accd8;--v10-s1:#fb3751;--v10-s2:#f5b64a;--v10-s3:#ff8fb3;--v10-s4:#7fe0c4;--v10-s5:#c9d36b;--v10-cash:#716f6a}
 .v10-js [data-tabpanel]:not([data-active]),.v10-js [data-acct]:not([data-active]),.v10-js [data-range-panel]:not([data-active]){display:none}
 html:not(.v10-js) .v10-range-bar{display:none}
 .v10-note{font-size:13px;color:var(--text-3);margin:8px 0 0;max-width:90ch;line-height:1.55}

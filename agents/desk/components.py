@@ -16,6 +16,23 @@ NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions'
        ('/architecture', 'Architecture', ''))
 
 
+def brand(size=34):
+    """The Botfolio mark, inline (no image request, so it also shows on pages whose security policy blocks images)."""
+    from functools import lru_cache
+    from pathlib import Path
+    global _LOGO
+    try:
+        _LOGO
+    except NameError:
+        try:
+            raw = (Path(__file__).resolve().parents[1] / 'static' / 'botfolio-logo.svg').read_text()
+            _LOGO = raw[raw.index('>') + 1:raw.rindex('</svg>')]
+        except (OSError, ValueError):
+            _LOGO = ''
+    mark = (f'<svg class="bf-mark" viewBox="0 0 64 64" width="{size}" height="{size}" aria-hidden="true">{_LOGO}</svg>' if _LOGO else '')
+    return f'<a class="desk-brand bf-brand" href="/">{mark}Botfolio</a>'
+
+
 def nav_links(path):
     return ''.join(f'<a href="{href}"' + (f' data-nav="{key}"' if key else '') + (' aria-current="page"' if href == path else '')
                    + f'>{esc(label)}</a>' for href, label, key in NAV)
@@ -51,7 +68,7 @@ def shell(title, body, path='/', state=None):
 {'<link rel="stylesheet" href="/assets/guide.css"><script src="/assets/guide.js" defer></script>' if path == '/guide' else ''}
 <link rel="stylesheet" href="/assets/agent-v10.css"><link rel="stylesheet" href="/assets/botfolio-theme.css"><script src="/assets/agent-v10.js" defer></script>
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
-<header class="desk-header"><a class="desk-brand bf-brand" href="/"><img src="/assets/botfolio-logo.svg" width="34" height="34" alt="">Botfolio</a><nav aria-label="Sections">{links}</nav>
+<header class="desk-header">{brand()}<nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
 <main id="main" tabindex="-1">{body}</main><footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
 

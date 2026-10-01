@@ -1,5 +1,5 @@
 /* Botfolio theme. Loaded last on every page (desk pages and the operational Approvals page).
-   One type system, one page rhythm, one palette: warm charcoal with a single honey-yellow accent,
+   One type system, one page rhythm, one palette: near-black with a single ruby-red accent,
    a quiet teal for code paths, green/coral only for gains and losses. */
 @font-face{font-family:'Sora';src:url('/assets/fonts/Sora-var.woff2') format('woff2');font-weight:100 800;font-display:swap}
 @font-face{font-family:'Manrope';src:url('/assets/fonts/Manrope-var.woff2') format('woff2');font-weight:200 800;font-display:swap}
@@ -7,26 +7,26 @@
 @font-face{font-family:'Fredoka';src:url('/assets/fonts/Fredoka-600.woff2') format('woff2');font-weight:600;font-display:swap}
 
 .agent-desk,.legacy-skin{
-  --bf-yellow:#ffc629;--bf-yellow-soft:#ffe08a;--bf-yellow-dim:rgba(255,198,41,.10);--bf-ink:#0d0d0b;
+  --bf-accent:#ff3350;--bf-accent-soft:#ff9aa6;--bf-accent-dim:rgba(255,51,80,.10);--bf-ink:#ffffff;
   --bf-display:'Sora','Manrope',ui-sans-serif,system-ui,sans-serif;
   --bf-text:'Manrope',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
   --bf-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
 }
 .agent-desk.team-preview,.agent-desk{
-  --bg:#0d0d0b;--card:#151513;--card-2:#1a1a17;--border:#26251f;--border-soft:#1e1d19;
-  --text:#f4f2ec;--text-2:#d8d5cc;--text-3:#a39f93;--text-4:#8a877c;
-  --violet:var(--bf-yellow);--cyan:#58c7cf;--amber:#ff8f4d;--green:#3fd08f;--red:#ff7a5c;--ok:#3fd08f;
+  --bg:#0c0c0d;--card:#141415;--card-2:#19191b;--border:#262629;--border-soft:#1d1d20;
+  --text:#f5f4f2;--text-2:#d9d7d3;--text-3:#a3a09b;--text-4:#8a8782;
+  --violet:var(--bf-accent);--cyan:#58c7cf;--amber:#f5b54a;--green:#3fd08f;--red:#ff8a5c;--ok:#3fd08f;
 }
 
 /* ---- type: one system everywhere ---- */
 body.agent-desk,body.legacy-skin{font-family:var(--bf-text);font-feature-settings:'tnum' 0;-webkit-font-smoothing:antialiased;
-  background:radial-gradient(1100px 520px at 88% -8%,rgba(255,198,41,.055),transparent 62%),var(--bg,#0d0d0b);background-attachment:fixed}
+  background:radial-gradient(1100px 520px at 88% -8%,rgba(255,51,80,.055),transparent 62%),var(--bg,#0c0c0d);background-attachment:fixed}
 .agent-desk h1,.agent-desk h2,.agent-desk h3,.legacy-skin h1,.legacy-skin h2,.legacy-skin h3{font-family:var(--bf-display);font-weight:600;letter-spacing:-.018em}
 .agent-desk .num,.agent-desk td.num,.agent-desk code,.agent-desk .code,.agent-desk time,.agent-desk .rb-src,.agent-desk .v10-chart text,
 .legacy-skin code,.legacy-skin .num{font-family:var(--bf-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .agent-desk .v10-big b{font-family:var(--bf-display);font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .agent-desk .v10-eyebrow,.agent-desk .gd-eyebrow,.agent-desk h4{font-family:var(--bf-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
-.agent-desk .v10-eyebrow,.agent-desk .gd-eyebrow{color:var(--bf-yellow)}
+.agent-desk .v10-eyebrow,.agent-desk .gd-eyebrow{color:var(--bf-accent)}
 
 /* ---- one page rhythm: same width, same title size, same intro size on every tab ---- */
 .agent-desk.team-preview main#main{max-width:1320px}
@@ -42,36 +42,36 @@ body.agent-desk,body.legacy-skin{font-family:var(--bf-text);font-feature-setting
 
 /* ---- brand ---- */
 .bf-brand{display:inline-flex;align-items:center;gap:10px;font-family:'Fredoka',var(--bf-display);font-weight:600;font-size:21px;letter-spacing:.005em;
-  color:var(--bf-yellow)!important;text-decoration:none}
-.bf-brand img{flex:none;filter:drop-shadow(0 2px 8px rgba(255,198,41,.28))}
+  color:var(--bf-accent)!important;text-decoration:none}
+.bf-brand img{flex:none;filter:drop-shadow(0 2px 8px rgba(255,51,80,.28))}
 
 /* ---- navigation ---- */
-.agent-desk .desk-header{border-color:var(--border);background:linear-gradient(180deg,rgba(255,198,41,.03),transparent 140px)}
+.agent-desk .desk-header{border-color:var(--border);background:linear-gradient(180deg,rgba(255,51,80,.03),transparent 140px)}
 .agent-desk .desk-header nav a{font-family:var(--bf-text);font-weight:600;color:var(--text-3);border:1px solid transparent;transition:color .15s,background .15s}
 .agent-desk .desk-header nav a:hover{color:var(--text);background:rgba(255,255,255,.035)}
-.agent-desk .desk-header nav a[aria-current=page]{color:var(--bf-yellow);background:var(--bf-yellow-dim);border-color:rgba(255,198,41,.22);
-  box-shadow:inset 2px 0 0 var(--bf-yellow)}
+.agent-desk .desk-header nav a[aria-current=page]{color:var(--bf-accent);background:var(--bf-accent-dim);border-color:rgba(255,51,80,.22);
+  box-shadow:inset 2px 0 0 var(--bf-accent)}
 .agent-desk .desk-safety{border-color:var(--border);color:var(--text-3);font-family:var(--bf-mono);font-size:10.5px!important;letter-spacing:.02em}
 
 /* ---- surfaces and accents ---- */
 .agent-desk .v10-panel,.agent-desk .v10-graph,.agent-desk .room-card,.agent-desk .rb-rule,.agent-desk .rb-stage,.agent-desk .ar-card,.agent-desk .ar-seat,
 .agent-desk .ar-diagram,.agent-desk .rb-day,.agent-desk .rb-limit{background:linear-gradient(180deg,rgba(255,255,255,.012),transparent),var(--card);border-color:var(--border)}
-.agent-desk a{color:var(--bf-yellow-soft)}
+.agent-desk a{color:var(--bf-accent-soft)}
 .agent-desk .desk-header nav a,.agent-desk .v10-tabs a,.agent-desk .v10-acct-chip,.agent-desk .rb-toc a{color:inherit}
-.agent-desk ::selection{background:rgba(255,198,41,.32)}
-.agent-desk :focus-visible{outline:2px solid var(--bf-yellow);outline-offset:2px}
-.agent-desk .capital-note{border-color:rgba(255,198,41,.35);background:rgba(255,198,41,.04)}
-.agent-desk .v10-tabs a[aria-selected=true]{box-shadow:inset 0 -2px 0 var(--bf-yellow)}
-.agent-desk .v10-acct-chip[aria-current=true]{border-color:var(--bf-yellow);box-shadow:0 0 0 1px var(--bf-yellow) inset}
-.agent-desk .v10-range[aria-pressed=true]{background:var(--bf-yellow);color:var(--bf-ink)}
-.agent-desk .rb-toc a:hover{border-color:var(--bf-yellow)}
-.agent-desk .rb-btn:hover{border-color:var(--bf-yellow)}
-.agent-desk .gd-btn-main{background:var(--bf-yellow);border-color:var(--bf-yellow);color:var(--bf-ink)}
-.agent-desk .v10-chip{color:var(--bf-yellow)}
-.agent-desk .rb-stage>summary:before,.agent-desk .ar-q li:before{border-color:var(--bf-yellow);color:var(--bf-yellow)}
+.agent-desk ::selection{background:rgba(255,51,80,.32)}
+.agent-desk :focus-visible{outline:2px solid var(--bf-accent);outline-offset:2px}
+.agent-desk .capital-note{border-color:rgba(255,51,80,.35);background:rgba(255,51,80,.04)}
+.agent-desk .v10-tabs a[aria-selected=true]{box-shadow:inset 0 -2px 0 var(--bf-accent)}
+.agent-desk .v10-acct-chip[aria-current=true]{border-color:var(--bf-accent);box-shadow:0 0 0 1px var(--bf-accent) inset}
+.agent-desk .v10-range[aria-pressed=true]{background:var(--bf-accent);color:var(--bf-ink)}
+.agent-desk .rb-toc a:hover{border-color:var(--bf-accent)}
+.agent-desk .rb-btn:hover{border-color:var(--bf-accent)}
+.agent-desk .gd-btn-main{background:var(--bf-accent);border-color:var(--bf-accent);color:var(--bf-ink)}
+.agent-desk .v10-chip{color:var(--bf-accent)}
+.agent-desk .rb-stage>summary:before,.agent-desk .ar-q li:before{border-color:var(--bf-accent);color:var(--bf-accent)}
 .agent-desk .an-seat header img,.agent-desk .desk-identity img{box-shadow:0 0 0 1px var(--border)}
 .agent-desk table.mini thead th{font-family:var(--bf-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
-.agent-desk tr.an-held td{background:rgba(255,198,41,.06)}
+.agent-desk tr.an-held td{background:rgba(255,51,80,.06)}
 
 /* ---- operational (Approvals / History / Controls) page: same type and accent ---- */
 body.legacy-skin{color:#f4f2ec}
@@ -88,6 +88,10 @@ body.legacy-skin{color:#f4f2ec}
 .legacy-skin .bf-brand img{width:34px;height:34px}
 .legacy-skin .desktop-nav{display:flex;flex-direction:column;gap:2px}
 .legacy-skin .desktop-nav a{font-family:var(--bf-text);font-size:13px;font-weight:600;padding:7px 10px;border-radius:8px;border:1px solid transparent;color:#a39f93}
-.legacy-skin .desktop-nav a[aria-current="page"],.legacy-skin .desktop-nav a.active{color:var(--bf-yellow);background:var(--bf-yellow-dim);border-color:rgba(255,198,41,.22);box-shadow:inset 2px 0 0 var(--bf-yellow)}
+.legacy-skin .desktop-nav a[aria-current="page"],.legacy-skin .desktop-nav a.active{color:var(--bf-accent);background:var(--bf-accent-dim);border-color:rgba(255,51,80,.22);box-shadow:inset 2px 0 0 var(--bf-accent)}
 .legacy-skin main{max-width:1320px}
 .legacy-skin .desk-back{display:none}
+.bf-brand .bf-mark{flex:none;filter:drop-shadow(0 2px 8px rgba(255,51,80,.3))}
+.legacy-skin .bf-brand .bf-mark{width:34px;height:34px}
+.agent-desk{--v10-down:#ff8f5a}
+.agent-desk .gd-btn-main,.agent-desk .v10-range[aria-pressed=true]{color:#fff}
