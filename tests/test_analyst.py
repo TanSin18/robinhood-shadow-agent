@@ -156,12 +156,22 @@ class _Config:
 class _Client:
     def __init__(self):
         self.prompts = []
+        self.seats = []
 
     def __call__(self, model, prompt, schema, envelope):
+        from agents.analyst import team
+        seat = next(k for k, p in team.PROMPTS.items() if prompt.startswith(p))
         self.prompts.append(prompt)
-        assert model == commentary.MODEL and envelope == commentary.ENVELOPE
-        return ({'headline': 'Chips lead', 'market_read': 'Quiet tape.', 'decision_read': 'The desk rule bought SOXX.',
-                 'regime_read': '', 'auction_read': '', 'news': [], 'watch': ['SOXX trend'], 'cited_numbers': []}, 900, 300)
+        self.seats.append(seat)
+        assert model == team.MODELS[seat] and envelope == team.ENVELOPES[seat]
+        out = {'pip': {'base_rate': 'Trend rules like this lagged VTI after tax.', 'setups': [], 'cited_numbers': []},
+               'biscuit': {'summary': 'No relevant news.', 'news': [], 'cited_numbers': []},
+               'maple': {'portfolio_read': 'Mostly cash.', 'points': [], 'cited_numbers': []},
+               'pickle': {'verdicts': [{'target': 'official_decision', 'verdict': 'sound', 'reasons': ['rule followed'], 'fail_codes': []}],
+                          'cited_numbers': []},
+               'bubbles': {'headline': 'Chips lead', 'market_read': 'Quiet tape.', 'decision_read': 'The desk rule bought SOXX.',
+                           'regime_read': '', 'auction_read': '', 'news': [], 'watch': ['SOXX trend'], 'cited_numbers': []}}[seat]
+        return out, 900, 300
 
 
 class _Reader:
@@ -324,3 +334,36 @@ def test_exit_guard_trails_locks_profit_and_flags_give_back():
     assert g2['verdict'] == 'WOULD_SELL' and any('give-back' in t or 'chandelier' in t or 'lock' in t for t in g2['triggers'])
     loss = guard.exit_guard({**h, 'average_cost': 200.0}, bars)
     assert '8%' in loss['guard_stop_rule'] or loss['verdict'] == 'WOULD_SELL'
+
+
+def test_the_whole_team_writes_in_order_and_pickle_sees_the_others(tmp_path):
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    store = AnalystStore(path, official)
+    client = _Client()
+    out = hook.tick(_Inbox(official), _Config(), NOW_AM, path=path, client_factory=lambda: client, opener=_no_net)
+    assert client.seats == ['pip', 'biscuit', 'maple', 'pickle', 'bubbles']
+    assert set(out['morning']['note']['team']) == {'pip', 'biscuit', 'maple', 'pickle', 'bubbles'}
+    pickle_prompt = client.prompts[3]
+    assert '"TEAM_NOTES"' in pickle_prompt and 'Trend rules like this lagged VTI' in pickle_prompt
+    assert '"TEAM_NOTES"' not in client.prompts[0]
+    with store.connect() as db:
+        kinds = sorted(k for (k,) in db.execute('SELECT kind FROM notes'))
+    assert kinds == ['morning', 'morning:biscuit', 'morning:maple', 'morning:pickle', 'morning:pip']
+
+
+def test_a_failing_seat_does_not_stop_the_team(tmp_path):
+    from agents.ai_trader.model import ModelError
+    official = _official(tmp_path)
+    path = tmp_path / 'diag' / 'analyst' / 'analyst.db'
+    AnalystStore(path, official)
+    base = _Client()
+
+    def flaky(model, prompt, schema, envelope):
+        from agents.analyst import team
+        if prompt.startswith(team.PROMPTS['maple']):
+            raise ModelError('OUTPUT_TRUNCATED')
+        return base(model, prompt, schema, envelope)
+    out = hook.tick(_Inbox(official), _Config(), NOW_AM, path=path, client_factory=lambda: flaky, opener=_no_net)
+    team = out['morning']['note']['team']
+    assert team['maple']['status'] == 'ModelError' and team['bubbles']['status'] == 'WRITTEN'

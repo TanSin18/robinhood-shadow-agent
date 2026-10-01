@@ -110,7 +110,27 @@ def _values(pkt):
     return vals
 
 
-def check(out, pkt):
+SKIP_KEYS = {'cited_numbers', 'headline_ids', 'ticker', 'target', 'verdict', 'fail_codes', 'sentiment', 'relevance', 'topic'}
+
+
+def _texts(v, key=None):
+    if key in SKIP_KEYS:
+        return []
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [t for k, x in v.items() for t in _texts(x, k)]
+    if isinstance(v, list):
+        return [t for x in v for t in _texts(x, key)]
+    return []
+
+
+def check_any(out, pkt):
+    """check() for any seat's schema: every string field is scanned, wherever it sits."""
+    return check(out, pkt, text=' '.join(_texts(out)))
+
+
+def check(out, pkt, text=None):
     """Deterministic checks on the model's note. Returns {'ok': bool, 'flags': [...]}."""
     flags = []
     for c in out.get('cited_numbers') or []:
@@ -126,8 +146,9 @@ def check(out, pkt):
     for n in out.get('news') or []:
         if any(h not in ids for h in n.get('headline_ids') or []):
             flags.append(f'UNKNOWN_HEADLINE:{n.get("ticker")}')
-    text = ' '.join(str(out.get(k) or '') for k in ('headline', 'market_read', 'decision_read', 'regime_read', 'auction_read'))
-    text += ' ' + ' '.join(n.get('note', '') for n in out.get('news') or []) + ' ' + ' '.join(out.get('watch') or [])
+    if text is None:
+        text = ' '.join(str(out.get(k) or '') for k in ('headline', 'market_read', 'decision_read', 'regime_read', 'auction_read'))
+        text += ' ' + ' '.join(n.get('note', '') for n in out.get('news') or []) + ' ' + ' '.join(out.get('watch') or [])
     cited = [float(c['value']) for c in out.get('cited_numbers') or [] if isinstance(c.get('value'), (int, float))]
     known = cited + _values(pkt)
     for tok in _NUM.findall(text):

@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from . import auction, commentary, guard, kelly, news, regime
+from . import auction, commentary, guard, kelly, news, regime, team
 from .store import AnalystStore, default_path
 
 ET = ZoneInfo('America/New_York')
@@ -168,17 +168,16 @@ def _contact(path):
         return None
 
 
+def _seat_spec(seat):
+    return SimpleNamespace(models={seat: team.MODELS[seat]}, envelopes={seat: team.ENVELOPES[seat]},
+                           daily_budget=Decimal(commentary.DAILY_CAP_USD))
+
+
 def _note(store, kind, pkt, client, day, now, prices=None):
-    from agents.ai_trader.model import BudgetedModels, BudgetExhausted, ModelError
-    models = BudgetedModels(store, spec(), client, day=day, now=now, prices=prices)
-    try:
-        out = models.run('commentary', commentary.build(kind, pkt), commentary.SCHEMA)
-    except (BudgetExhausted, ModelError) as error:
-        store.journal('commentary_failed', {'kind': kind, 'error': type(error).__name__, 'reason': str(error)[:80]}, now)
-        return {'status': f'COMMENTARY_{type(error).__name__}', 'reason': str(error)[:80]}
-    checks = commentary.check(out, pkt)
-    store.add('notes', day, out, now, kind=kind, model=commentary.MODEL, checks_json=checks)
-    return {'status': 'WRITTEN', 'flags': checks['flags']}
+    """The whole team writes, in order; Bubbles' note is the one stored under the job's own kind."""
+    report = team.run(store, kind, pkt, client, day, now, spec_factory=_seat_spec, prices=prices)
+    b = report.get('bubbles') or {}
+    return {'status': b.get('status', 'NOT_RUN'), 'flags': b.get('flags', []), 'team': report}
 
 
 def morning(store, official_db, now, client, *, opener=None, prices=None, contact=None):
