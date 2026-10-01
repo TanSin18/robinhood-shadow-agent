@@ -1,0 +1,54 @@
+# Research recipe (pre-registered 2026-09-30 22:10 ET, before this rule was ever run).
+# One parameter set. The harness hashes this file's bytes; any edit is a new trial.
+aim: >-
+  Extra money versus the easy standalone alternative: beat VTI buy-and-hold after costs and tax.
+  Scored only on the harness pass rule (certified data, 90% interval of excess over VTI above zero,
+  deflated Sharpe probability >= 0.95 counting every trial in the log, after-tax CAGR above VTI).
+  Beating cash or having a smaller drawdown is reported but is not a pass.
+stopping_rule: >-
+  This is trial 17 only. If it is NOT_PROVEN (or INCONCLUSIVE), no more research trials until
+  2026-10-31. A VTI-only trend-to-cash recipe may be considered in November as a new, hashed trial.
+recipe:
+  id: sector_top3_12_1_ma10_spdr9
+  version: 1
+  status: research_only_never_official
+  description: >-
+    Monthly sector rotation on the Select Sector SPDR family. On the first session of each month,
+    using completed closes only, rank the funds by 12-1 momentum (return from 252 sessions ago to
+    21 sessions ago, skipping the most recent month). Hold the top 3, one third each. A slot is
+    held only if that fund's last completed close is above its 10-month moving average (mean of
+    its last 10 completed month-end closes); otherwise that third stays in cash. No bonds, gold,
+    QQQ or other havens. XLRE and XLC join once each has 253 completed sessions.
+  engine: sector_top3_12_1_ma10
+universe:
+  kind: etf_list
+  symbols: [XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY]
+  note: >-
+    The complete Select Sector SPDR family, chosen by rule rather than by performance: the nine
+    original 1998 funds (XLB XLE XLF XLI XLK XLP XLU XLV XLY) plus XLRE (2015) and XLC (2018) once eligible.
+signal:
+  momentum_from_sessions: 252
+  momentum_skip_sessions: 21
+  picks: 3
+  trend_filter_month_ends: 10
+  features_from: completed_sessions_through_t_minus_1
+sizing: {per_slot: 0.3333333333, max_gross: 1.0}
+rebalance: first_session_of_each_month_at_open
+execution:
+  timing: next_session_open
+  buy_cost: half_spread_plus_0.1pct_slippage
+  sell_cost: half_spread
+  settlement: T_plus_1_cash_account_buy_with_settled_cash_only
+  trade_only_differences: true
+breakers: none
+tax: {short_term: 0.35, long_term: 0.15, liquidation_at_end: true}
+benchmark: VTI_buy_and_hold_same_costs_and_tax
+secondary_benchmark: none
+report_periods:
+  first_half: ['2006-01-01', '2015-12-31']
+  second_half: ['2016-01-01', '2026-12-31']
+fitted_parameters: none
+data_requirement:
+  minimum_years: 15
+  point_in_time_universe_required: false
+  certified_label: CERTIFIED_ETF_HISTORY

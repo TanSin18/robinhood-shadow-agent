@@ -204,6 +204,78 @@ def engine_gem_dual_momentum(panel, recipe, capital):
             'holding_share': share, 'switches': sum(1 for a, b in zip(months, months[1:]) if a != b)}, start
 
 
+def engine_sector_top3_12_1_ma10(panel, recipe, capital):
+    sig = recipe['signal']
+    symbols = [s for s in recipe['universe']['symbols'] if s in panel.close]
+    far, skip, picks, months = sig['momentum_from_sessions'], sig['momentum_skip_sessions'], sig['picks'], sig['trend_filter_month_ends']
+    p = Params(universe=tuple(symbols), capital=capital, guards=False)
+    days = panel.days
+    month_end = [k for k in range(len(days) - 1) if days[k][:7] != days[k + 1][:7]]
+
+    def closes_before(s, i):
+        return [(k, panel.close[s][k]) for k in range(i) if panel.present[s][k]]
+
+    def score(s, i):
+        c = closes_before(s, i)
+        if len(c) < 253:
+            return None
+        mom = c[-1 - skip][1] / c[-1 - far][1] - 1
+        ends = [panel.close[s][k] for k in month_end if k < i and panel.present[s][k]][-months:]
+        ma = sum(ends) / len(ends) if len(ends) == months else None
+        return mom, (ma is not None and c[-1][1] > ma)
+    vti = panel.present.get('VTI')
+    ready = []
+    for s in symbols:   # first index with 253 completed closes before it
+        seen, at = 0, None
+        for k, ok in enumerate(panel.present[s]):
+            if seen >= 253:
+                at = k; break
+            seen += 1 if ok else 0
+        if at is not None:
+            ready.append(at)
+    start = sorted(ready)[picks - 1]
+    if vti:
+        start = max(start, next(i for i, ok in enumerate(vti) if ok))
+    book, curve, trades, targets, slots = Book(settled=capital), [], [], {}, []
+    for i in range(start, len(days)):
+        day = days[i]
+        book.settled += book.unsettled; book.unsettled = 0.0
+        opens = {s: panel.open[s][i] for s in symbols if panel.present[s][i] and panel.open[s][i]}
+        if i == start or day[:7] != days[i - 1][:7]:
+            scored = {s: score(s, i) for s in symbols}
+            ranked = sorted((s for s, v in scored.items() if v is not None), key=lambda s: (-scored[s][0], s))[:picks]
+            chosen = [s for s in ranked if scored[s][1] and s in opens]
+            slots.append(len(chosen))
+            equity = book.settled + sum(book.qty(s) * (opens.get(s) or panel.close[s][i - 1] or 0.0) for s in book.lots)
+            targets = {s: equity * sig_weight for s, sig_weight in ((s, recipe['sizing']['per_slot']) for s in chosen)}
+            for s in sorted(list(book.lots)):
+                if not book.lots[s] or s not in opens:
+                    continue
+                excess = book.qty(s) * opens[s] - targets.get(s, 0.0)
+                if s not in targets or excess > max(1.0, 0.01 * equity):
+                    qty = book.qty(s) if s not in targets else excess / opens[s]
+                    book.sell_qty(s, qty, opens[s] * (1 - HALF_SPREAD[s]), opens[s], day)
+                    trades.append({'day': day, 'side': 'sell', 'symbol': s, 'qty': qty})
+        equity_now = book.settled + book.unsettled + sum(book.qty(s) * (opens.get(s) or 0.0) for s in book.lots)
+        for s, target in sorted(targets.items()):
+            if s not in opens:
+                continue
+            short = target - book.qty(s) * opens[s]
+            if short <= max(1.0, 0.01 * equity_now) or book.settled <= 1.0:
+                continue
+            fill = opens[s] * (1 + HALF_SPREAD[s]) * (1 + p.slippage)
+            qty = min(short, book.settled) / fill
+            book.buy(s, qty, fill, opens[s], day)
+            trades.append({'day': day, 'side': 'buy', 'symbol': s, 'qty': qty})
+        if i + 1 == len(days) or days[i + 1][:4] != day[:4]:
+            book.year_end_tax(p.st_tax, p.lt_tax)
+        curve.append((day, book.value({s: panel.close[s][i] or 0.0 for s in panel.close})))
+    liq = book.liquidation_tax({s: panel.close[s][-1] or 0.0 for s in panel.close}, days[-1], p.st_tax, p.lt_tax)
+    return {'curve': curve, 'trades': trades, 'tax_paid': book.tax_paid, 'liquidation_tax': liq,
+            'cost_paid': book.cost_paid, 'invested_share': sum(slots) / max(1, picks * len(slots)), 'locked': False,
+            'latched_on': None, 'slots_filled_share': {n: round(slots.count(n) / max(1, len(slots)), 3) for n in range(picks + 1)}}, start
+
+
 def basket_buy_and_hold(panel, weights, start, capital):
     """Static basket bought once at the start (no rebalancing, so no tax until the end)."""
     parts = []
@@ -229,7 +301,7 @@ def period_table(strategy, benchmarks, periods):
 
 
 ENGINES = {'registered_rule': engine_registered_rule, 'dual_trend_vol_target': engine_dual_trend_vol_target,
-           'gem_dual_momentum': engine_gem_dual_momentum}
+           'gem_dual_momentum': engine_gem_dual_momentum, 'sector_top3_12_1_ma10': engine_sector_top3_12_1_ma10}
 
 
 def _start(panel, feats, p):
@@ -395,12 +467,17 @@ def run(recipe_path, bars_path, log_path, capital=25000.0):
             verdict = 'INCONCLUSIVE'
     sec = recipe.get('secondary_benchmark', '')
     benches = {'vti': vti}
-    if sec.startswith('buy_and_hold_60pct_VTI_40pct_EFA'):
+    if sec and sec.startswith('buy_and_hold_60pct_VTI_40pct_EFA'):
         mix = basket_buy_and_hold(panel, {'VTI': 0.6, 'EFA': 0.4}, start, capital)
         benches['vti60_efa40'] = mix
         m = stats(mix, capital)
         extras['secondary_benchmark'] = {'name': sec, **{k: m[k] for k in ('cagr_after_all_tax', 'sharpe_rf0', 'max_drawdown')},
                                          'excess_vs_strategy': bootstrap_excess(strategy, mix)}
+    for key in ('aim', 'stopping_rule'):
+        if recipe.get(key):
+            extras[key] = recipe[key]
+    if 'slots_filled_share' in strategy:
+        extras['slots_filled_share'] = strategy['slots_filled_share']
     if recipe.get('report_periods'):
         extras['periods_cagr_pre_tax'] = period_table(strategy, benches, recipe['report_periods'])
     result = {

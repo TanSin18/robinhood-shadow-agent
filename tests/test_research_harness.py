@@ -122,3 +122,24 @@ def test_gem_holds_one_asset_and_never_peeks(tmp_path):
     assert start >= 253
     buys = {t['symbol'] for t in res['trades'] if t['side'] == 'buy'}
     assert buys <= {'VTI', 'EFA', 'AGG'} and res['trades'][0]['day'] >= Panel(bars, 'VTI').days[253]
+
+
+def test_sector_recipe_holds_at_most_three_and_records_aim_and_stop(tmp_path):
+    r = run(RECIPES / 'sector_top3_12_1_ma10_spdr9.yaml', _bars(tmp_path / 'b.csv'), tmp_path / 'res' / 'trials.db')
+    assert r['verdict'] in {'PASS', 'NOT_PROVEN', 'INCONCLUSIVE'}
+    assert 'no more research trials' in r['stopping_rule'] and 'beat VTI' in r['aim']
+    assert set(r['slots_filled_share']) == {0, 1, 2, 3} and abs(sum(r['slots_filled_share'].values()) - 1) < 0.01
+    assert set(r['periods_cagr_pre_tax']) == {'first_half', 'second_half'}
+
+
+def test_sector_engine_never_holds_more_than_three(tmp_path):
+    from research.backtest_etf_rule import Panel, load_bars
+    from research.harness import engine_sector_top3_12_1_ma10
+    bars, _ = load_bars(_bars(tmp_path / 'b.csv'))
+    recipe, _ = load_recipe(RECIPES / 'sector_top3_12_1_ma10_spdr9.yaml')
+    res, _ = engine_sector_top3_12_1_ma10(Panel(bars), recipe, 10000)
+    held, worst = {}, 0
+    for t in res['trades']:
+        held[t['symbol']] = held.get(t['symbol'], 0) + (t['qty'] if t['side'] == 'buy' else -t['qty'])
+        worst = max(worst, sum(1 for q in held.values() if q > 1e-6))
+    assert worst <= 3 and not ({t['symbol'] for t in res['trades']} - set(recipe['universe']['symbols']))
