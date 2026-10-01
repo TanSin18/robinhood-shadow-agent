@@ -104,3 +104,12 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - Dashboard v11 (`claude/ui-v10` dc4c7be) deployed to the overlay (backup agent-desk.3K4Fam.v10-20261001): /analyst page; nav "Analyst" replaces "AI trader"; Architecture and Rule book updated.
 - Operator still to run: install release G, `agents.ai_trader.cli retire`, `agents.analyst.cli init`, kickstart the inbox service.
 - 13:10 ET: public read-only mirror for the mentor (`agents/desk/mirror.py`, `claude/ui-v10` 2ad628a; copied into the overlay). launchd `com.openai.robinhood-mirror` (plist in robinhood-dashboard-releases/) serves 127.0.0.1:8767 from the overlay; Tailscale Funnel on :10000 → https://tanmays-macbook-air.tail4c3ace.ts.net:10000. Review pages only (no Inbox/Approvals/Controls/Health/History/AI trader), GET only, ts.net links scrubbed, 30 s snapshot cache, noindex. Stop with `tailscale funnel --https=10000 off` and `launchctl bootout gui/$(id -u)/com.openai.robinhood-mirror`.
+
+## 2026-10-01 16:00 ET — release J (supersedes H, I) + dashboard v13
+- Morning analyst note failed (JSON truncated at 2,500 output tokens, 59 headlines): fixed (6,000-token envelope, 30 headlines spread across tickers, named OUTPUT_TRUNCATED / OUTPUT_NOT_JSON errors).
+- VTI benchmark row now written on no-AI official days too (rows stopped after Sep 29; promotion test pairs by day).
+- Shadow exit guard (chandelier, profit lock, give-back, fast trend break) and chop gate (ADX/ATR/stretch) per holding/ticker, after the close; first would-sell price kept for evaluation.
+- Advisory team: Pip, Biscuit, Maple, Pickle, Bubbles write every trading day (morning + close), own prompts/schemas, same $1/day cap; Pickle critiques the official decision and the other notes.
+- Trial 19 (multi-asset 10-month trend, 6 sleeves) pre-registered on `claude/research-harness` cfa5a91, run_not_before 2026-11-01. Draft v1.7.0 (unsigned): docs/superpowers/plans/preregistration-amendment-v1.7.0.draft.yaml.
+- Release J: `claude/ai-trader` 5c372de, manifest docs/review/release-2026-10-01j-manifest.json (base bc043a5, before fingerprint d9e59297…). Dashboard v13 (`claude/ui-v10` 350ff1d) copied into the overlay; needs inbox (and mirror) kickstart.
+- Scheduled self-check 16:40 ET (trig_0155a1gwjQdyqQXtoEebdXLX) of the first after-close run.
