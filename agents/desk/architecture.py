@@ -156,7 +156,8 @@ ROSTER = (
      'Also the official Portfolio stage for single stocks (not triggered yet).'),
     ('Mojo Jojo', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the official decision and the team’s notes with fixed '
      'fail codes. Also the official Critic with veto for single stocks (not triggered yet).'),
-    ('Bubbles', 'Explainer (gpt-5.4-mini)', 'active · advisory daily', 'Writes the morning and after-close note you read, last, from everyone else.'),
+    ('Bubbles', 'Explainer (gpt-5.4-mini)', 'active · advisory daily', 'Writes the morning and after-close note you read, last, from everyone else. Also answers your questions on the Ask Bubbles page: '
+     'one model call per question, no tools, records only, every number checked by code, never read by the trading rules.'),
 )
 FILES = (
     ('agents/daily_cycle.py', 'The 10:00 official run and the 15:50 protective check'),

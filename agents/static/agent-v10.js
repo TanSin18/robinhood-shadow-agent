@@ -72,9 +72,26 @@
     });
   }
 
+  // Ask Bubbles: an answer takes a few seconds; show that the question was sent and stop double submits.
+  function setupAsk() {
+    document.querySelectorAll('form.ask-form').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type=submit]');
+        setTimeout(function () {
+          form.classList.add('is-asking');
+          document.querySelectorAll('form.ask-form button[type=submit]').forEach(function (b) { b.disabled = true; });
+          if (btn && !form.classList.contains('ask-preset')) btn.textContent = 'Reading the records…';
+        }, 0);
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') document.querySelectorAll('details.ask-fab[open]').forEach(function (d) { d.open = false; });
+    });
+  }
+
   function start() {
     document.documentElement.classList.add('v10-js');
-    setupTabs(); setupAccounts(); setupRanges(); setupExpandAll();
+    setupTabs(); setupAccounts(); setupRanges(); setupExpandAll(); setupAsk();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

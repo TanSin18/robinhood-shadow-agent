@@ -5,12 +5,12 @@ from .team import TEAM
 ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & charts'), ('/portfolio', 'Portfolio'),
           ('/money', 'Road to money'), ('/scoreboard', 'Is the AI working?'),
           ('/controls', 'Controls'), ('/health', 'Tweaks and health'), ('/guide', 'How it works'), ('/inbox', 'Inbox'), ('/firm', 'AI trader'),
-          ('/rules', 'Rule book'), ('/architecture', 'Architecture'), ('/analyst', 'Analyst desk'))
+          ('/rules', 'Rule book'), ('/architecture', 'Architecture'), ('/analyst', 'Analyst desk'), ('/ask', 'Ask Bubbles'))
 
 
 # One navigation for the whole dashboard. Operational views (Approvals, History,
 # Results, Controls) are served by the unchanged operational page at /legacy.
-NAV = (('/', 'Today', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/inbox', 'Inbox', ''), ('/analyst', 'Analyst', ''),
+NAV = (('/', 'Today', ''), ('/ask', 'Ask Bubbles', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/inbox', 'Inbox', ''), ('/analyst', 'Analyst', ''),
        ('/room', 'Decision room', ''), ('/checks', 'Checks & charts', ''), ('/legacy#history', 'History', 'history'),
        ('/legacy#controls', 'Controls', 'controls'), ('/guide', 'How it works', ''), ('/rules', 'Rule book', ''),
        ('/architecture', 'Architecture', ''))
@@ -62,6 +62,10 @@ def shell(title, body, path='/', state=None):
     preview = '<p class="desk-preview" role="status">Preview — view only · No approvals, controls or broker connection</p>' if state.get('preview') else ''
     refresh = ''
     body_class = 'agent-desk team-preview' if state.get('preview') else 'agent-desk'
+    fab = ''
+    if state.get('inbox_csrf') and path != '/ask':
+        from .ask_page import floating
+        fab = floating(state['inbox_csrf'], f'{title} page')
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} · Botfolio</title><link rel="icon" href="/assets/botfolio-logo.svg"><link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/agent-desk.css">
 {'<link rel="stylesheet" href="/assets/agent-polish.css"><link rel="stylesheet" href="/assets/agent-scene.css"><link rel="stylesheet" href="/assets/agent-compact.css">' if state.get('preview') else ''}
@@ -70,7 +74,7 @@ def shell(title, body, path='/', state=None):
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
 <header class="desk-header">{brand()}<nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
-<main id="main" tabindex="-1">{body}</main><footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
+<main id="main" tabindex="-1">{body}</main>{fab}<footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
 
 
 def deferred(title, milestone):

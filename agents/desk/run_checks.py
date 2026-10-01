@@ -161,8 +161,19 @@ def operational(payload, now=None):
     add('Data', 'Quotes collected', str(q) if isinstance(q, int) else None, 'pass' if isinstance(q, int) and q > 0 else 'fail')
     add('Data', 'Volatility series', str(v) if isinstance(v, int) else None, 'pass' if isinstance(v, int) and v > 0 else 'warn')
     cae = payload.get('corporate_action_exclusions') if isinstance(payload.get('corporate_action_exclusions'), list) else []
-    reasons = sorted({_s(x.get('reason'), 60) for x in cae if isinstance(x, dict) and x.get('reason')})
-    add('Data', 'Corporate-action exclusions', str(len(cae)), 'warn' if cae else 'pass', ', '.join(r for r in reasons if r))
+    # The run records every instrument it left out of the day's screen in one list. Two different things land there:
+    # a quote the run could not use (no positive, uncrossed bid/ask: almost always a thinly traded option contract),
+    # and a real corporate action (split, merger, symbol change). Only the second needs attention.
+    quote_skips = [x for x in cae if isinstance(x, dict) and 'QUOTE' in str(x.get('reason') or '').upper()]
+    actions = [x for x in cae if x not in quote_skips]
+    reasons = sorted({_s(x.get('reason'), 60) for x in actions if isinstance(x, dict) and x.get('reason')})
+    add('Data', 'Corporate-action exclusions', str(len(actions)), 'warn' if actions else 'pass', ', '.join(r for r in reasons if r))
+    if quote_skips:
+        options = sum(1 for x in quote_skips if len(str(x.get('instrument') or '')) == 36 and str(x.get('instrument')).count('-') == 4)
+        what = 'all option contracts' if options == len(quote_skips) else f'{options} option contracts' if options else 'no option contracts'
+        add('Data', 'Quotes left out (no usable bid/ask)', str(len(quote_skips)), 'info',
+            f'{what}; a quote needs a positive, uncrossed bid and ask to be used. Left out of today’s screen only. '
+            'New option buys are paused under v1.6, so nothing was missed.')
     gate = payload.get('ai_gate') if isinstance(payload.get('ai_gate'), dict) else None
     if gate:
         add('AI', 'AI gate', 'Open' if gate.get('invoke') is True else 'Closed', 'info', _s(gate.get('reason'), 60) or '')

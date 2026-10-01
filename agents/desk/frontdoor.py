@@ -11,7 +11,12 @@ def make_server(inbox, port=8765, **options):
     server = operational_server(inbox, port, **options)
     base = server.RequestHandlerClass
     import secrets
-    inbox_csrf = secrets.token_urlsafe(32)   # the Inbox page's own form token
+    inbox_csrf = secrets.token_urlsafe(32)   # form token for the desk pages' own forms (Inbox answers, Ask Bubbles)
+    from threading import Lock
+    from urllib.parse import urlparse
+    ask_lock = Lock()                        # one question at a time
+    external = urlparse(inbox.config.notifications.dashboard_base_url)
+    external_origin = f'{external.scheme}://{external.netloc}'   # the private (tailnet) address, same as the operational page allows
 
     class Handler(base):
         desk_response = False
@@ -53,12 +58,17 @@ def make_server(inbox, port=8765, **options):
                                  '<nav class="desktop-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
                 content = re.sub(r'<nav class="phone-nav"[^>]*>.*?</nav>(?=</body>)',
                                  '<nav class="phone-nav" aria-label="Sections">' + nav_links('') + '</nav>', content, count=1, flags=re.S)
+                if '<body class="legacy-skin"' in content:
+                    from .ask_page import floating
+                    content = content.replace('</body>', floating(inbox_csrf, 'Approvals, History and Controls page') + '</body>', 1)
             super().send(status, content, content_type)
 
         def do_POST(self):
             self.desk_response = False
             self.desk_forms = False
             target = urlsplit(self.path).path
+            if target == '/ask/question':
+                return self.ask_question()
             if target not in ('/inbox/answer', '/firm/answer'):
                 return super().do_POST()
             import hmac
@@ -100,6 +110,52 @@ def make_server(inbox, port=8765, **options):
             self.send_header('Content-Length', '0')
             self.end_headers()
 
+        def ask_question(self):
+            """Ask Bubbles. Same-origin form with the desk token; the runtime (a separate process) calls the model."""
+            import hmac
+            from urllib.parse import parse_qs
+            from . import ask_page
+
+            def back(notice=''):
+                self.send_response(303)
+                self.send_header('Location', '/ask' + (f'?notice={notice}' if notice else '') + '#latest')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+            origin = self.headers.get('Origin')
+            local = {f'http://127.0.0.1:{self.server.server_port}', f'http://localhost:{self.server.server_port}', external_origin}
+            if not self.allowed() or (origin is not None and origin not in local):
+                return self.send(403, 'Invalid request origin')
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            if not 0 < length <= 4096:
+                return self.send(400, 'Invalid request')
+            try:
+                form = parse_qs(self.rfile.read(length).decode(), max_num_fields=6)
+            except (ValueError, UnicodeDecodeError):
+                return self.send(400, 'Invalid request')
+            if any(len(v) != 1 for v in form.values()) or not hmac.compare_digest(form.get('csrf', [''])[0], inbox_csrf):
+                return self.send(403, 'Invalid request token')
+            question = ' '.join(form.get('question', [''])[0].split())
+            context = ' '.join(form.get('context', [''])[0].split())[:120]
+            run, step = form.get('run', [''])[0][:64], form.get('step', [''])[0][:20]
+            if not question:
+                return back('EMPTY_QUESTION')
+            if len(question) > 500:
+                return back('QUESTION_TOO_LONG')
+            if not ask_lock.acquire(blocking=False):
+                return back('BUSY')
+            try:
+                try:
+                    packet = ask_page.build_packet(snapshot(inbox.path), question, context, run or None, step or None)
+                except Exception:
+                    return back('RECORDS_UNAVAILABLE')
+                status = ask_page.submit(inbox.path, question, context, packet)
+            finally:
+                ask_lock.release()
+            return back('' if status == 'ANSWERED' or status.startswith('FAILED_') else status if status in ask_page.NOTICES else 'RUNTIME_NOT_READY')
+
         def do_GET(self):
             self.desk_response = False
             self.desk_forms = False
@@ -112,7 +168,7 @@ def make_server(inbox, port=8765, **options):
                 return super().do_GET()
             if path in dict(ROUTES):
                 self.desk_response = True
-                self.desk_forms = path in ('/inbox', '/firm')
+                self.desk_forms = True      # every desk page carries the Ask Bubbles form (same-origin only)
                 try:
                     try:
                         state = snapshot(inbox.path)
@@ -120,8 +176,12 @@ def make_server(inbox, port=8765, **options):
                         if path != '/guide':
                             raise
                         state = {'preview': True}   # the walkthrough needs no records
-                    if path in ('/inbox', '/firm'):
-                        state = {**state, 'inbox_csrf': inbox_csrf}
+                    state = {**state, 'inbox_csrf': inbox_csrf}
+                    if path == '/ask':
+                        from urllib.parse import parse_qs
+                        from . import ask_page
+                        notice = parse_qs(parsed.query).get('notice', [''])[0]
+                        state = {**state, 'ask': ask_page.load(inbox.path), 'ask_notice': notice if notice in ask_page.NOTICES else None}
                     body = render(path, state, None, '')
                     # One navigation (sidebar) covers Approvals/History/Results/Controls; no second banner.
                     body = body.replace('<p class="desk-preview" role="status">Preview — view only · No approvals, controls or broker connection</p>', '')

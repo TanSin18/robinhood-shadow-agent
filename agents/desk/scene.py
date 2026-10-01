@@ -318,7 +318,7 @@ def log_rows(entries, show_actor=True):
     return out + '</ol>'
 
 
-def inspector(key, stage, review, flow, rid, log, selected):
+def inspector(key, stage, review, flow, rid, log, selected, token=''):
     kind, kind_label = KIND[key]
     times = (review.get('stage_times') or {}).get(key, {})
     span = (f'{clock(times["start"])} → {clock(times.get("end"))}' + (f' · {times["seconds"]}s' if 'seconds' in times else '')) if times.get('start') else ''
@@ -326,8 +326,8 @@ def inspector(key, stage, review, flow, rid, log, selected):
     tabs = (('work', 'Work'), ('report', 'Original report'))
     tablist = ''.join(f'<button type="button" role="tab" id="{panel}-{t}-tab" aria-controls="{panel}-{t}" aria-selected="{str(t == "work").lower()}" data-character-tab="{t}">{esc(label)}</button>' for t, label in tabs)
     report = f'<details class="original-report" open><summary>Original report</summary><p class="report">{esc(stage.get("summary") or "No report was saved.")}</p></details>'
-    later = ('<p class="muted small later-note">Coming after the Phase 0 gate: ask Bubbles about this work, and tune it via side tests '
-             '(read-only until then — editable after Phase 0 via side test; safety rules stay locked).</p>')
+    from .ask_page import step_ask
+    later = step_ask(token, review, key, name(key), date_label(review.get('timestamp')))
     panes = {'work': tools_block(key, stage, review) + work(key, stage, review) + later, 'report': report}
     content = ''.join(f'<section role="tabpanel" id="{panel}-{t}" aria-labelledby="{panel}-{t}-tab" data-character-pane="{t}"{"" if t == "work" else " hidden"}>{panes[t]}</section>' for t, _ in tabs)
     chip = esc(stage.get('status_label') or 'Not recorded')
@@ -354,7 +354,7 @@ def ideas(review):
     return f'<section class="room-card ideas scene-ideas"><div class="card-head"><h3>Investment ideas</h3><span class="muted small">{len(rows)} recorded</span></div>{body}</section>'
 
 
-def scene(review, index, rows):
+def scene(review, index, rows, token=''):
     recorded = handoffs(review, rows)
     pairs = {(e['from_actor'], t) for e in recorded for t in e['to_actors']}
     stages = {s['key']: s for s in review.get('stages', []) if s.get('key') in ACTORS}
@@ -388,7 +388,7 @@ def scene(review, index, rows):
     player = (f'<div class="scene-player"><button type="button" data-replay="play"{off}>Replay run</button>'
               f'<button type="button" data-replay="previous"{off}>Previous</button><button type="button" data-replay="next"{off}>Next</button>'
               f'<span class="now-playing" data-step-label aria-live="polite">{"Replay steps through " + str(len(log)) + " recorded events in order" if log else "Playback unavailable — no run log was recorded"}</span></div>')
-    inspectors = ''.join(inspector(k, stages.get(k, {'key': k}), review, flow, index, log, selected) for k in ACTORS)
+    inspectors = ''.join(inspector(k, stages.get(k, {'key': k}), review, flow, index, log, selected, token) for k in ACTORS)
     present = [a for a in LOG_NAMES if any(e['actor'] == a for e in log)]
     filters = ('<div class="log-filters" role="group" aria-label="Filter run log"><button type="button" data-log-filter="all" aria-pressed="true">All</button>'
                + ''.join(f'<button type="button" data-log-filter="{a}" aria-pressed="false">{esc(LOG_NAMES[a])}</button>' for a in present) + '</div>') if log else ''
@@ -411,8 +411,10 @@ def render(state):
     choices = ''.join(f'<option value="{i}">{esc(category_prefix(r))}{esc(date_label(r.get("timestamp")))} — {esc(outcome(r)[:70])}</option>' for i, r in enumerate(reviews))
     html = ('<div class="scene-heading room-head"><div><h1>Decision room</h1><p>Every step of a run, straight from its saved records.</p></div>'
             f'<label>Run <select id="scene-review">{choices}</select></label></div>')
+    from .ask_page import ask_bar
+    html += ask_bar(state, 'Decision room', 'Ask about this run, a step, a pick, a rule…', uid='room')
     if not reviews: return html + team_strip(state) + '<p>No saved review yet.</p>'
-    return html + team_strip(state) + ''.join(scene(r, i, state.get('handoffs', [])) for i, r in enumerate(reviews))
+    return html + team_strip(state) + ''.join(scene(r, i, state.get('handoffs', []), state.get('inbox_csrf') or '') for i, r in enumerate(reviews))
 
 
 def _short(text, n=150):

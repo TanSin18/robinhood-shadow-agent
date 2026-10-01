@@ -15,7 +15,9 @@ def test_frontdoor_preserves_legacy_actions_and_readonly_home(tmp_path, monkeypa
         assert 'data-nav="decisions"' in page
         assert 'href="/legacy#decisions"' in page
         assert 'href="/legacy#controls"' in page
-        assert '<form' not in page
+        import re
+        assert set(re.findall(r'<form[^>]*action="([^"]+)"', page)) == {'/ask/question'}   # the only form on a desk page: Ask Bubbles
+        assert page.count('<form') == 1
         legacy = read(url+'/legacy')
         assert 'Approval inbox' in legacy
         assert 'name="csrf"' in legacy
@@ -41,7 +43,8 @@ def test_frontdoor_keeps_origin_and_csrf_checks(tmp_path, monkeypatch):
                 urlopen(Request(url+path, data=b'csrf=bad&action=pause&confirm=yes', headers={'Origin':'https://evil.example'}))
             assert error.value.code == 403
         response=urlopen(url)
-        assert "form-action 'none'" in response.headers['Content-Security-Policy']
+        csp = response.headers['Content-Security-Policy']
+        assert "form-action 'self'" in csp and "connect-src 'none'" in csp and "script-src 'self'" in csp   # forms post to this server only
         response=urlopen(url+'/legacy')
         assert "form-action 'self'" in response.headers['Content-Security-Policy']
 

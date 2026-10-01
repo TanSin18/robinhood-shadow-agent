@@ -22,7 +22,9 @@ def test_historical_scene_without_run_log_shows_unrecorded_edges_bench_and_disab
     assert 'Original report' in html and '<script>unsafe' not in html
     for name in ('Work','Original report'):
         assert name in html
-    assert 'editable after Phase 0 via side test' in html
+    assert '<form' not in html and 'Ask Bubbles about this step' not in html   # no form token (preview, shared mirror): nothing to submit
+    asked = render('/room',{'preview':True,'decision_room':[review()],'inbox_csrf':'tok'},None,'')
+    assert asked.count('Ask Bubbles about this step') == 6 and 'name="step" value="critic"' in asked and 'action="/ask/question"' in asked
     assert '<textarea' not in html  # no disabled placeholder controls
 
 
