@@ -134,7 +134,7 @@ def render(state):
     toc += [(f'g-{g["id"]}', g['title'].split('(')[0].strip()) for g in ordered]
     toc += [('accounts', 'Accounts and lanes'), ('fills', 'How paper fills are priced'), ('breakers', 'Breakers and stops'),
             ('budgets', 'AI budgets'), ('real', 'Why real money cannot move'), ('promotion', 'What must be proven'),
-            ('ai-trader', 'AI trader (separate book)'), ('issues', 'Known issues'), ('shorthand', 'Shorthand decoded')]
+            ('ai-trader', 'AI trader (retired)'), ('issues', 'Known issues'), ('shorthand', 'Shorthand decoded')]
     meta = c.get('meta') or {}
     layers = ''.join(f'<li><b>{esc(l.get("file"))}</b> · v{esc(l.get("version"))} · {esc(l.get("status"))}'
                      f'<small> sha256 {esc(str(l.get("sha256") or "")[:16])}…</small></li>' for l in meta.get('registration_layers') or [])
@@ -167,7 +167,7 @@ def render(state):
                          _cards(c.get('real_money_blocks') or [], 'mechanism', ['detail', 'source']), tools=True))
     html.append(_section('promotion', 'What must be proven before anything goes live', '',
                          f'<div class="rb-rule"><div class="rb-body">{value(c.get("promotion_gate") or {})}</div></div>'))
-    html.append(_section('ai-trader', 'AI trader (separate forward book)', 'Its own database and budget; never counted in the official results.',
+    html.append(_section('ai-trader', 'AI trader (retired Oct 1, kept for the record)', 'Retired before it started paper trading, after the advice to keep agents off the trading path. Its rules stay here for review.',
                          f'<div class="rb-rule"><div class="rb-body">{value(c.get("ai_trader") or {})}</div></div>'))
     issues = sorted(c.get('known_issues') or [], key=lambda i: {'high': 0, 'medium': 1, 'low': 2}.get(i.get('severity'), 3))
     html.append(_section('issues', 'Known issues', 'Honest list of bugs, gaps and mismatches found while writing this book. High first.',

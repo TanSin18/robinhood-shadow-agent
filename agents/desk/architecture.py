@@ -20,13 +20,13 @@ BOXES = {
     'screen':   (770, 60, 200, 64, 'Nightly S&P screen', '16:50 ET · research only', 'code'),
     'cycle':    (290, 180, 200, 64, 'Official 10:00 run', 'read → signals → AI gate', 'code'),
     'protect':  (530, 180, 200, 64, '15:50 protective check', 'v1.6 stop / trend / momentum', 'code'),
-    'trader':   (770, 180, 200, 64, 'AI trader hook', 'after the official run', 'ai'),
+    'trader':   (770, 180, 200, 64, 'Analyst desk', 'commentary · news · regime', 'ai'),
     'models':   (290, 300, 200, 64, 'AI stages (official)', 'Research · Portfolio · Critic', 'ai'),
     'risk':     (530, 300, 200, 64, 'Risk engine', '26 checks on every order', 'code'),
     'ledger':   (770, 300, 200, 64, 'Paper ledger', '3 accounts × 2 lanes', 'code'),
     'dash':     (290, 420, 200, 64, 'Dashboard :8765', 'read-only views + card answers', 'code'),
     'db':       (530, 420, 200, 64, 'agent.db (official)', 'append-only, hashed capsules', 'store'),
-    'tdb':      (770, 420, 200, 64, 'trader.db · trial log', 'separate from official', 'store'),
+    'tdb':      (770, 420, 200, 64, 'analyst.db · trial log', 'separate from official', 'store'),
     'proxy':    (1050, 180, 190, 64, 'Read-only proxy', '11 read tools · caller uid check', 'ext'),
     'oauth':    (1050, 300, 190, 64, 'Robinhood sign-in', 'tokens live only here', 'ext'),
     'openai':   (1300, 60, 170, 64, 'OpenAI API', 'dated gpt-5.4 models', 'ai'),
@@ -38,12 +38,12 @@ ZONES = (('you', 14, 20, 222, 520, 'You'), ('mac', 270, 20, 720, 520, 'Your Mac 
 EDGES = (
     ('write', 'starts', 418, 156, ((390, 124), (390, 180))),
     ('read', 'reads quotes, history, account', 760, 146, ((490, 196), (510, 196), (510, 152), (1010, 152), (1010, 200), (1050, 200))),
-    ('read', 'reads quotes', 1010, 236, ((970, 228), (1050, 228))),
+    ('read', 'daily bars', 1010, 236, ((970, 228), (1050, 228))),
     ('read', 'read only', 1270, 206, ((1240, 212), (1300, 212))),
     ('read', '', 0, 0, ((1145, 300), (1145, 248))),
     ('ai', 'only if a stock idea or holding', 485, 276, ((390, 244), (390, 300))),
     ('ai', 'AI calls · ≤ $0.40 a day', 640, 386, ((360, 364), (360, 392), (1272, 392), (1272, 100), (1300, 100))),
-    ('ai', 'AI calls · ≤ $2 a day', 1120, 264, ((870, 244), (870, 270), (1262, 270), (1262, 84), (1300, 84))),
+    ('ai', 'AI calls · ≤ $1 a day', 1120, 264, ((870, 244), (870, 270), (1262, 270), (1262, 84), (1300, 84))),
     ('write', '', 0, 0, ((490, 332), (530, 332))),
     ('write', 'fills', 750, 326, ((730, 332), (770, 332))),
     ('write', 'records', 700, 412, ((830, 364), (830, 406), (640, 406), (640, 420))),
@@ -88,12 +88,12 @@ SEATS_OFFICIAL = (
     ('you', 'You', 'operator', 'Answer cards for the “AI + your approval” account. You alone sign in, sign rules and install releases.'),
 )
 SEATS_TRADER = (
-    ('ai', 'Scout', 'gpt-5.4-nano', 'Reads the packet for all 23 names; names 0–3 candidates with tool-id sources.'),
-    ('ai', 'PM', 'gpt-5.4-mini', 'Turns one candidate into a ticket: thesis, invalidation below the ask, time stop, cited numbers.'),
-    ('ai', 'Critic', 'gpt-5.4', 'Attacks each ticket with fixed fail codes. Conviction is not evidence.'),
-    ('code', 'Risk', 'code', '5% per name, 5 names max, 3% daily / 6% weekly book stops, 20-session time stop.'),
-    ('code', 'Clerk', 'code', 'Checks every cited number against the tool packet, fills at ask × 1.001, keeps the books.'),
-    ('code', 'Books', 'A · B · C', 'A = AI alone, B = your answers, C = seeded random with matched size and timing (placebo).'),
+    ('ai', 'Commentator', 'gpt-5.4-mini', 'Morning and after-close notes on the official decision, the regime and the day. Cannot trade.'),
+    ('ai', 'News reader', 'same call', 'Summarises free headlines (Google News RSS, SEC filings) per ticker with a sentiment label. Headlines are untrusted data.'),
+    ('code', 'Regime model', 'code · after the close', '3-state Gaussian HMM on VTI daily returns, retrained every night; labels calm / normal / stressed.'),
+    ('code', 'Shadow Kelly', 'code · after the close', 'Raw, half and disciplined Kelly per name beside the size the risk engine uses. Never sizes a trade.'),
+    ('code', 'Checker', 'code', 'Every number the model cites must match the records; uncited numbers, hype and order-like language are flagged.'),
+    ('code', 'AI trader (retired)', 'never started', 'The AI-picks-trades book was retired on Oct 1 before paper trading, following the advice to keep agents off the trading path.'),
 )
 LAYERS = (
     ('Separate identities', 'Robinhood sign-in and tokens live under a separate macOS user. The trading code reaches only a local proxy, which checks '
@@ -104,7 +104,7 @@ LAYERS = (
      'dashboard or environment can turn a rule on.'),
     ('Account tripwire', 'Each 10:00 run reads the Agentic account; any unexpected change in cash, positions or orders stops trading and records an incident.'),
     ('Cash bound', 'If the Agentic account ever holds more than $1,200, the run fails closed.'),
-    ('Budgets with reservations', 'Every model call reserves its worst case first. Official runs: $0.40/day; AI trader: $2/day.'),
+    ('Budgets with reservations', 'Every model call reserves its worst case first. Official runs: $0.40/day; analyst desk: $1/day.'),
     ('One runner', 'One launchd daily service claims each day’s run under a file lock; a second runner is refused.'),
     ('Releases with rollback', 'Installs are manifest-checked (file hashes, before/after fingerprint), then the full test suite runs on the Mac; any '
      'failure rolls back automatically.'),
@@ -131,12 +131,12 @@ TRIALS = (
 QUESTIONS = (
     ('Is a forward paper test of this size able to show anything?', 'At ~1 trade a week, 200 decisions takes years. Would you change the metric, '
      'the sample rule, or the universe to get a usable answer in 6–12 months?'),
-    ('Where should the AI sit?', 'Today rules pick ETFs and the AI only handles single stocks and reviews holdings; the separate AI trader lets models '
-     'pick from the full list. Which design gives a fairer test of model judgment?'),
+    ('Where should the AI sit?', 'Rules pick ETFs; the AI may still propose one single stock in the official run, and everything else it does is '
+     'commentary, news and regime notes. Should the official stock path also become rules-only, with the AI purely advisory?'),
     ('Are the AI guardrails the right ones?', 'Citations must match tool numbers, a Critic can veto, code owns sizing and exits, and there is no news input. '
      'What would you add or remove, for example news, a model-free placebo per seat, or calibration scoring?'),
-    ('Is the placebo design sound?', 'Book C copies the AI book’s timing and size with seeded random names from the same list. Is that the right '
-     'control, or should it be a rules-only or equal-weight control?'),
+    ('Regime model and Kelly', 'A 3-state Gaussian HMM on VTI retrained nightly, and half-Kelly that is zero unless t ≥ 2. Would you use other '
+     'features (breadth, credit spreads, VIX), a fixed refit window, or a different way to stop Kelly overbetting an unproven edge?'),
     ('How should the drawdown latch reset?', 'The 10% latch never clears today (it froze the backtest for 16 years). The draft offers “clear at 5% off '
      'peak” or “re-base the peak after 20 latched sessions”.'),
     ('Is the promotion test right?', 'Block bootstrap with a fixed 21-day block, 90% one-sided, VTI benchmark, 35% tax. Would you use a different '
@@ -154,7 +154,8 @@ FILES = (
     ('agents/inbox.py · broker/paper.py', 'Paper ledger, fills, settlement, breakers'),
     ('agents/scheduled_inference.py · agents/bounded_inference.py', 'Model calls, budgets and reservations'),
     ('broker_proxy/ · broker/read_gateway.py', 'Read-only proxy and the 11 allowed read methods'),
-    ('agents/ai_trader/', 'The separate AI trader (seats, risk, books, hook)'),
+    ('agents/analyst/', 'Analyst desk: commentary, news, HMM regime, shadow Kelly, auction read'),
+    ('agents/ai_trader/', 'The retired AI trader (kept for the record)'),
     ('eval/promotion_stats.py · research/harness.py', 'Promotion test and the research trial log'),
     ('preregistration.yaml + amendments', 'The signed rules (v1.4.2 root, v1.5.0–v1.6.0 layers)'),
     ('scripts/release_install.py', 'Manifest-checked install with automatic rollback'),
@@ -173,7 +174,8 @@ def _live(state):
              ('Paper fills so far', str(len(fills))),
              ('Lane A capital per account', '$25,000 (v1.6, since Oct 1)' if any(str(p.get('start', '')).startswith('25000') for p in lane_a) else 'see Portfolio'),
              ('Real Agentic account', f'{money(real.get("cash"))} cash, never traded' if real else 'not recorded'),
-             ('AI trader', str(firm.get('mode') or ('set up' if firm.get('exists') else 'not set up')).replace('_', ' ').lower())]
+             ('Analyst desk', 'set up' if (state.get('analyst') or {}).get('exists') else 'not set up yet'),
+             ('AI trader', 'retired before it started (Oct 1)')]
     return ''.join(f'<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>' for k, v in facts)
 
 
@@ -221,18 +223,19 @@ def render(state):
                  'accounts and writes a hashed decision capsule.</small></summary></details>'
                  '<details class="ar-card"><summary><b>10:00–15:30 · your answers</b><small>Cards for the approval account fill only at a fresh price at '
                  'or under the limit, and expire at 15:30 ET.</small></summary></details>'
-                 '<details class="ar-card"><summary><b>After 10:00 · AI trader</b><small>Inside the same service tick, after the official run completed: '
-                 'Scout → PM → Critic → code checks. Watch-only until Oct 5.</small></summary></details>'
+                 '<details class="ar-card"><summary><b>After 10:00 · analyst morning note</b><small>Inside the same service tick, after the official run '
+                 'completed: free headlines are fetched and a model writes commentary and news notes. It cannot trade.</small></summary></details>'
+                 '<details class="ar-card"><summary><b>16:15 ET · analyst after-close job</b><small>Daily bars for the 23 names, regime model retrained, '
+                 'shadow Kelly, daily auction read, news and the close note.</small></summary></details>'
                  '<details class="ar-card"><summary><b>15:50 ET · protective check</b><small>Sells a holding at the bid if it is 8% below cost, at or '
                  'below its 200-day average, or (ETFs) momentum turned non-positive.</small></summary></details>'
                  '<details class="ar-card"><summary><b>16:50 ET · nightly screen</b><small>Shadow-only scan of the S&P 500 for research notes. It never '
                  'trades and never changes the 23 registered names.</small></summary></details>'
                  '<details class="ar-card"><summary><b>Friday 16:30 · weekly report</b><small>Accounts vs VTI and cash, costs, decisions and incidents, '
                  'sent as a notification.</small></summary></details></div>'),
-        _section('seats', 'Who decides', 'Two separate set-ups. The official desk is what counts; the AI trader is a separate forward experiment with '
-                 'its own database and budget.',
-                 '<h3>Official desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>AI trader (separate book)</h3>' + _seats(SEATS_TRADER)
-                 + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and the AI trader spec are '
+        _section('seats', 'Who decides', 'The official desk is what counts. Since Oct 1 the other AI work is advisory only: it explains, it does not decide.',
+                 '<h3>Official desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>Analyst desk (AI off the trading path)</h3>' + _seats(SEATS_TRADER)
+                 + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and specs are '
                  'hashed; changing either starts a new trial.</p>'),
         _section('safety', 'Safety layers', 'Independent layers. Any one of them is enough to stop a real order.', _cards(LAYERS)),
         _section('evidence', 'How results are judged', 'Designed so a lucky streak or a tuned backtest cannot be mistaken for skill.', _cards(EVIDENCE)),
@@ -241,8 +244,8 @@ def render(state):
                  '<th>Verdict</th></tr></thead><tbody>'
                  + ''.join(f'<tr><td>{esc(n)}</td><td>{esc(r)}</td><td class="neg">{esc(x)}</td><td>{esc(note)}</td><td>NOT PROVEN</td></tr>'
                            for n, r, x, note in TRIALS)
-                 + '<tr><td>18</td><td>AI trader forward book (ai_trader_fwd_v1)</td><td>—</td><td>Registered; evaluated Oct 2027 or after 200 closed trades'
-                   '</td><td>NOT STARTED</td></tr></tbody></table></div>'
+                 + '<tr><td>18</td><td>AI trader forward book (ai_trader_fwd_v1)</td><td>—</td><td>Retired before start on Oct 1 (agents kept off the trading path)'
+                   '</td><td>WITHDRAWN</td></tr></tbody></table></div>'
                  '<p class="v10-note">Backtests are price-only (no dividends), on Robinhood daily bars from 2005; rows 1–13 are early looks that still '
                  'count against the deflated Sharpe.</p>'),
         _section('issues', 'Known issues (high severity)', 'Found while writing the Rule book; the full list, with medium and low items, is there.',

@@ -1,9 +1,9 @@
-from . import today, decision_room, portfolio, money, scoreboard, controls, health, checks, guide, inbox_page, firm_page, rulebook, architecture
+from . import today, decision_room, portfolio, money, scoreboard, controls, health, checks, guide, inbox_page, firm_page, rulebook, architecture, analyst_page
 from .components import ROUTES, shell
 
 SCREENS = {'/room': decision_room, '/checks': checks, '/portfolio': portfolio, '/money': money,
            '/scoreboard': scoreboard, '/controls': controls, '/health': health, '/guide': guide, '/inbox': inbox_page, '/firm': firm_page,
-           '/rules': rulebook, '/architecture': architecture}
+           '/rules': rulebook, '/architecture': architecture, '/analyst': analyst_page}
 
 
 def render(path, state, config, csrf, filters=None):

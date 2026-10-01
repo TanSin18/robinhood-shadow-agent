@@ -244,3 +244,29 @@ tr.v10-scr-blocked td{color:var(--text-3)}
 .ar-seat{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)}
 .ar-seat.k-ai{border-top:3px solid var(--violet)}.ar-seat.k-code{border-top:3px solid var(--cyan)}.ar-seat.k-you{border-top:3px solid var(--v10-up)}
 .ar-seat b{display:block}.ar-seat span{font-size:12px;color:var(--text-3)}.ar-seat p{font-size:13px;margin:6px 0 0;line-height:1.5}
+
+/* ---------------- Analyst desk (/analyst) ---------------- */
+.an-notes{align-items:start}
+.an-note h3{font-size:20px;margin:4px 0 12px}
+.an-ok{font-size:13px;color:var(--v10-up);margin:12px 0 0}.an-flag{font-size:13px;color:var(--amber);margin:12px 0 0}
+.an-news,.an-headlines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.an-news li{border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px}
+.an-news p{margin:6px 0 0;line-height:1.5}
+.an-links{margin:6px 0 0;padding-left:16px;font-size:13px}
+.an-links a,.an-headlines a{color:var(--cyan)}
+.an-headlines li{font-size:14px;line-height:1.5;border-bottom:1px solid var(--border);padding:6px 0}
+.an-headlines .v10-chip{margin-right:8px}
+.an-sent{font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px;margin-right:8px;border:1px solid var(--border)}
+.an-sent.pos{color:var(--v10-up)}.an-sent.neg{color:var(--v10-down)}.an-sent.mixed{color:var(--amber)}
+.an-regime-head{display:flex;gap:24px;justify-content:space-between;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.an-state{display:block;font-size:32px;text-transform:capitalize;letter-spacing:-.02em}
+.an-state.st-calm{color:var(--v10-up)}.an-state.st-normal{color:var(--cyan)}.an-state.st-stressed{color:var(--v10-down)}
+.an-probs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-width:320px}
+.an-probs li{display:grid;grid-template-columns:70px 1fr 44px 90px;gap:8px;align-items:center;font-size:13px;text-transform:capitalize}
+.v10-meter-fill.st-calm,.an-strip .st-calm,.key.st-calm{fill:var(--v10-up);background:var(--v10-up)}
+.v10-meter-fill.st-normal,.an-strip .st-normal,.key.st-normal{fill:var(--cyan);background:var(--cyan)}
+.v10-meter-fill.st-stressed,.an-strip .st-stressed,.key.st-stressed{fill:var(--v10-down);background:var(--v10-down)}
+.an-strip{display:block;width:100%;height:46px;border-radius:8px;overflow:hidden}
+.an-strip rect{opacity:.85}
+.key{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+tr.an-held td{background:rgba(61,198,255,.08)}

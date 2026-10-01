@@ -97,3 +97,39 @@ def test_guide_steps_open_into_every_rule():
     html = render('/guide', {'preview': True}, None, '')
     assert 'Every rule at this step' in html and 'href="/rules"' in html
     assert 'There are three rules: ETF momentum and the 3% dip' in html and '26 coded checks' in html
+
+
+def test_analyst_page_empty_and_with_records(tmp_path):
+    import sqlite3
+    from agents.desk.analyst_page import load
+    html = render('/analyst', {'preview': True, 'analyst': {'exists': False}}, None, '')
+    assert '<h1>Analyst desk</h1>' in html and 'Not set up yet' in html
+    official = tmp_path / 'rt' / 'data' / 'agent.db'
+    official.parent.mkdir(parents=True)
+    path = tmp_path / 'robinhood-diagnostics' / 'analyst' / 'analyst.db'
+    path.parent.mkdir(parents=True)
+    db = sqlite3.connect(path)
+    for t in ('notes', 'regimes', 'kelly', 'auction', 'news'):
+        extra = ', kind TEXT, model TEXT, checks_json TEXT' if t == 'notes' else (', kind TEXT' if t == 'news' else '')
+        db.execute(f'CREATE TABLE {t} (id INTEGER PRIMARY KEY, at TEXT, day TEXT{extra}, payload_json TEXT)')
+    db.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)')
+    db.execute('CREATE TABLE budget (id INTEGER PRIMARY KEY, at TEXT, day TEXT, seat TEXT, model TEXT, reserved TEXT, actual TEXT, status TEXT)')
+    note = {'headline': 'Chips <lead>', 'market_read': 'Quiet.', 'news': [{'ticker': 'SOXX', 'sentiment': 'positive', 'relevance': 'high',
+                                                                       'note': 'n', 'headline_ids': ['news:1']}], 'watch': ['x']}
+    db.execute("INSERT INTO notes(at,day,kind,model,checks_json,payload_json) VALUES('2026-10-02T14:10:00+00:00','2026-10-02','morning','m',?,?)",
+               (json.dumps({'ok': True, 'flags': []}), json.dumps(note)))
+    db.execute("INSERT INTO news(at,day,kind,payload_json) VALUES('2026-10-02T14:09:00+00:00','2026-10-02','morning',?)",
+               (json.dumps({'items': [{'id': 'news:1', 'ticker': 'SOXX', 'title': 'Chips up', 'url': 'https://example.com/a', 'source': 'Ex'}]}),))
+    reg = {'status': 'OK', 'model': 'm', 'current': 'calm', 'current_probabilities': {'calm': .8, 'normal': .19, 'stressed': .01},
+           'tomorrow_probabilities': {'calm': .78, 'normal': .2, 'stressed': .02}, 'current_run_sessions': 39, 'sessions': 5000,
+           'states': [{'name': n, 'ann_return_pct': 1, 'ann_vol_pct': 2, 'expected_duration_sessions': 3, 'share_of_days': .3}
+                      for n in ('calm', 'normal', 'stressed')], 'transition': [[.9, .09, .01]] * 3, 'path': [['2026-10-01', 'calm']]}
+    db.execute("INSERT INTO regimes(at,day,payload_json) VALUES('2026-10-02T20:20:00+00:00','2026-10-02',?)", (json.dumps(reg),))
+    db.execute("INSERT INTO budget(at,day,seat,model,reserved,actual,status) VALUES('x','2026-10-02','commentary','m','0.02','0.004','SETTLED')")
+    db.commit()
+    db.close()
+    state = {'preview': True, 'analyst': load(official)}
+    html = render('/analyst', state, None, '')
+    assert 'Chips &lt;lead&gt;' in html and 'href="https://example.com/a"' in html and 'Code checks passed' in html
+    assert 'an-strip' in html and 'calm' in html and '$0.0040 of $1.00' in html
+    assert 'style=' not in html and '<script>' not in html and '<form' not in html
