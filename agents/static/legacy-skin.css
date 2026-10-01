@@ -1,46 +1,44 @@
 /* Agent Desk look for the operational Approvals/Controls page (/legacy).
    Colours and type only; the page's markup, forms and security checks are unchanged. */
 @font-face{font-family:Geist;src:url('/assets/fonts/Geist.woff2') format('woff2');font-display:swap;font-weight:100 900}
-body.legacy-skin{--canvas:#0f1217;--paper:#161b23;--ink:#e8ecf1;--forest:#c6b7f3;--evidence:#8fb8ff;--caution:#f3cf86;--failure:#ffb3a8;
- --muted:#8f9aab;--line:#262e3a;--focus:#c6b7f3;--accent:#c6b7f3;--accent-pale:#2a2540;--rail:#12161d;--amber:#f3cf86;--amber-pale:#2a2415;
+body.legacy-skin{--canvas:#0e0e0d;--paper:#151413;--ink:#ededec;--forest:#ffcd29;--evidence:#fce69c;--caution:#f3aa86;--failure:#ffb3a8;
+ --muted:#a09e9a;--line:#232220;--focus:#ffcd29;--accent:#ffcd29;--accent-pale:#2e291b;--rail:#111110;--amber:#f3aa86;--amber-pale:#2a2415;
  font:14px/1.55 Geist,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--canvas);color:var(--ink)}
 .legacy-skin h1{font-size:22px;letter-spacing:-.015em;font-weight:600}.legacy-skin h2{font-size:17px;font-weight:600}.legacy-skin h3{font-size:14px;font-weight:600}
 .legacy-skin p{max-width:96ch}.legacy-skin small{font-size:12px}
-.legacy-skin button,.legacy-skin .button{min-height:34px;padding:6px 14px;font-size:13px;border-color:#344052;background:#1f2632;color:var(--ink);border-radius:8px}
-.legacy-skin button:hover,.legacy-skin .button:hover{background:#2a3242}
-.legacy-skin .primary,.legacy-skin button[type=submit].primary{background:#d6c8f7;color:#231d32;border-color:#d6c8f7}
-.legacy-skin .primary:hover{background:#e4dafb;color:#231d32}
+.legacy-skin button,.legacy-skin .button{min-height:34px;padding:6px 14px;font-size:13px;border-color:#31302d;background:#1e1d1b;color:var(--ink);border-radius:8px}
+.legacy-skin button:hover,.legacy-skin .button:hover{background:#272624}
+.legacy-skin .primary,.legacy-skin button[type=submit].primary{background:#ffe07a;color:#242015;border-color:#ffe07a}
+.legacy-skin .primary:hover{background:#ffe07a;color:#242015}
 .legacy-skin .rail{width:204px;padding:18px 12px;background:var(--rail);border-right:1px solid var(--line)}
-.legacy-skin .brand{font-size:16px;gap:8px;padding:0 10px}.legacy-skin .brand-mark{width:22px;height:22px;font-size:13px;border-color:#6d5f93}
+.legacy-skin .brand{font-size:16px;gap:8px;padding:0 10px}.legacy-skin .brand-mark{width:22px;height:22px;font-size:13px;border-color:#ffcd29}
 .legacy-skin .rail-caption{font-size:11.5px;margin:8px 10px 14px;color:var(--muted)}
 .legacy-skin nav{gap:2px}.legacy-skin nav a{min-height:0;padding:7px 10px;font-size:13px;color:var(--muted);font-weight:500}
-.legacy-skin nav a:hover{background:#1f2632;color:var(--ink)}
-.legacy-skin nav a[aria-current="page"]{background:#2a2540;color:#eee8ff;box-shadow:inset 3px 0 #c6b7f3;font-weight:600}
-.legacy-skin .rail-foot .pill{background:#1f2632;color:var(--muted)}.legacy-skin .rail-foot p{color:var(--muted)}
-.legacy-skin .desk-back{display:block;margin:0 0 14px;padding:8px 10px;border:1px solid #4d4466;border-radius:8px;color:#e4dafb;font-size:12.5px;text-decoration:none;background:#1c1a27}
-.legacy-skin .desk-back:hover{background:#2a2540}
+.legacy-skin nav a:hover{background:#1e1d1b;color:var(--ink)}
+.legacy-skin nav a[aria-current="page"]{background:#2e291b;color:#ffe07a;box-shadow:inset 3px 0 #ffcd29;font-weight:600}
+.legacy-skin .rail-foot .pill{background:#1e1d1b;color:var(--muted)}.legacy-skin .rail-foot p{color:var(--muted)}
+.legacy-skin .desk-back{display:block;margin:0 0 14px;padding:8px 10px;border:1px solid #494331;border-radius:8px;color:#ffe07a;font-size:12.5px;text-decoration:none;background:#1c1a13}
+.legacy-skin .desk-back:hover{background:#2e291b}
 .legacy-skin .workspace{margin-left:204px}
-.legacy-skin .topbar{min-height:0;padding:10px 28px;background:#12161d;border-bottom-color:var(--line)}
+.legacy-skin .topbar{min-height:0;padding:10px 28px;background:#111110;border-bottom-color:var(--line)}
 .legacy-skin .safety{color:#a6ecd0;font-size:12.5px}
 .legacy-skin main{max-width:1520px;padding:20px 28px 40px}
 .legacy-skin .day-sheet,.legacy-skin .empty,.legacy-skin .proposal,.legacy-skin .lane,.legacy-skin .control-panel,.legacy-skin .empty-history{background:var(--paper);border-color:var(--line);border-radius:12px}
 .legacy-skin .proposal,.legacy-skin .lane,.legacy-skin .control-panel{padding:16px 18px}
-.legacy-skin .filters{background:#131821;border:1px solid var(--line)}
-.legacy-skin .filters input,.legacy-skin .filters select,.legacy-skin [data-review-choice],.legacy-skin input,.legacy-skin select,.legacy-skin textarea{background:#131821;color:var(--ink);border-color:#344052;min-height:34px}
-.legacy-skin .badge.neutral{background:#232b37;color:var(--muted)}
+.legacy-skin .filters{background:#131311;border:1px solid var(--line)}
+.legacy-skin .filters input,.legacy-skin .filters select,.legacy-skin [data-review-choice],.legacy-skin input,.legacy-skin select,.legacy-skin textarea{background:#131311;color:var(--ink);border-color:#31302d;min-height:34px}
+.legacy-skin .badge.neutral{background:#21201e;color:var(--muted)}
 .legacy-skin .activity-event+.activity-event{border-top-color:var(--line)}
 .legacy-skin .skip{background:var(--paper)}
-.legacy-skin pre{background:#131821}
-.legacy-skin .connection{border-left-color:#e3a948}
+.legacy-skin pre{background:#131311}
+.legacy-skin .connection{border-left-color:#e37c48}
 .legacy-skin .appointment h3{font-size:20px}.legacy-skin .appointment-time{font-size:18px}
 .legacy-skin table{font-size:12.5px}.legacy-skin thead th{color:var(--muted)}
-.legacy-skin a{color:#d3c6f6}
-.legacy-skin .phone-nav{background:#12161d;border-top:1px solid var(--line)}
+.legacy-skin a{color:#ffe07a}
+.legacy-skin .phone-nav{background:#111110;border-top:1px solid var(--line)}
 @media(max-width:800px){.legacy-skin .workspace{margin-left:0}}
 .legacy-skin .workspace>a.button[href="/"]{display:none}
 .legacy-skin .rail .desk-brand{display:block;font-size:16px;font-weight:700;color:var(--ink);text-decoration:none;padding:0 10px;margin-bottom:18px;letter-spacing:-.2px}
 .legacy-skin .phone-nav a{color:var(--muted)}
-.legacy-skin .capital-note{margin:12px 0;padding:10px 14px;border:1px solid #edca91;border-radius:10px;font-size:14px}
+.legacy-skin .capital-note{margin:12px 0;padding:10px 14px;border:1px solid #edb091;border-radius:10px;font-size:14px}
 .legacy-skin .capital-note.is-live{border-color:#a5d9d0}
-@font-face{font-family:Fredoka;src:url('/assets/fonts/Fredoka-600.woff2') format('woff2');font-weight:600;font-display:swap}
-.bf-brand{display:inline-flex;align-items:center;gap:10px;font-family:Fredoka,system-ui,sans-serif;font-weight:600;font-size:21px;text-decoration:none}

@@ -1,5 +1,5 @@
 /* Compact type scale and layout for the preview shell. Loaded last; overrides only sizing. */
-.agent-desk.team-preview{--bg:#0f1217;--card:#161b23;--border:#262e3a;--text:#e8ecf1;--text-2:#c2cad6;--text-3:#8f9aab;font-size:14px;line-height:1.55;background:var(--bg)}
+.agent-desk.team-preview{--bg:#0e0e0d;--card:#151413;--border:#232220;--text:#ededec;--text-2:#cecdca;--text-3:#a09e9a;font-size:14px;line-height:1.55;background:var(--bg)}
 .agent-desk.team-preview .desk-header{width:204px;padding:18px 12px;gap:18px}
 .agent-desk.team-preview .desk-brand{font-size:16px;letter-spacing:-.2px;padding:0 10px}
 .agent-desk.team-preview .desk-header nav{gap:2px}
@@ -18,7 +18,7 @@
 .agent-desk.team-preview .team-toolbar{margin-bottom:12px;gap:12px}.agent-desk.team-preview .team-toolbar h1{font-size:22px}
 .agent-desk.team-preview .team-toolbar p{margin:2px 0;font-size:13px}
 .agent-desk.team-preview .team-toolbar .button,.agent-desk.team-preview .team-refresh{font-size:13px;padding:7px 12px;border-radius:8px}
-.agent-desk.team-preview .team-outcome{padding:14px 18px;border:1px solid var(--border);border-left:3px solid #c6b7f3;border-radius:12px;background:var(--card);margin:12px 0}
+.agent-desk.team-preview .team-outcome{padding:14px 18px;border:1px solid var(--border);border-left:3px solid #ffcd29;border-radius:12px;background:var(--card);margin:12px 0}
 .agent-desk.team-preview .team-outcome h2{font-size:19px;max-width:none;margin:4px 0 6px}
 .agent-desk.team-preview .team-outcome>p{font-size:13.5px;margin:4px 0}.agent-desk.team-preview .team-date{font-size:12px}
 .agent-desk.team-preview .team-heading{margin-top:14px}.agent-desk.team-preview .team-heading h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}

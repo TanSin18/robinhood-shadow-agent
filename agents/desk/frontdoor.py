@@ -20,7 +20,7 @@ def make_server(inbox, port=8765, **options):
             if keyword.lower() == 'location' and value.startswith('/#'):
                 value = '/legacy' + value[1:]
             if keyword.lower() == 'content-security-policy' and not self.desk_response and "font-src" not in value:
-                value = value + "; font-src 'self'"
+                value = value + "; font-src 'self'; img-src 'self'"   # the brand logo is an image on the operational page too
             if keyword.lower() == 'content-security-policy' and self.desk_response:
                 form = "'self'" if getattr(self, 'desk_forms', False) else "'none'"
                 value = ("default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; "
@@ -43,7 +43,8 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('<p>Each lane starts at $500. ', '<p>Each lane starts at its recorded capital (Lane A $25,000 from the first v1.6 run; Lane B $500). ', 1)
                 # Same look as Agent Desk; markup, forms and checks unchanged.
                 content = content.replace('<link rel="stylesheet" href="/assets/dashboard.css">',
-                    '<link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/legacy-skin.css">', 1)
+                    '<link rel="stylesheet" href="/assets/dashboard.css"><link rel="stylesheet" href="/assets/legacy-skin.css">'
+                    '<link rel="stylesheet" href="/assets/botfolio-theme.css"><link rel="icon" href="/assets/botfolio-logo.svg">', 1)
                 content = content.replace('<body ', '<body class="legacy-skin" ', 1)
                 import re
                 content = re.sub(r'<a class="brand" href="/legacy"[^>]*>.*?</a>\s*<p class="rail-caption">[^<]*</p>',
