@@ -5,7 +5,8 @@ from .team import TEAM
 ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & charts'), ('/portfolio', 'Portfolio'),
           ('/money', 'Road to money'), ('/scoreboard', 'Is the AI working?'),
           ('/controls', 'Controls'), ('/health', 'Tweaks and health'), ('/guide', 'How it works'), ('/inbox', 'Inbox'), ('/firm', 'AI trader'),
-          ('/rules', 'Rule book'), ('/architecture', 'Architecture'), ('/analyst', 'Analyst desk'), ('/ask', 'Ask Bubbles'), ('/history', 'History'))
+          ('/rules', 'Rule book'), ('/architecture', 'Architecture'), ('/analyst', 'Analyst desk'), ('/ask', 'Ask Bubbles'), ('/history', 'History'),
+          ('/firm-lab', 'Firm Lab'))
 
 
 # One navigation for the whole dashboard. Operational views (Approvals, History,
@@ -13,7 +14,42 @@ ROUTES = (('/', 'Today'), ('/room', 'Decision room'), ('/checks', 'Checks & char
 NAV = (('/', 'Today', ''), ('/ask', 'Ask Bubbles', ''), ('/portfolio', 'Portfolio', ''), ('/legacy#decisions', 'Approvals', 'decisions'), ('/inbox', 'Inbox', ''), ('/analyst', 'Analyst', ''),
        ('/room', 'Decision room', ''), ('/checks', 'Checks & charts', ''), ('/history', 'History', ''),
        ('/legacy#controls', 'Controls', 'controls'), ('/guide', 'How it works', ''), ('/rules', 'Rule book', ''),
-       ('/architecture', 'Architecture', ''))
+       ('/architecture', 'Architecture', ''), ('/firm-lab', 'Firm Lab', ''))
+
+# The three paper arms, named for what they do. "Automatic" because desk-rule trades (no AI) also execute here;
+# each trade carries its own decision source.
+ARM_NAMES = {'agent_alone': 'Automatic arm', 'with_approvals': 'Approval arm', 'deterministic_no_ai': 'Rules only (no AI)'}
+ARM_HELP = {
+    'agent_alone': 'Executes eligible registered paper decisions automatically. Each trade shows its actual decision source.',
+    'with_approvals': 'Receives the same registered paper decisions as cards. A trade happens only after the operator answers YES, at a fresh '
+                      'price at that moment. Each trade shows its decision source, the operator approval and both timestamps.',
+    'deterministic_no_ai': 'Never asks a model. Only the written rules trade here.',
+}
+COMPARE_NOTE = ('Same starting capital and opportunity set. Execution timing and prices can differ because the Approval arm waits for an '
+                'operator decision.')
+RUN_LABEL = 'Registered paper run'
+# Fixed statements, not measurements. They change only by a deliberate edit after a signed operator decision:
+# the strategy has not passed its registered gate versus VTI, real orders are blocked in code, and new option buys
+# are paused under the signed v1.6 rules.
+TRUTH = (('Mode', 'PAPER', 'paper'), ('Strategy evidence', 'NOT PROVEN', 'unproven'), ('Real execution', 'DISABLED', 'off'),
+         ('Official options', 'PAUSED', 'paused'))
+
+
+def truth_bar():
+    return ('<div class="truth-bar" role="status" aria-label="What this system is and is not">'
+            + ''.join(f'<span class="truth truth-{tone}"><small>{esc(k)}</small><b>{esc(v)}</b></span>' for k, v, tone in TRUTH) + '</div>')
+
+
+def decision_source(card):
+    """Who produced a trade's decision, from the recorded card only. Never guessed."""
+    if not card:
+        return 'not recorded for this fill'
+    prop = card.get('proposal') or {}
+    if card.get('attribution') == 'desk_policy_not_ai' or prop.get('model_name') == 'deterministic_not_a_model':
+        return 'Desk rule (code, no AI)'
+    if card.get('author'):
+        return str(card['author'])
+    return f'AI proposal ({prop["model_name"]})' if prop.get('model_name') else 'not recorded for this fill'
 
 
 def brand(size=34):
@@ -74,7 +110,7 @@ def shell(title, body, path='/', state=None):
 {scripts}{refresh}</head><body class="{body_class}">{preview}<a class="skip" href="#main">Skip to content</a>
 <header class="desk-header">{brand()}<nav aria-label="Sections">{links}</nav>
 <span class="desk-safety {'stopped' if stopped else ''}">{esc(safety)}</span></header>
-<main id="main" tabindex="-1">{body}</main>{fab}<footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
+<main id="main" tabindex="-1">{truth_bar()}{body}</main>{fab}<footer>Local records · Paper trading only. Real orders are blocked.</footer></body></html>'''
 
 
 def deferred(title, milestone):
@@ -85,17 +121,18 @@ def category_chips(review):
     cat = review.get('category') or {}
     chips = ''.join(f'<span class="cat cat-{esc(t["tone"])}" title="{esc(t["title"])}">{esc(t["label"])}</span>' for t in cat.get('tags', []))
     if cat:
-        chips += f'<span class="cat cat-{"counts" if cat.get("counts") else "nocount"}">{esc(cat.get("counts_reason", ""))}</span>'
+        chips += (f'<span class="cat cat-{"counts" if cat.get("counts") else "nocount"}" title="{esc(cat.get("counts_reason", ""))}">'
+                  f'Counts toward experiment: {"Yes" if cat.get("counts") else "No"}</span>')
     return f'<div class="cat-row">{chips}</div>' if chips else ''
 
 
 def category_prefix(review):
     cat = review.get('category') or {}
-    return '' if not cat else ('[Official] ' if cat.get('group') == 'official' else '[Build] ')
+    return '' if not cat else (f'[{RUN_LABEL}] ' if cat.get('group') == 'official' else '[Build] ')
 
 
 V16_CAPITAL = 25000   # signed v1.6.0 amendment: Lane A paper capital per account
-V16_START_TEXT = 'Thursday Oct 1, at the first official run (10:00 ET)'
+V16_START_TEXT = 'Thursday Oct 1, at the first registered paper run (10:00 ET)'
 
 
 def capital_state(state):

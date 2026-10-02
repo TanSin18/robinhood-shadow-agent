@@ -165,14 +165,15 @@ def history(reviews):
         g = r.get('ai_gate')
         stages = ''.join(f'<i class="dot st-{esc(s.get("status", "unavailable"))}" title="{esc(s.get("key"))}: {esc(s.get("status_label"))}"></i>' for s in r.get('stages', []))
         cat = r.get('category') or {}
-        kind = ('<span class="cat cat-official">Official</span>' if cat.get('group') == 'official' else '<span class="cat cat-build">Build</span>') if cat else ''
+        kind = ('<span class="cat cat-neutral">Registered paper run</span>' if cat.get('group') == 'official' else '<span class="cat cat-build">Build</span>') if cat else ''
+        counts = ('Yes' if cat.get('counts') else 'No') if cat else '—'
         extra = ''.join(f'<span class="cat cat-{esc(t["tone"])}" title="{esc(t["title"])}">{esc(t["label"])}</span>' for t in cat.get('tags', [])[1:] if t['tone'] in {'warn', 'stop'})
-        rows += (f'<tr class="{"row-build" if cat.get("group") == "build" else ""}"><td class="nowrap">{esc(date_label(r.get("timestamp")))}</td><td>{kind}{extra}</td><td>{esc(outcome(r))}</td><td class="dots">{stages}</td>'
+        rows += (f'<tr class="{"row-build" if cat.get("group") == "build" else ""}"><td class="nowrap">{esc(date_label(r.get("timestamp")))}</td><td>{kind}{extra}</td><td title="{esc(cat.get("counts_reason", ""))}">{counts}</td><td>{esc(outcome(r))}</td><td class="dots">{stages}</td>'
                  f'<td class="num">{signals}</td><td>{esc("open" if g and g["open"] else "closed" if g else "—")}</td>'
                  f'<td><svg class="spark" viewBox="0 0 100 10" aria-hidden="true"><rect x="0" y="1" width="{cost / top * 100:.1f}" height="8" rx="2"/></svg>'
                  f'<span class="num">${cost:.4f}</span></td><td class="num">{warn or "—"}</td></tr>')
-    return ('<section class="room-card"><div class="card-head"><h3>Run history</h3><span class="muted small">Build = made while the system was being built (never counts) · Official = counts from Oct 1, 9:30 AM ET</span></div>'
-            '<div class="table-wrap"><table class="mini history"><thead><tr><th>Run</th><th>Category</th><th>Outcome</th><th>Steps</th><th>Signals</th><th>AI gate</th><th>AI cost</th><th>Warnings</th></tr></thead>'
+    return ('<section class="room-card"><div class="card-head"><h3>Run history</h3><span class="muted small">Build = made while the system was being built (never counts) · Registered paper run = under the signed rules, from Oct 1, 9:30 AM ET</span></div>'
+            '<div class="table-wrap"><table class="mini history"><thead><tr><th>Run</th><th>Category</th><th>Counts toward experiment</th><th>Outcome</th><th>Steps</th><th>Signals</th><th>AI gate</th><th>AI cost</th><th>Warnings</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div></section>')
 
 

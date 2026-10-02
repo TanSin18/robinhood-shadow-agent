@@ -482,3 +482,42 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 @media (max-width:560px){.agent-desk .mem-steps{grid-template-columns:1fr}.agent-desk .mem-steps li+li{padding-left:0;border-left:0}}
 @media (max-width:700px){.agent-desk .v10-activity li{grid-template-columns:1fr;gap:2px}.agent-desk .v10-limits{grid-template-columns:1fr 1fr}}
 @media (max-width:760px){.agent-desk main{overflow-x:clip}.agent-desk .rb-body,.agent-desk .rb-rule,.agent-desk .rb-stage{min-width:0;overflow-wrap:anywhere}}
+
+/* ---------- truth bar: what this system is and is not, on every page ---------- */
+.truth-bar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.truth-bar .truth{display:flex;flex-direction:column;gap:2px;padding:8px 14px;border:1px solid var(--border,#262629);border-radius:10px;background:rgba(255,255,255,.025);min-width:150px}
+.truth-bar small{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3,#a3a09b)}
+.truth-bar b{font-size:14px;letter-spacing:.04em;font-weight:650;color:var(--text,#f5f4f2)}
+.truth-bar .truth-unproven b,.truth-bar .truth-paused b{color:#e2c275}
+.truth-bar .truth-off b{color:#e58c8c}
+.legacy-skin .truth-bar{margin:0 0 16px}
+@media (max-width:700px){.truth-bar .truth{min-width:calc(50% - 4px);flex:1 1 calc(50% - 4px);padding:7px 10px}}
+/* ---------- per-trade provenance ---------- */
+.agent-desk .v10-trade-meta{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 18px;margin:2px 0 0}
+.agent-desk .v10-trade-meta div{display:flex;gap:6px;align-items:baseline}
+.agent-desk .v10-trade-meta dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3,#a3a09b)}
+.agent-desk .v10-trade-meta dd{margin:0;font-size:12px;color:var(--text-2,#d9d7d3)}
+
+/* ---------- Firm Lab (read-only) ---------- */
+.agent-desk .fl-flags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;max-width:none}
+.agent-desk .fl-flag{font-family:var(--bf-mono);font-size:12px!important;letter-spacing:.12em;font-weight:650;color:#e2c275;border:1px solid rgba(226,194,117,.45);
+  background:rgba(226,194,117,.06);border-radius:8px;padding:6px 12px}
+.agent-desk .fl-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px 28px;margin:0}
+.agent-desk .fl-facts div{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid var(--hair-2)}
+.agent-desk .fl-facts dt{font-family:var(--bf-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-4)}
+.agent-desk .fl-facts dd{margin:0;font-size:13px;color:var(--text-2);overflow-wrap:anywhere}
+.agent-desk .fl-stamp{font-family:var(--bf-mono);font-size:12px!important;letter-spacing:.1em;color:#e2c275;border:1px dashed rgba(226,194,117,.5);border-radius:8px;
+  padding:8px 12px;display:inline-block;margin:0 0 12px}
+.agent-desk table.fl-cap{table-layout:fixed;width:100%}
+.agent-desk table.fl-cap .fl-c1{width:210px}.agent-desk table.fl-cap .fl-c2{width:120px}.agent-desk table.fl-cap .fl-c3{width:230px}
+.agent-desk table.fl-cap td,.agent-desk table.fl-base td:last-child{vertical-align:top;white-space:normal;overflow-wrap:anywhere}
+.agent-desk table.fl-base td:last-child{min-width:220px}
+.agent-desk table.fl-base{margin-top:16px}
+.agent-desk table.fl-base tr.fl-pick td{background:rgba(255,255,255,.035)}
+.agent-desk .fl-benches{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--pad)}
+.agent-desk .fl-bench h3{margin:0 0 8px}
+.agent-desk .fl-warning p{font-size:14px;color:var(--text-2);max-width:86ch;margin:0}
+.agent-desk .fl-warning{border-color:rgba(226,194,117,.35)}
+@media (max-width:760px){.agent-desk table.fl-cap,.agent-desk table.fl-cap tbody,.agent-desk table.fl-cap tr,.agent-desk table.fl-cap td{display:block;width:auto}
+  .agent-desk table.fl-cap thead,.agent-desk table.fl-cap colgroup,.agent-desk table.fl-cap td:nth-child(3){display:none}
+  .agent-desk table.fl-cap tr{padding:10px 12px;border-bottom:1px solid var(--hair-2)}.agent-desk table.fl-cap td{padding:2px 0;border:0}}

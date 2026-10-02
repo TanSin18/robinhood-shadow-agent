@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 from agents.inbox_web import make_server as operational_server
 from .preview import snapshot, ASSETS
 from .router import render
-from .components import ROUTES, nav_links, brand
+from .components import ROUTES, nav_links, brand, truth_bar
 
 
 def make_server(inbox, port=8765, **options):
@@ -37,6 +37,12 @@ def make_server(inbox, port=8765, **options):
                 content = content.replace('href="/#', 'href="/legacy#').replace('action="/#', 'action="/legacy#')
                 content = content.replace('action="/"', 'action="/legacy"').replace('href="/"', 'href="/legacy"')
                 content = content.replace('<main ', '<a class="button" href="/">Botfolio home</a><main ', 1)
+                # Truthful names on the operational page too. Text replacement only: the page's own source is not edited.
+                for old, new in (('Agent + my approvals', 'Approval arm'), ('With your approvals', 'Approval arm'), ('Agent alone', 'Automatic arm'),
+                                 ('Defined-risk options', 'Options (PAUSED)')):
+                    content = content.replace(old, new)
+                import re as _re
+                content = _re.sub(r'(<main\b[^>]*>)', lambda m: m.group(1) + truth_bar(), content, count=1)
                 # Capital wording follows the ledger (v1.6 Lane A $25,000) instead of the old fixed "$500" text.
                 try:
                     from .components import capital_note

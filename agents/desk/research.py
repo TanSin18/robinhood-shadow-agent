@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from .components import esc
 
 ET = ZoneInfo('America/New_York')
-ARMS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only (no AI)'}
+from .components import ARM_NAMES as ARMS
 
 
 def _when(value):
@@ -61,7 +61,7 @@ def backtest_card(report):
 
 def promotion_card(gate):
     if not gate or gate.get('unavailable'):
-        return _card('Scoreboard · statistical gate', 'Official runs only, from Oct 1 09:30 ET',
+        return _card('Scoreboard · statistical gate', 'Registered paper runs only, from Oct 1 09:30 ET',
                      '<p class="muted">Installs with tonight’s runtime release. Until it reports, nothing counts as proven.</p>')
     rows = ''
     for arm, r in (gate.get('arms') or {}).items():
@@ -73,7 +73,7 @@ def promotion_card(gate):
     body = ('<div class="table-wrap"><table class="mini"><thead><tr><th>Account</th><th>Sessions</th><th>Decisions</th><th>Excess / yr vs VTI (90% range)</th><th>Verdict</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div>'
             f'<p class="muted small">{esc(gate.get("rule", ""))}. After spread, AI cost and an estimated 35% tax. Never unlocks real money.</p>')
-    return _card('Scoreboard · statistical gate', 'Official runs only, from Oct 1 09:30 ET', body)
+    return _card('Scoreboard · statistical gate', 'Registered paper runs only, from Oct 1 09:30 ET', body)
 
 
 def protective_card(items, rebase):
@@ -99,7 +99,7 @@ def screen_card(screen):
     body = (f'<p class="small">Last run {esc(_when(screen.get("at")))} · {esc(screen.get("status"))}</p>'
             + (f'<ol class="funnel-steps">{steps}</ol>' if steps else '')
             + f'<p class="small">Shortlist: <span class="code">{esc(short)}</span></p>'
-            '<p class="muted small">Shadow only: the official run still uses the 23 registered tickers until a later amendment after 20+ clean nights. '
+            '<p class="muted small">Shadow only: the registered paper run still uses the 23 registered tickers until a later amendment after 20+ clean nights. '
             'Current constituents only, so any history drawn from it is survivorship-biased.</p>')
     return _card('S&P 500 shadow screen', 'Nightly 4:50 PM ET · never trades', body)
 

@@ -16,12 +16,12 @@ def render(state, config, csrf, filters=None):
             cards = [c for c in cards if matches(c, filters, card=True)]
         approvals = ''.join(card_view(c, csrf, state.get('paused', False)) for c in cards[:30]) or '<p>No matching proposals. Clear the filters to see all recorded cards.</p><a href="/">Clear filters</a>'
     money = ''.join(card(label, f'<p class="desk-number">{value}</p><p>{reason}</p>') for label, value, reason in (
-        ('AI account', 'Not recorded', 'Official-mode balances are not available in this UI version.'),
+        ('AI account', 'Not recorded', 'Registered-run balances are not available in this UI version.'),
         ('No-AI arm', 'Not tracked yet', 'The comparison arm has not been connected.'),
-        ('VTI', 'Not recorded', 'A comparable official observation period is required.'),
+        ('VTI', 'Not recorded', 'A comparable registered observation period is required.'),
         ('AI cost this year', 'Not recorded', 'Mode-separated annual costs require U1 records.')))
-    return f'''<h1>Today</h1><p class="desk-muted">Last official run: Not recorded · Experiment day: Not recorded</p>
-<p class="desk-mode">Historical records · run mode not recorded. Official and learning totals are unavailable.</p>
+    return f'''<h1>Today</h1><p class="desk-muted">Last registered paper run: Not recorded · Experiment day: Not recorded</p>
+<p class="desk-mode">Historical records · run mode not recorded. Registered-run and learning totals are unavailable.</p>
 <div class="desk-today">{card('Latest recorded outcome', summary+'<p class="desk-muted">Code-built summary from the latest recorded cycle outcome; not an AI explanation. This may be from an earlier day.</p>', 'desk-story')}{card('Needs you', approvals)}</div>
 {card('From the universe to your inbox', '<p>Not recorded: per-candidate funnel counts arrive with U1. No counts are inferred from cycle-level stages.</p>')}
 <div class="desk-money">{money}</div>

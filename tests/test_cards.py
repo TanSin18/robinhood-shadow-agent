@@ -100,7 +100,7 @@ def test_inbox_page_separates_sources_and_shows_no_official_pnl(tmp_path):
     store.add(card(id='w1', source='watch', ticker='MRNA', side=None, quantity=None, est_cost_usd=None, max_loss_usd=None,
                    opinion='Platform company; outcome depends on pipeline results.'))
     html = render({'card_inbox': store.view(), 'inbox_csrf': 'tok'})
-    assert html.index('From the Official rule') < html.index('SOXX') < html.index('Watch notes') < html.index('MRNA')
+    assert html.index('From the registered rule') < html.index('SOXX') < html.index('Watch notes') < html.index('MRNA')
     assert 'No record yet' in html and 'AI opinion' in html and 'NOT A RECOMMENDATION' in html
     assert 'value="may_copy_live" disabled' in html          # live copy stays off
     assert 'vs start' not in html and 'Portfolio value' not in html

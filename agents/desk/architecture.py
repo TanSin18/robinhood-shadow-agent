@@ -18,7 +18,7 @@ BOXES = {
     'daily':    (290, 60, 200, 64, 'Daily service', 'launchd · 60 s tick · starts runs', 'code'),
     'maint':    (530, 60, 200, 64, 'Maintenance', 'every 5 min: settle, expire, alert', 'code'),
     'screen':   (770, 60, 200, 64, 'Nightly S&P screen', '16:50 ET · research only', 'code'),
-    'cycle':    (290, 180, 200, 64, 'Official 10:00 run', 'read → signals → AI gate', 'code'),
+    'cycle':    (290, 180, 200, 64, 'Registered 10:00 run', 'read → signals → AI gate', 'code'),
     'protect':  (530, 180, 200, 64, '15:50 protective check', 'v1.6 stop / trend / momentum', 'code'),
     'trader':   (770, 180, 200, 64, 'Analyst desk', 'commentary · news · regime', 'ai'),
     'models':   (290, 300, 200, 64, 'AI stages (official)', 'Research · Portfolio · Critic', 'ai'),
@@ -85,10 +85,10 @@ SEATS_OFFICIAL = (
     ('ai', 'Critic', 'gpt-5.4 (dated)', 'Sees a blind packet and can reject. Returns free text plus rejected tickers.'),
     ('code', 'Desk rule', 'code, never credited to AI', 'Buys the single strongest ETF signal if liquidity, spread, trigger and sizing pass.'),
     ('code', 'Risk engine', 'code', '26 checks on every order in every account: size, cash, limits, losses, kill switch, whitelist.'),
-    ('you', 'You', 'operator', 'Answer cards for the “AI + your approval” account. You alone sign in, sign rules and install releases.'),
+    ('you', 'You', 'operator', 'Answer cards for the Approval arm. You alone sign in, sign rules and install releases.'),
 )
 SEATS_TRADER = (
-    ('ai', 'Commentator', 'gpt-5.4-mini', 'Morning and after-close notes on the official decision, the regime and the day. Cannot trade.'),
+    ('ai', 'Commentator', 'gpt-5.4-mini', 'Morning and after-close notes on the registered run decision, the regime and the day. Cannot trade.'),
     ('ai', 'News reader', 'same call', 'Summarises free headlines (Google News RSS, SEC filings) per ticker with a sentiment label. Headlines are untrusted data.'),
     ('code', 'Regime model', 'code · after the close', '3-state Gaussian HMM on VTI daily returns, retrained every night; labels calm / normal / stressed.'),
     ('code', 'Shadow Kelly', 'code · after the close', 'Raw, half and disciplined Kelly per name beside the size the risk engine uses. Never sizes a trade.'),
@@ -104,14 +104,14 @@ LAYERS = (
      'dashboard or environment can turn a rule on.'),
     ('Account tripwire', 'Each 10:00 run reads the Agentic account; any unexpected change in cash, positions or orders stops trading and records an incident.'),
     ('Cash bound', 'If the Agentic account ever holds more than $1,200, the run fails closed.'),
-    ('Budgets with reservations', 'Every model call reserves its worst case first. Official runs: $0.40/day; analyst desk: $1/day.'),
+    ('Budgets with reservations', 'Every model call reserves its worst case first. Registered paper runs: $0.40/day; analyst desk: $1/day.'),
     ('One runner', 'One launchd daily service claims each day’s run under a file lock; a second runner is refused.'),
     ('Releases with rollback', 'Installs are manifest-checked (file hashes, before/after fingerprint), then the full test suite runs on the Mac; any '
      'failure rolls back automatically.'),
 )
 EVIDENCE = (
-    ('Three decision-makers, same money', 'AI alone, AI + your approval and Rules only start with the same $25,000 and see the same prices. '
-     'The AI is only interesting if it beats Rules only after costs.'),
+    ('Three paper arms, same starting capital', 'The Automatic arm, the Approval arm and Rules only start with the same $25,000 and the same opportunity '
+     'set. Execution timing and prices can differ because the Approval arm waits for an operator decision. Each trade records its decision source.'),
     ('Benchmarks', 'VTI (do nothing clever), cash, and planned seeded-random and exposure-matched VTI arms (registered, not yet in code).'),
     ('Costs counted', 'Buys pay the ask, holdings are valued at the bid, AI spend is charged to the AI accounts, and a 35% tax is applied to gains '
      'in the promotion test.'),
@@ -131,8 +131,8 @@ TRIALS = (
 QUESTIONS = (
     ('Is a forward paper test of this size able to show anything?', 'At ~1 trade a week, 200 decisions takes years. Would you change the metric, '
      'the sample rule, or the universe to get a usable answer in 6–12 months?'),
-    ('Where should the AI sit?', 'Rules pick ETFs; the AI may still propose one single stock in the official run, and everything else it does is '
-     'commentary, news and regime notes. Should the official stock path also become rules-only, with the AI purely advisory?'),
+    ('Where should the AI sit?', 'Rules pick ETFs; the AI may still propose one single stock in the registered paper run, and everything else it does is '
+     'commentary, news and regime notes. Should the registered stock path also become rules-only, with the AI purely advisory?'),
     ('Are the AI guardrails the right ones?', 'Citations must match tool numbers, a Critic can veto, code owns sizing and exits, and there is no news input. '
      'What would you add or remove, for example news, a model-free placebo per seat, or calibration scoring?'),
     ('Regime model and Kelly', 'A 3-state Gaussian HMM on VTI retrained nightly, and half-Kelly that is zero unless t ≥ 2. Would you use other '
@@ -154,13 +154,13 @@ ROSTER = (
      'Never read by a trade decision.'),
     ('Mayor', 'Portfolio (gpt-5.4-mini)', 'active · advisory daily', 'Every day: reviews the whole paper book, cash drag, exit guard, chop and Kelly vs actual. '
      'Also the official Portfolio stage for single stocks (not triggered yet).'),
-    ('Mojo Jojo', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the official decision and the team’s notes with fixed '
+    ('Mojo Jojo', 'Critic (gpt-5.4-mini daily; gpt-5.4 official)', 'active · advisory daily', 'Every day: attacks the registered run decision and the team’s notes with fixed '
      'fail codes. Also the official Critic with veto for single stocks (not triggered yet).'),
     ('Bubbles', 'Explainer (gpt-5.4-mini)', 'active · advisory daily', 'Writes the morning and after-close note you read, last, from everyone else. Also answers your questions on the Ask Bubbles page: '
      'one model call per question, no tools, records only, every number checked by code, never read by the trading rules.'),
 )
 FILES = (
-    ('agents/daily_cycle.py', 'The 10:00 official run and the 15:50 protective check'),
+    ('agents/daily_cycle.py', 'The 10:00 registered paper run and the 15:50 protective check'),
     ('research/strategy_signals.py', 'The momentum, dip and option signal rules'),
     ('agents/etf_desk_policy.py · agents/etf_exit.py', 'Desk entry rule and ETF exits (v1.5 / v1.5.1)'),
     ('risk/engine.py · risk/models.py', 'The 26 risk checks'),
@@ -183,7 +183,7 @@ def _live(state):
     lane_a = [p for p in pf.get('paper') or [] if p.get('lane') == 'A']
     real = pf.get('real') or {}
     facts = [('Mode', 'Stage 1 · paper only · real orders blocked'),
-             ('Official runs recorded', str(len(runs)) if runs else 'not recorded'),
+             ('Registered paper runs recorded', str(len(runs)) if runs else 'not recorded'),
              ('Paper fills so far', str(len(fills))),
              ('Lane A capital per account', '$25,000 (v1.6, since Oct 1)' if any(str(p.get('start', '')).startswith('25000') for p in lane_a) else 'see Portfolio'),
              ('Real Agentic account', f'{money(real.get("cash"))} cash, never traded' if real else 'not recorded'),
@@ -231,12 +231,12 @@ def render(state):
                  'the Rule book.',
                  '<p class="rb-toc">' + ''.join(f'<a href="/rules#cycle">{i + 1}. {esc(s)}</a>' for i, s in enumerate(flow)) + '</p>'
                  '<div class="ar-cards">'
-                 '<details class="ar-card"><summary><b>10:00 ET · official run</b><small>Claims the day under a lock, reads the account and the market, '
+                 '<details class="ar-card"><summary><b>10:00 ET · registered paper run</b><small>Claims the day under a lock, reads the account and the market, '
                  'computes features from completed sessions only, runs the rules, calls the AI only if needed, checks every order, fills the three paper '
                  'accounts and writes a hashed decision capsule.</small></summary></details>'
                  '<details class="ar-card"><summary><b>10:00–15:30 · your answers</b><small>Cards for the approval account fill only at a fresh price at '
                  'or under the limit, and expire at 15:30 ET.</small></summary></details>'
-                 '<details class="ar-card"><summary><b>After 10:00 · analyst morning note</b><small>Inside the same service tick, after the official run '
+                 '<details class="ar-card"><summary><b>After 10:00 · analyst morning note</b><small>Inside the same service tick, after the registered paper run '
                  'completed: free headlines are fetched and a model writes commentary and news notes. It cannot trade.</small></summary></details>'
                  '<details class="ar-card"><summary><b>16:15 ET · analyst after-close job</b><small>Daily bars for the 23 names, regime model retrained, '
                  'shadow Kelly, daily auction read, news and the close note.</small></summary></details>'
@@ -246,8 +246,8 @@ def render(state):
                  'trades and never changes the 23 registered names.</small></summary></details>'
                  '<details class="ar-card"><summary><b>Friday 16:30 · weekly report</b><small>Accounts vs VTI and cash, costs, decisions and incidents, '
                  'sent as a notification.</small></summary></details></div>'),
-        _section('seats', 'Who decides', 'The official desk is what counts. Since Oct 1 the other AI work is advisory only: it explains, it does not decide.',
-                 '<h3>Official desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>Analyst desk (AI off the trading path)</h3>' + _seats(SEATS_TRADER)
+        _section('seats', 'Who decides', 'Only the registered-run desk can place paper trades. Since Oct 1 the other AI work is advisory only: it explains, it does not decide.',
+                 '<h3>Registered-run desk</h3>' + _seats(SEATS_OFFICIAL) + '<h3>Analyst desk (AI off the trading path)</h3>' + _seats(SEATS_TRADER)
                  + '<p class="v10-note">Model ids are pinned to dated versions; a different model id is refused. Prompts and specs are '
                  'hashed; changing either starts a new trial.</p>'),
         _section('roster', 'Agent roster, as it really is today', 'Decides = can stop or allow a trade; advisory = writes every trading day but no trade reads it '

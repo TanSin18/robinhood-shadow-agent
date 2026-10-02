@@ -21,7 +21,7 @@ def _has(db, table):
     return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
 
 
-ACCOUNTS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only'}
+ACCOUNTS = {'agent_alone': 'Automatic arm', 'with_approvals': 'Approval arm', 'deterministic_no_ai': 'Rules only'}
 CHOP_CLS = {'TRENDING': 'pos', 'CHOPPY': 'mixed', 'LOW_VOL': 'neutral', 'OVEREXTENDED': 'neg'}
 
 
@@ -35,7 +35,7 @@ def _team(team):
     for key, name, role, avatar in SEATS:
         n = (team or {}).get(key)
         if not n:
-            body = '<p class="v10-empty">No note yet. Writes after the official run and after the close.</p>'
+            body = '<p class="v10-empty">No note yet. Writes after the registered paper run and after the close.</p>'
         elif key == 'pip':
             body = (f'<p><b>Base rate:</b> {esc(n.get("base_rate"))}</p><ul class="v10-list">'
                     + ''.join(f'<li><b>{esc(x.get("ticker"))}</b> {esc(x.get("read"))} <small>Wrong if: {esc(x.get("wrong_if"))}</small></li>'
@@ -109,7 +109,7 @@ def _chop(g):
     return ('<div class="table-wrap"><table class="mini"><thead><tr><th>Name</th><th>Tape</th><th>ADX(14)</th><th>ATR(14) % of price</th>'
             f'<th>Distance from 50-day avg (ATRs)</th><th>Gate</th></tr></thead><tbody>{rows}</tbody></table></div>'
             '<p class="v10-note">Trending = ADX ≥ 20; choppy = ADX < 20; low vol = ATR% in the bottom fifth of its own last year; overextended = more '
-            'than 3 ATRs from the 50-day average. Only “trending” would pass a chop gate. Shadow only: the official run does not read it yet.</p>')
+            'than 3 ATRs from the 50-day average. Only “trending” would pass a chop gate. Shadow only: the registered paper run does not read it.</p>')
 
 
 def load(official_db):
@@ -168,7 +168,7 @@ def _note(n, news_items, title, when_written=''):
     checks = ('<p class="an-ok">Code checks passed: every number cited matches the records; no order-like or hype language.</p>' if not flags else
               '<p class="an-flag">Code flagged: ' + esc(', '.join(flags)) + '</p>')
     reads = ''.join(f'<section><h4>{esc(k)}</h4><p>{esc(n.get(f))}</p></section>' for k, f in
-                    (('Market', 'market_read'), ('Official decision', 'decision_read'), ('Regime', 'regime_read'), ('Auction', 'auction_read'))
+                    (('Market', 'market_read'), ('Registered run decision', 'decision_read'), ('Regime', 'regime_read'), ('Auction', 'auction_read'))
                     if n.get(f))
     order = {'high': 0, 'medium': 1, 'low': 2}
     notes = ''
@@ -450,7 +450,7 @@ def render(state):
     if not a.get('exists'):
         return head + ('<section class="v10-panel"><h3>Not set up yet</h3><p>Install the latest release, then run '
                        '<code>python -m agents.analyst.cli init --official-database …/data/agent.db</code>. The first morning note follows the next '
-                       'official run; the first regime fit runs after the close.</p></section>')
+                       'registered paper run; the first regime fit runs after the close.</p></section>')
     if a.get('error'):
         return head + f'<p class="v10-empty">Analyst records unavailable ({esc(a["error"])}). No status is assumed.</p>'
     held = {f.get('ticker') for f in (state.get('portfolio') or {}).get('fills') or []}
@@ -460,7 +460,7 @@ def render(state):
     morning, close = a.get('morning'), a.get('close')
     latest = 'close' if close and (not morning or str(close.get('at')) >= str(morning.get('at'))) else 'morning'
     subs = (('close', 'After close', close, 'Written in the after-close job, 4:15 PM ET at the earliest, once the day’s bars are in.'),
-            ('morning', 'Morning', morning, 'Written after the 10:00 AM ET official run completes.'))
+            ('morning', 'Morning', morning, 'Written after the 10:00 AM ET registered paper run completes.'))
     seg = ''.join(f'<a role="tab" href="#an-brief-{k}" data-tab="an-brief-{k}" aria-selected="{"true" if k == latest else "false"}">{esc(label)}'
                   f'<small>{esc(short_time(n.get("at"))) if n else "not written yet"}</small></a>' for k, label, n, _ in subs)
     brief = (f'<nav class="v10-seg" role="tablist" aria-label="Which note" data-tabgroup="brief">{seg}</nav>'

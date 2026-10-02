@@ -37,6 +37,6 @@ def test_portfolio_shows_recorded_real_snapshot_and_paper_split():
         'values': [{'timestamp': '2026-09-30T14:00:46+00:00', 'lane': 'A', 'track': 'with_approvals', 'value': '500'}]}}
     html = render('/portfolio', state, None, '')
     assert '$500.00' in html and 'Verified Unchanged' in html and 'Sep 30, 10:00 AM ET' in html
-    assert 'SOXX' in html and 'AI alone' in html and 'acct-A-deterministic_no_ai' not in html
+    assert 'SOXX' in html and 'Automatic arm' in html and 'AI alone' not in html and 'acct-A-deterministic_no_ai' not in html
     assert 'data-tab="tab-real"' in html and 'data-tab="tab-paper"' in html
     assert 'v10-chart' in html and 'style=' not in html and '<script>' not in html

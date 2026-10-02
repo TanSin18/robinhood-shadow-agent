@@ -27,11 +27,11 @@ def render(state):
     firm = state.get('firm')
     csrf = state.get('inbox_csrf', '')
     head = ('<div class="room-head"><div><h1>AI trader</h1><p>A forward paper experiment: can a team of AI models pick trades '
-            'that beat VTI and beat random picks, after spreads, tax and its own AI bill? Separate from Official.</p></div></div>')
+            'that beat VTI and beat random picks, after spreads, tax and its own AI bill? Separate from the registered paper run.</p></div></div>')
     if not firm or not firm.get('exists'):
         return head + ('<p class="capital-note is-scheduled"><strong>Not set up yet.</strong> The book is registered as '
                        '<code>ai_trader_fwd_v1</code> and can start paper trading on Monday Oct 5 at the earliest, after '
-                       'Thursday\'s Official run is confirmed. Until it is initialised nothing runs.</p>')
+                       'Thursday\'s registered paper run is confirmed. Until it is initialised nothing runs.</p>')
     board = firm['board']
     mode_note = {'WATCH_ONLY': 'Watch-only: the seats run and tickets are recorded, but nothing is bought.',
                  'PAPER': 'Paper trading: book A fills, book B waits for you, book C copies with a random ticker.',
@@ -43,10 +43,10 @@ def render(state):
     ac = (board.get('A_vs_C') or {})
     html += ('<section class="room-card"><div class="card-head"><h3>Scoreboard</h3><span class="muted small">after spreads, AI bill and estimated tax</span></div>'
              '<div class="table-wrap"><table class="mini"><thead><tr><th>Book</th><th>Value</th><th>vs VTI per year (90% range)</th>'
-             '<th>vs Official per year</th><th>vs cash</th></tr></thead><tbody>'
-             + _line('A', 'A · AI alone', lines.get('A')) + _line('B', 'B · AI + you', lines.get('B'))
+             '<th>vs registered run per year</th><th>vs cash</th></tr></thead><tbody>'
+             + _line('A', 'A · automatic', lines.get('A')) + _line('B', 'B · with operator approval', lines.get('B'))
              + _line('C', 'C · random picks (control)', lines.get('C')) + '</tbody></table></div>'
-             f'<p class="small">AI alone vs random picks: {_pct(ac.get("annual_excess"))} per year'
+             f'<p class="small">Book A vs random picks: {_pct(ac.get("annual_excess"))} per year'
              + (f' (90% {_pct(ac["ci90"][0])} to {_pct(ac["ci90"][1])})' if ac.get('ci90') else '') + '. If AI does not beat random, '
              'any win over VTI is labelled luck or market exposure.</p></section>')
     cards = ''

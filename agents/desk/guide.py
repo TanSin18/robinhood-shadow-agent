@@ -109,7 +109,7 @@ def body():
 <a href="/rules#day">A day, minute by minute</a><a href="/rules#cycle">The 10:00 run, stage by stage</a>
 <a href="/rules#issues">Known issues</a><a href="/architecture">Architecture for reviewers</a></nav>
 <section class="gd-section" aria-labelledby="gd-flow-h"><div class="gd-section-head"><h2 id="gd-flow-h">The daily flow</h2>
-<p>Click a box to jump to its step, or play the demo to walk through Thursday's first official run.</p></div>
+<p>Click a box to jump to its step, or play the demo to walk through Thursday's first registered paper run.</p></div>
 <div class="gd-demo"><button type="button" class="gd-btn" data-demo="prev">Previous</button>
 <button type="button" class="gd-btn gd-btn-main" data-demo="play">Play demo</button>
 <button type="button" class="gd-btn" data-demo="next">Next</button>

@@ -82,7 +82,7 @@
     {
      "id": "act-root-pin",
      "name": "Root registration must be the approved file",
-     "applies_to": "every official run, every LiveReader, bounded inference",
+     "applies_to": "every registered paper run, every LiveReader, bounded inference",
      "when": "at load",
      "condition": "sha256(preregistration.yaml) == 39375034...6075; version 1.4.2; status approved_for_phase_0; approval.scope phase_0_only; phase_1_allowed false; max_agentic_cash_usd == 1200.00; allowed_robinhood_read_tools is exactly the 11 READ_METHODS; read schema manifest path broker/read_schemas_v1.4.2.json with matching sha",
      "action": "ValueError (run fails closed) if any check fails",
@@ -92,7 +92,7 @@
     {
      "id": "act-v150",
      "name": "v1.5.0 desk policy layer",
-     "applies_to": "official cycle (desk ETF entry, 23-ticker universe, ETF removal from AI packets, blind Critic packet, capsule)",
+     "applies_to": "registered paper run (desk ETF entry, 23-ticker universe, ETF removal from AI packets, blind Critic packet, capsule)",
      "when": "per call to v15_active(now)",
      "condition": "sha256(preregistration-amendment-v1.5.0.yaml) == dc3d884b...0179 AND now >= 2026-10-01T09:30-04:00 AND not symlink AND declared base_sha256 == root sha AND operator_signature.status == SIGNED",
      "action": "production_enabled() returns True -> desk_policy_enabled for the cycle",
@@ -146,7 +146,7 @@
     {
      "id": "act-v15-not-activated",
      "name": "Things v1.5.0 explicitly does NOT activate",
-     "applies_to": "official system",
+     "applies_to": "registered-run system",
      "when": "-",
      "condition": "-",
      "action": "session.pulse, ledger, seats, token_cap_finalization, universe_expansion_broad_screen, advisory_rebuttal, what_if_budget_increase remain off",
@@ -158,12 +158,12 @@
   {
    "id": "schedule",
    "title": "When things run (services, windows, claims)",
-   "plain": "One official decision run per trading day at 10:00 ET (it must start by 10:20). A once-a-minute service tick handles approved-card fills, the 3:50 PM safety check and the AI trader; a 5-minute housekeeping job settles cash, expires cards and checks the connection.",
+   "plain": "One registered paper run per trading day at 10:00 ET (it must start by 10:20). A once-a-minute service tick handles approved-card fills, the 3:50 PM safety check and the AI trader; a 5-minute housekeeping job settles cash, expires cards and checks the connection.",
    "rules": [
     {
      "id": "sch-daily-service",
      "name": "Daily service tick",
-     "applies_to": "official desk + AI trader hook",
+     "applies_to": "registered-run desk + AI trader hook",
      "when": "launchd StartInterval 60 s, RunAtLoad, plus StartCalendarInterval Mon-Fri 10:00 ET (TZ=America/New_York)",
      "condition": "-",
      "action": "runs `agents.daily_cycle --mode live --scheduled` through scripts/runtime_preflight.py",
@@ -172,8 +172,8 @@
     },
     {
      "id": "sch-claim-window",
-     "name": "Official claim window",
-     "applies_to": "official cycle",
+     "name": "Registered-run claim window",
+     "applies_to": "registered paper run",
      "when": "10:00:00 <= ET time < 10:20:00 on an XNYS session",
      "condition": "MarketSchedule.classify == TRADING_WINDOW (exchange_calendars XNYS); scheduled flag; no safety stop; not already claimed today (cycle_runs PRIMARY KEY day; INSERT OR IGNORE); OS flock on agent.db.cycle.lock",
      "action": "exactly one atomic claim per market date; status STARTED with a cycle_id",
@@ -183,7 +183,7 @@
     {
      "id": "sch-recovery",
      "name": "One recovery attempt",
-     "applies_to": "official cycle",
+     "applies_to": "registered paper run",
      "when": "after a FAILED or FAILED_STALLED claim, inside the window",
      "condition": "recovery=True, remaining budget > 0, prior status FAILED/FAILED_STALLED, recovery_count < 1",
      "action": "re-claims as trigger scheduled_recovery",
@@ -193,7 +193,7 @@
     {
      "id": "sch-stall",
      "name": "Stalled run detection",
-     "applies_to": "official cycle",
+     "applies_to": "registered paper run",
      "when": "maintenance every 300 s",
      "condition": "a STARTED claim older than 30 minutes (or future-dated)",
      "action": "status FAILED_STALLED, priority-1 notification",
@@ -203,7 +203,7 @@
     {
      "id": "sch-missed",
      "name": "Missed window alert",
-     "applies_to": "official cycle",
+     "applies_to": "registered paper run",
      "when": "maintenance tick after 10:20 ET on a session day",
      "condition": "MISSED_WINDOW state and no cycle_runs row for today",
      "action": "MISSED_WINDOW event, priority-1 notification",
@@ -270,9 +270,9 @@
     {
      "id": "dat-history",
      "name": "Daily history request bounds",
-     "applies_to": "official, protective, AI trader, screen",
+     "applies_to": "registered paper run, protective, AI trader, screen",
      "when": "each history read",
-     "condition": "interval day, bounds regular, adjustment_type split, end <= now, span <= 550 days, <= 10 symbols per call (official sends 1 symbol per call)",
+     "condition": "interval day, bounds regular, adjustment_type split, end <= now, span <= 550 days, <= 10 symbols per call (the registered paper run sends 1 symbol per call)",
      "action": "otherwise denied (incident)",
      "source": "broker/read_gateway.py:262,288-293; agents/market_reader.py:39-42",
      "status": "active"
@@ -290,7 +290,7 @@
     {
      "id": "dat-final-refresh",
      "name": "Post-AI quote refresh",
-     "applies_to": "AI path of the official cycle",
+     "applies_to": "AI path of the registered paper run",
      "when": "after Critic",
      "condition": "re-read quotes for the whole whitelist + wanted option ids; original quotes discarded",
      "action": "any wanted instrument missing/halted/older than 60 s -> NOT_ISSUED_DATA (no trades from AI)",
@@ -300,7 +300,7 @@
     {
      "id": "dat-collection-refresh",
      "name": "Collection-end refresh",
-     "applies_to": "official collection",
+     "applies_to": "registered-run collection",
      "when": "after history and option reads",
      "condition": "-",
      "action": "initial discovery quotes are replaced by a fresh read before any decision",
@@ -310,7 +310,7 @@
     {
      "id": "dat-universe-bound",
      "name": "Discovery bound",
-     "applies_to": "official collection",
+     "applies_to": "registered-run collection",
      "when": "collect()",
      "condition": "config whitelist must be a subset of REGISTERED_DISCOVERY_UNIVERSE (23 names) and not larger",
      "action": "BrokerError 'Universe exceeds reviewed discovery bound'",
@@ -331,7 +331,7 @@
      "id": "dat-options-discovery",
      "name": "Option contract discovery",
      "applies_to": "Lane B (paused for buys)",
-     "when": "official collection",
+     "when": "registered-run collection",
      "condition": "first 2 expiries 7-45 days out; active+tradable; strike within +/-10% of spot ask; 40 contracts nearest the money; multiplier 100; expiry >= today+7 days to be kept",
      "action": "contracts registered for quote reads",
      "source": "agents/market_reader.py:52-74; agents/daily_cycle.py:212; broker/read_gateway.py:281-287",
@@ -368,7 +368,7 @@
      "id": "sig-momentum",
      "name": "momentum_rotation_126d_trend200_top1",
      "applies_to": "17 ETFs (8 base + 9 SPDR sectors after v1.5)",
-     "when": "official cycle, decision date = today ET",
+     "when": "registered paper run, decision date = today ET",
      "condition": ">= 253 completed closes; last close > mean of last 200 closes; momentum_126d = last/close[-127] - 1 > 0; rank by -momentum_126d then symbol",
      "action": "only the top 1 becomes a buy signal; strength = momentum_126d; confidence = min(0.85, 0.55 + max(0, momentum)); invalidation text 'closes at or below its 200-session average or loses positive 126-session momentum'",
      "source": "research/strategy_signals.py:25-27,58-76,110-121,137",
@@ -378,7 +378,7 @@
      "id": "sig-meanrev",
      "name": "mean_reversion_drop3_above_ma200",
      "applies_to": "EVERY name with history (all 23 incl. ETFs, not only the 6 stocks)",
-     "when": "official cycle",
+     "when": "registered paper run",
      "condition": ">= 202 completed closes; last close > 200-day mean; one_day_return <= -0.03",
      "action": "buy signal, strength = |drop|, confidence = min(0.80, 0.55 + |drop|); invalidation text includes 'fails to recover within 10 sessions' (not implemented as an exit)",
      "source": "research/strategy_signals.py:79-95,123-135",
@@ -388,7 +388,7 @@
      "id": "sig-option",
      "name": "defined_risk_call_on_<strategy>",
      "applies_to": "Lane B",
-     "when": "official cycle",
+     "when": "registered paper run",
      "condition": "call on an underlying with a buy signal; bid>0, ask>bid; spread/mid <= 0.15; >= 1 contract buyable and available_risk_notional >= ask*100; one per underlying, lowest spread first",
      "action": "option signal; confidence 0.55",
      "source": "research/strategy_signals.py:28,163-199",
@@ -418,13 +418,13 @@
   },
   {
    "id": "ai_official",
-   "title": "AI invocation gate and the Research / Portfolio / Critic stages (official desk)",
+   "title": "AI invocation gate and the Research / Portfolio / Critic stages (registered-run desk)",
    "plain": "AI is only called when a stock signal qualifies or a held stock/option needs its daily review. ETF signals and ETF holdings never wake the AI. The AI can only pick from names a rule already flagged, at most one per lane.",
    "rules": [
     {
      "id": "ai-gate",
      "name": "AIInvocationGate",
-     "applies_to": "official cycle",
+     "applies_to": "registered paper run",
      "when": "after strategy evaluation",
      "condition": "invoke if any discovery row has qualified True and asset_class 'stock' (QUALIFIED_AI_ELIGIBLE_CANDIDATE), else if any holding has qualitative_review_required (HOLDING_QUALITATIVE_REVIEW_REQUIRED). Holdings rows = every held ticker in Lane A/B agent_alone+with_approvals EXCEPT ETFs when v1.5 is active",
      "action": "otherwise AI_NOT_NEEDED, $0 cost",
@@ -454,7 +454,7 @@
     {
      "id": "ai-research",
      "name": "Research stage",
-     "applies_to": "official",
+     "applies_to": "registered paper run",
      "when": "gate open",
      "condition": "registered model (research: gpt-5.4-nano-2026-03-17, reasoning low), one turn, no tools, strict JSON schema {summary, compared_symbols, news_checked, news, missing_evidence}",
      "action": "output recorded",
@@ -464,7 +464,7 @@
     {
      "id": "ai-portfolio",
      "name": "Portfolio stage",
-     "applies_to": "official",
+     "applies_to": "registered paper run",
      "when": "after Research",
      "condition": "model gpt-5.4-mini-2026-03-17 (medium); schema Decision{picks (max 2) of {instrument, side buy|sell, thesis, good_if, invalidation, confidence 0..1}, reason}",
      "action": "picks passed to Critic",
@@ -474,7 +474,7 @@
     {
      "id": "ai-critic",
      "name": "Critic stage (blind)",
-     "applies_to": "official",
+     "applies_to": "registered paper run",
      "when": "after Portfolio",
      "condition": "model gpt-5.4-2026-03-05 (medium); v1.5: packet built by code, excludes Portfolio 'reason'; schema {counterargument, rejected_instruments}",
      "action": "any instrument in rejected_instruments is not issued (REJECTED)",
@@ -534,7 +534,7 @@
     {
      "id": "ai-failure-codes",
      "name": "Inference failure handling",
-     "applies_to": "official",
+     "applies_to": "registered paper run",
      "when": "any stage error",
      "condition": "codes COST_NO_REPRESENTED_LANE, ALLOCATION_TOKEN_COUNT_FAILED, MODEL_REQUEST_FAILED, MODEL_SCHEMA_INVALID, OUTPUT_TRUNCATED_AT_TOKEN_CAP, MODEL_RESPONSE_INCOMPLETE, INPUT_TOKEN_CAP, INPUT_TOKEN_COUNT_FAILED, INVALID_USAGE, PROVIDER_ENVELOPE_VIOLATION, RESPONSE_MODEL_MISMATCH, RESPONSE_PRICING_TIER_MISMATCH, UNEXPECTED_MODEL_TOOL",
      "action": "status HOLD_OPERATIONAL with that reason; anything else INFERENCE_FAILED + accounting incident; no model fallback",
@@ -544,7 +544,7 @@
     {
      "id": "ai-model-pin",
      "name": "Registered dated models only",
-     "applies_to": "official scheduled inference",
+     "applies_to": "registered-run scheduled inference",
      "when": "bridge construction",
      "condition": "config research/portfolio/critic_model_name must equal preregistration assigned_models; stage 1; broker paper; daily_api_budget_usd == 0.40",
      "action": "MODEL_CONFIG_MISMATCH / REGISTERED_SCHEDULED_CONFIG_REQUIRED",
@@ -562,7 +562,7 @@
      "id": "desk-select",
      "name": "Which ETF",
      "applies_to": "Lane A",
-     "when": "official cycle (both AI and no-AI paths), market open",
+     "when": "registered paper run (both AI and no-AI paths), market open",
      "condition": "ETF_UNIVERSE signals with side buy and a fresh quote; pick highest 'strength' then symbol",
      "action": "one candidate per cycle",
      "source": "agents/daily_cycle.py:381-403",
@@ -574,13 +574,13 @@
      "applies_to": "Lane A",
      "when": "AI path",
      "condition": "an AI Lane A result is filled or PENDING",
-     "action": "desk blocked AI_STOCK_SLOT_PRECEDENCE / LANE_A_SLOT_USED; max 1 desk entry per official cycle",
+     "action": "desk blocked AI_STOCK_SLOT_PRECEDENCE / LANE_A_SLOT_USED; max 1 desk entry per registered paper run",
      "source": "agents/daily_cycle.py:797-802; agents/etf_desk_policy.py:57-60; preregistration-amendment-v1.5.0.yaml:etf_desk_policy.maximum_entries_per_official_cycle 1, slot_precedence",
      "status": "active"
     },
     {
      "id": "desk-window",
-     "name": "Only from the official window",
+     "name": "Only from the registered-run window",
      "applies_to": "desk plan",
      "when": "-",
      "condition": "evaluated_at classifies as TRADING_WINDOW (10:00-10:20 ET) and market open at now",
@@ -692,7 +692,7 @@
      "id": "desk-spread-record",
      "name": "Spread recording",
      "applies_to": "all quoted symbols",
-     "when": "official live run",
+     "when": "registered paper run on live data",
      "condition": "first observation per symbol per day",
      "action": "append-only liquidity_observations row",
      "source": "agents/etf_issuer.py:38-53; agents/daily_cycle.py:406-410",
@@ -910,7 +910,7 @@
   {
    "id": "approvals",
    "title": "Approval cards (with_approvals arm)",
-   "plain": "The 'with approvals' account only trades when you answer YES on a card. AI stock cards are priced at the moment the card was issued; desk ETF cards wait for a fresh price after your YES.",
+   "plain": "The Approval arm only trades when you answer YES on a card. AI stock cards are priced at the moment the card was issued; desk ETF cards wait for a fresh price after your YES.",
    "rules": [
     {
      "id": "apr-ai-card",
@@ -955,7 +955,7 @@
     {
      "id": "apr-expiry",
      "name": "Expiry",
-     "applies_to": "all official cards",
+     "applies_to": "all registered-run cards",
      "when": "maintenance (every 5 min) and on decide()",
      "condition": "now >= expires",
      "action": "EXPIRED (no carry to next day; approval after expiry rejected)",
@@ -966,7 +966,7 @@
      "id": "apr-rebase",
      "name": "Cards closed by capital rebase",
      "applies_to": "Lane A PENDING/APPROVED_AWAITING_FILL cards",
-     "when": "first official v1.6 cycle",
+     "when": "first registered-run v1.6 cycle",
      "condition": "-",
      "action": "status EXPIRED_CAPITAL_REBASE",
      "source": "agents/v16_policy.py:109-115",
@@ -983,7 +983,7 @@
      "id": "exit-etf",
      "name": "v1.5.1 ETF exit",
      "applies_to": "Lane A ETF positions in agent_alone, with_approvals, deterministic_no_ai",
-     "when": "10:00 official cycle, after entries, market open",
+     "when": "10:00 registered paper run, after entries, market open",
      "condition": "from today's completed-session features: above_ma200 is False (close <= 200-session mean) OR momentum_126d <= 0",
      "action": "full position: agent_alone and deterministic_no_ai sell at fresh bid (<=60 s); with_approvals SELL card; missing features -> HOLD EXIT_EVIDENCE_MISSING; stale quote -> EXIT_BLOCKED FRESH_QUOTE_REQUIRED",
      "why": "operator intent: 'agents should sell when conditions are right' (preregistration-amendment-v1.5.1.yaml:operator_signature.intent_source)",
@@ -1075,7 +1075,7 @@
      "id": "acc-rebase",
      "name": "v1.6 Lane A rebase to $25,000",
      "applies_to": "Lane A, 3 arms",
-     "when": "once, at the first official v1.6 live_readonly cycle with desk policy enabled",
+     "when": "once, at the first registered-run v1.6 live_readonly cycle with desk policy enabled",
      "condition": "no capital_rebases row for 1.6.0",
      "action": "archive build-phase state, reset each arm to fresh_state(25000) (peak/start/weekly = 25000, latches False), expire pending Lane A cards, record capital_rebase",
      "source": "agents/v16_policy.py:67-71,89-121; agents/daily_cycle.py:440-443",
@@ -1086,7 +1086,7 @@
      "id": "acc-valuation",
      "name": "Mark-to-bid",
      "applies_to": "all 6 accounts",
-     "when": "each official cycle (once in the no-AI path; before and after decisions in the AI path); not at 15:50",
+     "when": "each registered paper run (once in the no-AI path; before and after decisions in the AI path); not at 15:50",
      "condition": "fresh quote <= 60 s",
      "action": "mark = bid; missing marks -> value None (and buys blocked); peak updated; drawdown >= 10% sets peak_breaker_latched; >= 15% sets global_kill_switch",
      "source": "agents/inbox.py:73-114",
@@ -1143,7 +1143,7 @@
      "id": "saf-tripwire",
      "name": "Agentic account tripwire",
      "applies_to": "real Robinhood Agentic account (read-only)",
-     "when": "every official 10:00 collection (LiveReader.collect)",
+     "when": "every registered-run 10:00 collection (LiveReader.collect)",
      "condition": "compare cash, positions, equity/option/crypto orders vs last VERIFIED snapshot: cash > $1,200 -> AGENTIC_ACCOUNT_OUTSIDE_BOUNDS; cash decrease, any position change or any order/activity change -> AGENTIC_ACCOUNT_UNACKNOWLEDGED_CHANGE; cash increase alone (<= cap) -> ACCOUNT_CASH_INCREASE_BENIGN (new baseline); first snapshot -> BASELINE_CREATED",
      "action": "violation: incident + kill switch + revoke instructions; re-arm only by operator acknowledgement of the exact snapshot hash",
      "source": "agents/account_tripwire.py:112-205,230-264; agents/market_reader.py:129-187; preregistration.yaml:safety.oauth.state_tripwire",
@@ -1163,7 +1163,7 @@
      "id": "saf-order-history",
      "name": "Order-history coverage",
      "applies_to": "tripwire",
-     "when": "official collection",
+     "when": "registered-run collection",
      "condition": "<= 20 pages per class, <= 1,000 records, <= 1,060 calls; incremental window = last checkpoint - 60 s",
      "action": "incomplete -> ORDER_HISTORY_INCOMPLETE incident",
      "source": "preregistration.yaml:safety.order_history_boundary; agents/market_reader.py:151-157",
@@ -1194,22 +1194,22 @@
   {
    "id": "isolation",
    "title": "Run-mode isolation and records",
-   "plain": "Only the scheduled official run can write official results. Rehearsals and replays use separate databases and cannot issue cards or fills.",
+   "plain": "Only the scheduled registered paper run can write registered results. Rehearsals and replays use separate databases and cannot issue cards or fills.",
    "rules": [
     {
      "id": "iso-modes",
-     "name": "official / what_if / replay",
+     "name": "registered-run / what_if / replay",
      "applies_to": "all runs",
      "when": "-",
      "condition": "database role must match (live / whatif / fixture)",
-     "action": "non-official runs may not issue cards, write fills, scoreboard or memory; what-if needs a parent official run id",
+     "action": "runs other than the registered paper run may not issue cards, write fills, scoreboard or memory; what-if needs a parent registered paper run id",
      "source": "agents/daily_cycle.py:418-438; preregistration.yaml:run_mode_isolation",
      "status": "active"
     },
     {
      "id": "iso-ownership",
      "name": "Cycle ownership fencing",
-     "applies_to": "every write in an official run",
+     "applies_to": "every write in a registered paper run",
      "when": "each step",
      "condition": "lifecycle.owns(cycle_id): flock held, cycle_runs STARTED with this id, no safety stop",
      "action": "'Cycle ownership lost' -> abort",
@@ -1219,7 +1219,7 @@
     {
      "id": "iso-capsule",
      "name": "Decision capsule",
-     "applies_to": "official runs",
+     "applies_to": "registered paper runs",
      "when": "finish()",
      "condition": "-",
      "action": "content-addressed sanitized capsule (models, snapshot, assessment, accounts, stage requests/outputs, result); capture failure never fails the cycle (capsule_status UNAVAILABLE)",
@@ -1277,7 +1277,7 @@
      "id": "rni-ai-stop",
      "name": "AI stop rule",
      "applies_to": "Research/Portfolio/Critic",
-     "when": "365 days after first official run, then monthly",
+     "when": "365 days after first registered paper run, then monthly",
      "condition": "agent_with_approvals after-cost return >= deterministic_no_ai AND paired bootstrap (10,000 runs) P(research concordance > screener) >= 0.80",
      "action": "disable AI stages persistently (AI_STOP_RULE_TRIGGERED)",
      "source": "preregistration.yaml:ai_stop_rule",
@@ -1359,12 +1359,12 @@
   },
   {
    "time_et": "10:00:00",
-   "what": "launchd calendar tick (Mon-Fri) + 60-s tick: runtime preflight, then atomic claim of today's official cycle (flock + cycle_runs INSERT OR IGNORE). Claim allowed only 10:00:00-10:19:59 ET on XNYS sessions, not while safety-stopped.",
+   "what": "launchd calendar tick (Mon-Fri) + 60-s tick: runtime preflight, then atomic claim of today's registered paper run (flock + cycle_runs INSERT OR IGNORE). Claim allowed only 10:00:00-10:19:59 ET on XNYS sessions, not while safety-stopped.",
    "source": "scripts/install_shadow_services.py:68; agents/cycle_lifecycle.py:57-91; agents/operator.py:59-68"
   },
   {
    "time_et": "10:00 (+~45-70 s)",
-   "what": "Official cycle: v1.6 rebase (first run only) -> read-only collection with tripwire -> snapshot -> option expiry settlement -> signals -> AI gate -> [no-AI path: valuation, spread record, ETF desk entry, ETF exit, stock backstop] or [AI path: budget reservation, Research, Portfolio, Critic, final refresh, valuation, AI issue, spread record, desk entry, exits, valuation, VTI benchmark] -> capsule -> terminal record.",
+   "what": "Registered paper run: v1.6 rebase (first run only) -> read-only collection with tripwire -> snapshot -> option expiry settlement -> signals -> AI gate -> [no-AI path: valuation, spread record, ETF desk entry, ETF exit, stock backstop] or [AI path: budget reservation, Research, Portfolio, Critic, final refresh, valuation, AI issue, spread record, desk entry, exits, valuation, VTI benchmark] -> capsule -> terminal record.",
    "source": "agents/daily_cycle.py:413-816"
   },
   {
@@ -1384,7 +1384,7 @@
   },
   {
    "time_et": "10:05-15:30",
-   "what": "AI trader morning run (only if trader.db exists, today's official cycle_runs status == COMPLETED, < 3 attempts today, not retired): settle T+1, code exits (PAPER), management cards, Scout -> PM -> code checks -> Critic -> fills (PAPER) or WATCH_APPROVED (WATCH_ONLY). Stops starting model calls after 360 s.",
+   "what": "AI trader morning run (only if trader.db exists, today's registered-run cycle_runs status == COMPLETED, < 3 attempts today, not retired): settle T+1, code exits (PAPER), management cards, Scout -> PM -> code checks -> Critic -> fills (PAPER) or WATCH_APPROVED (WATCH_ONLY). Stops starting model calls after 360 s.",
    "source": "agents/ai_trader/hook.py:16,110-171; agents/ai_trader/cycle.py:23-25,157-297"
   },
   {
@@ -1602,7 +1602,7 @@
   "lanes": {
    "A": {
     "what": "Stocks and ETFs as shares, fractional to 6 decimals, $1 minimum notional",
-    "capital_per_arm_usd": "25000.00 from the first official v1.6 cycle (config base 500; preregistration v1.4.2 starting_cash_usd_per_lane 500)",
+    "capital_per_arm_usd": "25000.00 from the first registered-run v1.6 cycle (config base 500; preregistration v1.4.2 starting_cash_usd_per_lane 500)",
     "source": "preregistration-amendment-v1.6.0.yaml:paper_capital.lane_A_stocks_etfs_usd; agents/v16_policy.py:67-71"
    },
    "B": {
@@ -1649,7 +1649,7 @@
    "A": "ai_alone, $25,000, AI team picks, fills immediately after Critic and risk",
    "B": "ai_plus_operator, $25,000, fills only on operator YES/CUT; operator may skip or cut, never add size or a name; unanswered = skip",
    "C": "matched_random, $25,000, seeded random ticker from the same universe, same entry day, same notional fraction, same exit day as its A trade (seed 'ai_trader_fwd_v1:2026-09-30')",
-   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the official DB directory",
+   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the registered-run DB directory",
    "source": "research/recipes/ai_trader_fwd_v1.yaml:books; agents/ai_trader/hook.py:20-21; agents/ai_trader/store.py:131-145"
   }
  },
@@ -1779,7 +1779,7 @@
   {
    "id": "brk-kill-switch-system",
    "name": "Safety pause STOP_TRADING",
-   "scope": "whole system (official desk, protective, inference, nightly screen, AI trader hook)",
+   "scope": "whole system (registered-run desk, protective, inference, nightly screen, AI trader hook)",
    "condition": "STOP_TRADING file present (dashboard pause or incident)",
    "effect": "no claims, no exits, no inference; risk KILL_SWITCH",
    "reset": "dashboard resume (refused while any incident unresolved)",
@@ -1830,7 +1830,7 @@
  "budgets": [
   {
    "id": "bud-daily",
-   "name": "Official daily AI ceiling",
+   "name": "Registered-run daily AI ceiling",
    "value": "$0.40 per ET day (official_daily_llm_ceiling; per lane in BudgetAllocator, and the ScheduledInference CostLedger total)",
    "source": "preregistration.yaml:cost.official_daily_llm_ceiling; agents/budget.py:49,156-157; agents/scheduled_inference.py:49; config/settings.yaml:daily_api_budget_usd"
   },
@@ -1866,7 +1866,7 @@
   },
   {
    "id": "bud-tokens",
-   "name": "Official token envelopes per attempt",
+   "name": "Registered-run token envelopes per attempt",
    "value": "research gpt-5.4-nano: 24,000 in / 6,000 out (incl. reasoning), effort low, est. max $0.0123; portfolio gpt-5.4-mini: 12,000 / 3,000, medium, $0.0225; critic gpt-5.4: 8,000 / 2,000, medium, $0.0500; max 2 attempts per role; input counted by provider before the call; output capped by max_output_tokens; truncation disabled",
    "source": "preregistration.yaml:cost.stage_token_envelopes_per_attempt; agents/bounded_inference.py:115-127,179-191"
   },
@@ -1891,7 +1891,7 @@
   {
    "id": "bud-ai-trader",
    "name": "AI trader daily cap",
-   "value": "$2.00 per day, no rollover; each call reserves its worst-case envelope cost first; uncertain calls keep the reservation; separate from the official $0.40/$19.80 budgets",
+   "value": "$2.00 per day, no rollover; each call reserves its worst-case envelope cost first; uncertain calls keep the reservation; separate from the registered-run $0.40/$19.80 budgets",
    "source": "research/recipes/ai_trader_fwd_v1.yaml:budget; agents/ai_trader/model.py:40-77"
   },
   {
@@ -1903,7 +1903,7 @@
   {
    "id": "bud-time",
    "name": "Time budgets",
-   "value": "official claim window 20 min; stall after 30 min; OpenAI client timeout 120 s, max_retries 0; gateway/Codex request timeout 30 s; AI trader morning: no new model call after 360 s, <= 3 attempts/day; nightly screen 600 calls / 20 min / 120 first-fill symbols; history span <= 550 days; volatility evidence <= 7 days old",
+   "value": "registered-run claim window 20 min; stall after 30 min; OpenAI client timeout 120 s, max_retries 0; gateway/Codex request timeout 30 s; AI trader morning: no new model call after 360 s, <= 3 attempts/day; nightly screen 600 calls / 20 min / 120 first-fill symbols; history span <= 550 days; volatility evidence <= 7 days old",
    "source": "agents/operator.py:66; agents/cycle_lifecycle.py:116; agents/scheduled_inference.py:16-34; broker/read_gateway.py:305; agents/ai_trader/cycle.py:25; agents/ai_trader/hook.py:131; agents/universe_screen.py:43; risk/engine.py:65"
   }
  ],
@@ -1976,7 +1976,7 @@
    "metric": "annual_excess_log_growth_vs_vti_after_spread_ai_cost_and_estimated_short_term_tax (eval/promotion_stats.py:28)",
    "data_counted": "Lane A paper_valuation rows with data_mode live_readonly, timestamp >= 2026-10-01T09:30-04:00, excluding approval counterfactual rows; last value per ET day per arm; VTI benchmark rows keyed by run day (eval/promotion_stats.py:27,54-84)",
    "costs": "bid marks (spread), cumulative AI cost charged to agent_alone and with_approvals only, 35% tax applied to positive cumulative gain (eval/promotion_stats.py:31-33,87-97)",
-   "minimum_sample": ">= 200 filled decisions (count of filled fills, any side, per arm) OR >= 252 official sessions (eval/promotion_stats.py:29-30,71-76,124-127)",
+   "minimum_sample": ">= 200 filled decisions (count of filled fills, any side, per arm) OR >= 252 registered-run sessions (eval/promotion_stats.py:29-30,71-76,124-127)",
    "test": "daily excess log returns vs VTI; needs >= 20 comparable sessions; block bootstrap with fixed block 21, 2,000 draws, seed 11, circular wrap; 90% interval = [5th, 95th] percentile of annualized mean (x252); lower bound must be > 0 (eval/promotion_stats.py:100-113,131-137). Amendment text says 'stationary block bootstrap'.",
    "verdict": "EDGE_SHOWN only if no reasons (sample, METRIC_CHANGED, interval) else NOT_PROVEN; unlocks_live_money False (eval/promotion_stats.py:116-143)",
    "status": "active (reporting only)"
@@ -2014,7 +2014,7 @@
    "A": "ai_alone, $25,000, AI team picks, fills immediately after Critic and risk",
    "B": "ai_plus_operator, $25,000, fills only on operator YES/CUT; operator may skip or cut, never add size or a name; unanswered = skip",
    "C": "matched_random, $25,000, seeded random ticker from the same universe, same entry day, same notional fraction, same exit day as its A trade (seed 'ai_trader_fwd_v1:2026-09-30')",
-   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the official DB directory",
+   "separate_database": "robinhood-diagnostics/ai-trader/trader.db, must not share the registered-run DB directory",
    "source": "research/recipes/ai_trader_fwd_v1.yaml:books; agents/ai_trader/hook.py:20-21; agents/ai_trader/store.py:131-145"
   },
   "sizing": "notional = min(book value x 0.05, settled cash); fill = ask x 1.001; qty rounded down to 0.000001; must be >= $1. Book B sizes from A's fraction x cut fraction (capped at 5%); book C uses A's fraction (agents/ai_trader/risk.py:9-19; agents/ai_trader/cycle.py:316-319,410-414,336)",
@@ -2046,8 +2046,8 @@
   "tools": "precomputed by code, embedded in the packet, no live tool calls, no news: quote:<T> (bid, ask, mid, spread_pct, age, fresh), features:<T> (returns 1/5/20/63/126/252d, ma50/ma200, vol20, 252-day high, median $ volume), screen:<T>, risk:book, journal:<T> (agents/ai_trader/tools.py)",
   "watch_only_vs_paper": "WATCH_ONLY (default after init): morning run still calls Scout/PM/Critic (spends budget) and records tickets as WATCH_APPROVED; no fills, no management, no protective, no scoring. PAPER: fills, exits, scoring; AI bill counted from paper_started_at. RETIRED: hook returns None. Only the operator can change mode (agents/ai_trader/store.py:174-190; agents/ai_trader/cycle.py:169,177,306-309,346-360,450-453)",
   "operator_book_B": "YES or CUT (fraction 0.1 to < 1) -> APPROVED_AWAITING_FILL, filled at a fresh quote on an even-minute tick if ask x 1.001 <= A's fill mark x 1.005; NO/SKIP final; unanswered by 15:30 = EXPIRED (skip). Runbook says 'half size'; code accepts any cut 0.1-0.99 (agents/ai_trader/cycle.py:364-446; docs/review/AI_TRADER_RUNBOOK.md)",
-  "start_date_guard": "set_mode('PAPER') refuses if at.date() < 2026-10-05 (PAPER_NOT_BEFORE_2026-10-05) or the 2026-10-01 official cycle_runs row is not COMPLETED (START_CONDITION_OFFICIAL_RUN_NOT_CONFIRMED) (agents/ai_trader/store.py:182-186; agents/ai_trader/cli.py:132-134)",
-  "isolation": "DB must be in its own directory (not beside agent.db); reads via LiveReader against the trader path (incident latch lands beside trader.db); hook skips when the official DB is safety-stopped; failures journaled as AI_TRADER_TICK_FAILED and never fail the official tick (agents/ai_trader/store.py:131-140; agents/ai_trader/hook.py:118-125,255-282; agents/daily_cycle.py:902-907)"
+  "start_date_guard": "set_mode('PAPER') refuses if at.date() < 2026-10-05 (PAPER_NOT_BEFORE_2026-10-05) or the 2026-10-01 registered-run cycle_runs row is not COMPLETED (START_CONDITION_OFFICIAL_RUN_NOT_CONFIRMED) (agents/ai_trader/store.py:182-186; agents/ai_trader/cli.py:132-134)",
+  "isolation": "DB must be in its own directory (not beside agent.db); reads via LiveReader against the trader path (incident latch lands beside trader.db); hook skips when the registered-run DB is safety-stopped; failures journaled as AI_TRADER_TICK_FAILED and never fail the registered-run tick (agents/ai_trader/store.py:131-140; agents/ai_trader/hook.py:118-125,255-282; agents/daily_cycle.py:902-907)"
  },
  "known_issues": [
   {
@@ -2071,7 +2071,7 @@
   {
    "id": "ki-slippage-not-recorded",
    "severity": "medium",
-   "issue": "Registered approval-time buy fill = fresh_ask x (1 + 0.001) and the guide says 'modeled fill = ask x 1.001', but PaperBroker records buy fills at the plain ask. The 0.1% is used only for trigger/limit checks, so official paper results omit the registered slippage cost (the AI trader does apply it).",
+   "issue": "Registered approval-time buy fill = fresh_ask x (1 + 0.001) and the guide says 'modeled fill = ask x 1.001', but PaperBroker records buy fills at the plain ask. The 0.1% is used only for trigger/limit checks, so registered-run paper results omit the registered slippage cost (the AI trader does apply it).",
    "source": "broker/paper.py:57-69; preregistration.yaml:paper_approvals.approval_time_fill; agents/etf_desk_policy.py:89"
   },
   {
@@ -2155,19 +2155,19 @@
   {
    "id": "ki-model-names-docs",
    "severity": "low (docs)",
-   "issue": "The guide/walkthrough and the repo config/settings.yaml name 'gpt-5.6-luna' (Research) and 'gpt-5.6-terra' (Portfolio, Critic), but the official scheduled path refuses any config whose model names differ from the registered dated IDs (gpt-5.4-nano-2026-03-17 / gpt-5.4-mini-2026-03-17 / gpt-5.4-2026-03-05). HANDOFF says registered dated API models are deployed, so the guide text is likely wrong; the gpt-5.6 aliases are legacy Codex-bridge pricing.",
+   "issue": "The guide/walkthrough and the repo config/settings.yaml name 'gpt-5.6-luna' (Research) and 'gpt-5.6-terra' (Portfolio, Critic), but the registered-run scheduled path refuses any config whose model names differ from the registered dated IDs (gpt-5.4-nano-2026-03-17 / gpt-5.4-mini-2026-03-17 / gpt-5.4-2026-03-05). HANDOFF says registered dated API models are deployed, so the guide text is likely wrong; the gpt-5.6 aliases are legacy Codex-bridge pricing.",
    "source": "agents/desk/guide_content.py:106 = docs/SYSTEM_WALKTHROUGH.md:95; config/settings.yaml:4-6; agents/bounded_inference.py:34-37; agents/codex_bridge.py:31-32; HANDOFF.md:18"
   },
   {
    "id": "ki-prompts-500",
    "severity": "low",
-   "issue": "Official prompts (hardening_v2) still tell the models they manage 'two $500 paper lanes' after the v1.6 rebase to $25,000 in Lane A.",
+   "issue": "Registered-run prompts (hardening_v2) still tell the models they manage 'two $500 paper lanes' after the v1.6 rebase to $25,000 in Lane A.",
    "source": "prompts/research_hardening_v2.md; prompts/portfolio_hardening_v2.md; prompts/critic_hardening_v2.md"
   },
   {
    "id": "ki-injection-flag-inert",
    "severity": "low",
-   "issue": "The INJECTED_INSTRUCTIONS risk check depends on EvidenceItem.contains_instructions, but proposals in the official cycle carry no evidence items, so the check never fires; the registered prompt-injection scan is not implemented.",
+   "issue": "The INJECTED_INSTRUCTIONS risk check depends on EvidenceItem.contains_instructions, but proposals in the registered paper run carry no evidence items, so the check never fires; the registered prompt-injection scan is not implemented.",
    "source": "risk/engine.py:129-130; agents/schemas.py:21,52; agents/daily_cycle.py:305"
   },
   {
@@ -2191,7 +2191,7 @@
   {
    "id": "ki-ai-trader-budget-separate",
    "severity": "low",
-   "issue": "The AI trader's $2/day budget is outside the official $0.40/day and $19.80/year per-lane AI ceilings and uses the same Keychain API key; WATCH_ONLY mode still spends on model calls.",
+   "issue": "The AI trader's $2/day budget is outside the registered-run $0.40/day and $19.80/year per-lane AI ceilings and uses the same Keychain API key; WATCH_ONLY mode still spends on model calls.",
    "source": "agents/ai_trader/model.py:40-77,189-198; agents/ai_trader/cycle.py:171-297"
   },
   {
@@ -2236,7 +2236,7 @@
    "means": "Same RiskEngine.evaluate list as above, applied in PaperInbox._execute for every paper fill in every arm (agents/inbox.py:154-159)."
   },
   {
-   "phrase": "Agent alone: fills immediately if the risk checks pass.",
+   "phrase": "Automatic arm: fills immediately if the risk checks pass.",
    "where": "agents/desk/guide_content.py:148",
    "means": "RiskEngine.evaluate allowed AND PaperBroker accepts (quote 0-60 s old, not halted, limit reaches ask/bid, settled cash) (agents/inbox.py:154-179; broker/paper.py:37-85)."
   },

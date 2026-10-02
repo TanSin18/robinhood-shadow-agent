@@ -43,12 +43,18 @@ def _state():
 def test_portfolio_paper_home_explains_each_holding():
     html = render('/portfolio', _state(), None, '')
     assert html.count('data-acct="A-') == 3
-    assert 'Why it was picked' in html and 'Desk rule (no AI): not an AI pick' in html
+    assert 'Why it was picked' in html and '<dt>Decision source</dt><dd>Desk rule (no AI)</dd>' in html
     assert 'What would make it sell' in html and '8% under your cost ($521.31)' in html
     assert 'class="pk-badge win">#1' in html and 'class="pk-badge">#2' in html and 'ETFs trading below their 200-session average' in html
     assert 'Passed both tests' in html and 'Single stocks' in html and 'class="pk-funnel"' in html
     assert 'Single stock' in html                        # AAPL is not bought by the ETF rules
-    assert 'YES at' in html and '19 min 39 s' in html     # your answer on the approval card
+    # Approval arm: decision source, operator approval, approval time and fill time are four separate facts
+    assert '<dt>Operator approval</dt><dd>YES (19 min 39 s after the card arrived)</dd>' in html
+    assert '<dt>Approval time</dt><dd>Thu Oct 1, 10:21 AM ET</dd>' in html and '<dt>Fill time</dt><dd>Thu Oct 1, 10:02 AM ET</dd>' in html
+    assert html.count('<dt>Operator approval</dt><dd>Not required in this arm</dd>') == 2      # the other two arms
+    approval = html[html.index('id="acct-A-with_approvals"'):html.index('id="acct-A-deterministic_no_ai"')]
+    assert ('<dl class="v10-trade-meta"><div><dt>Decision source</dt><dd>Desk rule (no AI)</dd></div><div><dt>Operator approval</dt><dd>YES</dd></div>'
+            '<div><dt>Approval time</dt><dd>Oct 1, 10:21 AM ET</dd></div><div><dt>Fill time</dt><dd>Oct 1, 10:02 AM ET</dd></div></dl>') in approval
     for r in ('1D', '1W', '1M', 'ALL'):
         assert f'data-range="{r}"' in html
     assert 'v10-donut' in html and 'style=' not in html and '<script>' not in html and '<form' not in html

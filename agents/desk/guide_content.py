@@ -145,11 +145,12 @@ STEPS = [
     {
         'id': 'arms', 'title': 'Three paper accounts, and your approval', 'who': 'You',
         'plain': ('Every decision is played out in three separate paper accounts so you can measure what each layer adds. '
-                  '"Agent alone" takes trades immediately. "With approvals" waits for your YES or NO on a card in the dashboard. '
-                  '"Rules only" never uses AI. Comparing them shows whether the AI helps, and whether your judgment helps.'),
+                  'The "Automatic arm" executes eligible registered decisions immediately. The "Approval arm" waits for your YES or NO on a card in the dashboard. '
+                  '"Rules only" never uses AI. All three start with the same capital and the same opportunity set; timing and prices can differ in the '
+                  'Approval arm because it waits for you. Each trade shows its actual decision source.'),
         'checks': [
-            'Agent alone: fills immediately if the risk checks pass.',
-            'With approvals: a card is issued; you answer YES or NO on the Approvals page. Cards expire at the market close.',
+            'Automatic arm: fills immediately if the risk checks pass.',
+            'Approval arm: a card is issued; you answer YES or NO on the Approvals page. Cards expire at the market close.',
             'ETF desk cards fill at a fresh price when you say YES, and only if it is still within the limit.',
             'Rules only: ETF desk trades and rule exits, never AI picks.',
         ],
@@ -180,7 +181,7 @@ STEPS = [
             '3:50 PM protective check: sell if the live price is 8% below what was paid, below the 200-day average, '
             'or (ETFs) momentum has turned negative.',
             'Options: the AI can sell; at expiry they settle at their intrinsic value.',
-            'Immediate accounts sell at once; the approvals account gets a SELL card.',
+            'The Automatic arm and Rules only sell at once; the Approval arm gets a SELL card.',
         ],
         'trader': ('v1.5.1 ETF exit, v1.5.2 stock backstop (MA200 or 20 completed sessions), v1.6.0 protective exit '
                    '15:50–15:58 ET once per session with an 8% hard stop below average cost. Full fractional quantity is sold. '
@@ -190,17 +191,17 @@ STEPS = [
     {
         'id': 'score', 'title': 'Keeping score', 'who': 'Code',
         'plain': ('Results are compared with doing nothing clever: putting the same money in VTI (the whole US stock market) '
-                  'or keeping it in cash. Only official runs from October 1 count; earlier build-phase runs are tagged and excluded. '
+                  'or keeping it in cash. Only registered paper runs from October 1 count; earlier build-phase runs are tagged and excluded. '
                   'An edge is claimed only with enough trades and a statistical test, never from a few good weeks.'),
         'checks': [
             'Benchmarks: VTI price and cash, after the desk\'s own spreads, AI cost and an estimated 35% short-term tax.',
-            'Edge needs 200 filled trades or 12 months of official runs, and a 90% confidence range above VTI.',
+            'Edge needs 200 filled trades or 12 months of registered paper runs, and a 90% confidence range above VTI.',
             'Backtest 2005–2026 (Robinhood history): the ETF rule did NOT beat VTI after costs and tax.',
-            'Runs are tagged Official or Build phase on every page.',
+            'Runs are tagged Registered paper run or Build phase on every page, with “Counts toward experiment: Yes/No”.',
         ],
         'trader': ('Backtest (research/backtest_etf_rule.py): registered rule 0.4%/yr after tax vs VTI 8.3%; the 10% drawdown '
                    'latch froze it in July 2010. Signal alone 1.7%/yr, Sharpe 0.20 vs 0.54. Promotion gate: eval/promotion_stats.py.'),
-        'example': 'Thursday 10:30 ET: first official run checked and tagged "Official · counts toward results".',
+        'example': 'Thursday 10:30 ET: first registered paper run checked and tagged "Registered paper run · Counts toward experiment: Yes".',
     },
     {
         'id': 'safety', 'title': 'Safety and control', 'who': 'You',

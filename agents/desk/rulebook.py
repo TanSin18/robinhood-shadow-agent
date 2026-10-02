@@ -22,7 +22,7 @@ LIMITS = (('$25,000', 'paper cash per Lane A account (v1.6)'), ('25%', 'largest 
           ('5', 'most open positions per account'), ('min(25%, 2% ÷ vol)', 'position size: 10% × 20% target ÷ 20-session realized volatility'),
           ('0.5%', 'furthest a limit price may sit from the reference price'), ('3%', 'daily loss that blocks new buys'),
           ('5%', 'weekly loss that trips the kill switch'), ('10%', 'drawdown from peak that latches off new buys'),
-          ('8%', 'v1.6 protective stop below average cost (15:50 check)'), ('$0.40', 'official AI spend ceiling per day'),
+          ('8%', 'v1.6 protective stop below average cost (15:50 check)'), ('$0.40', 'registered-run AI spend ceiling per day'),
           ('5', 'most filled orders per account per day'), ('$1,200', 'highest real Agentic cash the system accepts'))
 
 
@@ -142,11 +142,13 @@ def render(state):
             '<header><p class="v10-eyebrow">Nothing is a black box</p><h1>Rule book</h1>'
             f'<p class="rb-lede">All {n_rules} rules the system runs, with the real numbers, when they run, what they do and the file and line '
             'they come from. Read from the installed code and the signed rule files; where the guide text and the code disagree, the code wins '
-            'and the gap is listed under Known issues. Open any row for the full detail.</p></header>',
+            'and the gap is listed under Known issues. Open any row for the full detail.</p>'
+            '<p class="v10-note">Where a rule quotes the code, “official” is the code’s own name for the registered paper run. It describes the '
+            'schedule and the signed rules, not the quality of the result: the strategy is not proven.</p></header>',
             '<nav class="rb-toc" aria-label="Rule book sections">' + ''.join(f'<a href="#{i}">{esc(t)}</a>' for i, t in toc) + '</nav>',
             _section('day', 'A day, minute by minute', 'Eastern time. Colour of the dot: blue = code, violet = AI, green = you, amber = safety.',
                      timeline(c)),
-            _section('cycle', 'The 10:00 official run, stage by stage',
+            _section('cycle', 'The 10:00 registered paper run, stage by stage',
                      'Each card is one stage in order. The amber chips are the gates that must pass; any failed gate stops the run or the trade '
                      'with a recorded reason.', pipeline(c)),
             _section('limits', 'Key limits at a glance', 'The numbers that bound every paper trade. Full conditions are in the groups below.',

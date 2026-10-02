@@ -8,10 +8,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from .charts import esc, money
-from .components import category_chips
+from .components import ARM_NAMES, RUN_LABEL, category_chips
 
 ET = ZoneInfo('America/New_York')
-ARM = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only'}
+ARM = {**ARM_NAMES, 'deterministic_no_ai': 'Rules only'}
 KIND = {'run': 'Run', 'fill': 'Paper fill', 'guard': 'Protective check', 'note': 'Team note'}
 
 
@@ -40,7 +40,7 @@ def events(state):
         d = _dt(r.get('timestamp'))
         if d:
             official = (r.get('category') or {}).get('group') == 'official'
-            out.append((d, 'run', 'Official run' if official else 'Build run', outcome(r), r))
+            out.append((d, 'run', RUN_LABEL if official else 'Build run', outcome(r), r))
     fills = defaultdict(list)
     for f in pf.get('fills') or []:
         d = _dt(f.get('timestamp'))
@@ -100,7 +100,7 @@ def render(state):
         days[e[0].date()].append(e)
     runs = [e for e in ev if e[1] == 'run']
     official = [e for e in runs if (e[4].get('category') or {}).get('group') == 'official']
-    tiles = (('Days recorded', len(days), 'with at least one event'), ('Official runs', len(official), 'these count toward results'),
+    tiles = (('Days recorded', len(days), 'with at least one event'), ('Registered paper runs', len(official), f'{sum(1 for e in official if (e[4].get("category") or {}).get("counts"))} count toward the experiment'),
              ('Paper fills', sum(1 for e in ev if e[1] == 'fill'), 'buys and sells, grouped by price'),
              ('Protective checks', sum(1 for e in ev if e[1] == 'guard'), 'the 15:50 look at every holding'))
     kpis = '<div class="an-kpis">' + ''.join(f'<div class="an-kpi"><span>{esc(t)}</span><b>{esc(v)}</b><small>{esc(n)}</small></div>' for t, v, n in tiles) + '</div>'

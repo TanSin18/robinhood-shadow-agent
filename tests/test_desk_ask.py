@@ -201,8 +201,8 @@ def test_history_page_groups_each_day_and_orders_the_run_before_its_fills():
     st = state()
     html = history_page.render(st)
     assert 'Monday, October 5' in html and html.count('class="v10-panel hd"') == 1
-    assert html.index('<b>Official run</b>') < html.index('<b>Bought SOXX</b>') < html.index('<b>Protective check</b>')
-    assert '2.32209 shares at $566.64 · AI alone (Lane A)' in html and 'Nothing sold. Still holding SOXX.' in html
+    assert html.index('<b>Registered paper run</b>') < html.index('<b>Bought SOXX</b>') < html.index('<b>Protective check</b>')
+    assert '2.32209 shares at $566.64 · Automatic arm (Lane A)' in html and 'Nothing sold. Still holding SOXX.' in html
     assert 'Bubbles · Morning note' in html and 'Blossom wrote their daily notes.' in html
     assert 'Run details' in html and ACCOUNT not in html
     assert 'Nothing is recorded yet' in history_page.render({})
@@ -221,7 +221,7 @@ def test_analyst_brief_has_a_sub_tab_per_note_and_opens_the_latest():
     assert html.index('Chips firm.') < html.index('Banks soft.')                      # most relevant first
     assert '1 headline</span>' in html and 'href="https://example.com/a"' in html
     only_close = analyst_page.render({'analyst': {**a, 'morning': None}, 'portfolio': {}})
-    assert 'Not written yet' in only_close and 'Written after the 10:00 AM ET official run completes.' in only_close
+    assert 'Not written yet' in only_close and 'Written after the 10:00 AM ET registered paper run completes.' in only_close
 
 
 def test_analyst_memory_tab_shows_the_record_without_overclaiming():

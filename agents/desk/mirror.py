@@ -24,7 +24,7 @@ from .preview import ASSETS, snapshot
 from .router import render
 
 PUBLIC = ('/', '/portfolio', '/room', '/checks', '/money', '/scoreboard', '/guide', '/rules', '/architecture', '/analyst', '/history')
-HIDDEN_LINKS = re.compile(r'<a href="/(legacy[^"]*|inbox|firm|controls|health|ask)"[^>]*>.*?</a>', re.S)
+HIDDEN_LINKS = re.compile(r'<a href="/(legacy[^"]*|inbox|firm|firm-lab|controls|health|ask)"[^>]*>.*?</a>', re.S)
 TS_LINK = re.compile(r'https://[a-z0-9.-]+\.ts\.net[^"<\s]*')
 BANNER = 'Preview — view only · No approvals, controls or broker connection'
 CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; "

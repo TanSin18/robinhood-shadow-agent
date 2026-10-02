@@ -23,7 +23,7 @@ def categorize(review, meta=None):
     status = (review.get('status') or '').upper()
     build = when is None or when < OFFICIAL_FROM
     tags.append(('Build phase', 'build', 'Before v1.5 took effect (Oct 1, 9:30 AM ET). The system was still being built; never counted.')
-                if build else ('Official', 'official', 'Scheduled experiment run under the registered rules in force (v1.5 entry and exit rules, v1.6 capital and protective check).'))
+                if build else ('Registered paper run', 'neutral', 'Scheduled paper run under the registered rules in force (v1.5 entry and exit rules, v1.6 capital and protective check). Registered describes the process, not the quality of the result.'))
     if mode == 'fixture':
         tags.append(('Test data', 'warn', 'Fixture data, not live market data.'))
     elif mode == 'whatif':
@@ -44,5 +44,5 @@ def categorize(review, meta=None):
               and not meta.get('recovery_of') and not meta.get('temporary_api_budget_usd'))
     return {'tags': [{'label': l, 'tone': t, 'title': d} for l, t, d in tags], 'counts': counts,
             'group': 'official' if not build else 'build',
-            'counts_reason': 'Counts toward results' if counts else
+            'counts_reason': 'Counts toward the experiment' if counts else
             ('Build phase: does not count' if build else 'Does not count: not a clean scheduled live run')}

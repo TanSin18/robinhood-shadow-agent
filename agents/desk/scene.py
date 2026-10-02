@@ -429,12 +429,12 @@ def team_strip(state):
     pip, bis, map_, pic = team.get('pip') or {}, team.get('biscuit') or {}, team.get('maple') or {}, team.get('pickle') or {}
     verdict = next((v for v in pic.get('verdicts') or [] if v.get('target') == 'official_decision'), None)
     note = a.get('close') or a.get('morning') or {}
-    waiting = 'Writes after the next official run.'
+    waiting = 'Writes after the next registered paper run.'
     seats = (('risk', 'decides', 'Checks every order in the run: size, cash, limits, losses, stop flags.', None),
              ('research', 'advisory', _short(pip.get('base_rate')) or waiting, pip.get('at')),
              ('filings_news', 'advisory', _short(bis.get('summary')) or waiting, bis.get('at')),
              ('portfolio', 'advisory', _short(map_.get('portfolio_read')) or waiting, map_.get('at')),
-             ('critic', 'advisory', (f'Official decision: {verdict.get("verdict")}. ' + _short('; '.join(verdict.get('reasons') or []), 110)) if verdict else waiting,
+             ('critic', 'advisory', (f'Registered run decision: {verdict.get("verdict")}. ' + _short('; '.join(verdict.get('reasons') or []), 110)) if verdict else waiting,
               pic.get('at')),
              ('explainer', 'advisory', _short(note.get('headline')) or waiting, note.get('at')))
     cards = ''

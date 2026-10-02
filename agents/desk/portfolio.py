@@ -17,16 +17,11 @@ from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from .charts import _dt, _f, donut, esc, meter, money, pct, ranged, short_time
-from .components import V16_CAPITAL, V16_START_TEXT, capital_note, capital_state, deferred
+from .components import ARM_HELP, ARM_NAMES, COMPARE_NOTE, V16_CAPITAL, V16_START_TEXT, capital_note, capital_state, decision_source, deferred
 
 ET = ZoneInfo('America/New_York')
-ARMS = {'agent_alone': 'AI alone', 'with_approvals': 'AI + your approval', 'deterministic_no_ai': 'Rules only (no AI)'}
-ARM_HELP = {
-    'agent_alone': 'Takes every AI pick and every desk-rule trade immediately, with no human in the loop.',
-    'with_approvals': 'Gets the same ideas as cards; a trade happens only if you answer YES, at a fresh price when you answer.',
-    'deterministic_no_ai': 'Never asks a model. Only the written rules trade here: the control the AI must beat.',
-}
-LANES = {'A': 'Lane A · Stocks & ETFs', 'B': 'Lane B · Options'}
+ARMS = ARM_NAMES
+LANES = {'A': 'Lane A · Stocks & ETFs', 'B': 'Lane B · Options (PAUSED)'}
 START = Decimal('500')
 NAMES = {
     'AAPL': 'Apple', 'AMZN': 'Amazon', 'GLD': 'SPDR Gold Shares', 'GOOGL': 'Alphabet (Google)', 'META': 'Meta Platforms',
@@ -108,6 +103,19 @@ def _card_for(state, order_id):
     return None
 
 
+def _trade_meta(state, track, fill):
+    """Decision source, operator approval, approval time and fill time for one fill, each from its own record."""
+    card = _card_for(state, fill.get('client_order_id'))
+    items = [('Decision source', decision_source(card))]
+    if track == 'with_approvals':
+        items += [('Operator approval', (card or {}).get('status') or 'not recorded'),
+                  ('Approval time', short_time((card or {}).get('decided')) if (card or {}).get('decided') else 'not recorded')]
+    else:
+        items.append(('Operator approval', 'not required in this arm'))
+    items.append(('Fill time', short_time(fill.get('timestamp'))))
+    return '<dl class="v10-trade-meta">' + ''.join(f'<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>' for k, v in items) + '</dl>'
+
+
 def _account_value(p):
     cash = (D(p.get('settled_cash')) or Decimal(0)) + (D(p.get('unsettled_cash')) or Decimal(0))
     invested = Decimal(0)
@@ -136,9 +144,7 @@ def _why(state, p, t, fills, capsule):
     card = _card_for(state, (first_buy or {}).get('client_order_id'))
     prop = (card or {}).get('proposal') or {}
     sig = next((s for s in (capsule or {}).get('signals') or [] if s.get('instrument') == t), {})
-    author = (card or {}).get('author') or ('Desk rule (no AI)' if prop.get('model_name') == 'deterministic_not_a_model'
-                                            else prop.get('model_name') or 'not recorded')
-    rows = [('Who picked it', author + (': not an AI pick' if 'no AI' in author else '')),
+    rows = [('Decision source', decision_source(card)),
             ('Rule / strategy', sig.get('strategy') or 'not in the latest decision record'),
             ('Thesis', prop.get('thesis') or sig.get('thesis') or 'not recorded'),
             ('Good if', prop.get('good_if') or sig.get('good_if') or 'not recorded'),
@@ -147,7 +153,11 @@ def _why(state, p, t, fills, capsule):
     if card and p.get('track') == 'with_approvals':
         secs = card.get('response_seconds')
         lag = f' ({int(secs) // 60} min {int(secs) % 60} s after the card arrived)' if isinstance(secs, (int, float)) else ''
-        rows.append(('Your answer', f'{card.get("status")} at {when(card.get("decided"))}{lag}'))
+        rows.append(('Operator approval', f'{card.get("status")}{lag}'))
+        rows.append(('Approval time', when(card.get('decided'))))
+    elif p.get('track') != 'with_approvals':
+        rows.append(('Operator approval', 'Not required in this arm'))
+    rows.append(('Fill time', when((first_buy or {}).get('timestamp'))))
     sizing = ''
     vol = _f((card or {}).get('vol'))
     if vol:
@@ -245,7 +255,7 @@ def _holding(state, p, x, capsule):
             + ''.join(f'<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>' for k, v in rows) + f'</dl>{sizing}{_numbers(capsule, t, vol)}</section>'
             f'<section><h4>What would make it sell</h4><ul class="v10-exits">{_exit_plan(capsule, t, x, cost, mark)}</ul>'
             '<p class="v10-note">There are no resting stop orders. Sells happen only at the 10:00 run or the 15:50 check, at the bid. '
-            'The “AI + your approval” account gets a SELL card instead.</p>'
+            'The Approval arm gets a SELL card instead.</p>'
             '<h4>Position vs limits</h4>'
             + meter(weight, POSITION_CAP, text=f'{pct((weight or 0) * 100, False, 1)} of account · limit 25% per position', cls='cap')
             + '</section></div>'
@@ -277,7 +287,8 @@ def _account_panel(state, p, values, rebase_at, capsule, active, now):
                     else 'Every run so far ended without an entry for this account.') + '</p>')
     fills = sorted(p.get('fills') or [], key=lambda f: str(f.get('timestamp')), reverse=True)
     activity = ''.join(f'<li><time>{esc(short_time(f.get("timestamp")))}</time><b>{esc((f.get("side") or "").upper())} {esc(f.get("ticker"))}</b>'
-                       f'<span>{esc(qty_s(f.get("quantity")))} shares @ {money(f.get("price"))} · spread {money(f.get("spread_cost"))}</span></li>' for f in fills)
+                       f'<span>{esc(qty_s(f.get("quantity")))} shares @ {money(f.get("price"))} · spread {money(f.get("spread_cost"))}</span>'
+                       f'{_trade_meta(state, track, f)}</li>' for f in fills)
     stats = [('Total value', money(total)), ('Invested, valued at bid', money(invested)),
              ('Buying power (settled cash)', money(p.get('settled_cash'))), ('Unsettled cash (T+1)', money(p.get('unsettled_cash'))),
              ('Return since start', f'<span class="{_cls(total - start)}">{money(total - start, True)} ({pct((total / start - 1) * 100)})</span>'),
@@ -438,8 +449,7 @@ def paper_tab(state, now):
     return (f'<div class="v10-acct-picker" role="group" aria-label="Choose a paper account">{chips}</div>{panels}'
             + _screen(capsule)
             + f'<section class="v10-panel"><h3>All paper accounts side by side</h3>{_compare(paper)}'
-            '<p class="v10-note">Same money, same prices, different decision-makers. The gaps between these accounts are the experiment: '
-            'does the AI beat “Rules only”, and does your YES/NO add anything on top?</p></section>')
+            f'<p class="v10-note">{esc(COMPARE_NOTE)} Each trade lists its actual decision source.</p></section>')
 
 
 # ------------------------------------------------------------------ real Agentic account

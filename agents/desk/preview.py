@@ -209,7 +209,12 @@ def snapshot(path,*,now=None):
         analyst=load_analyst(path)
     except Exception as error:
         analyst={'exists':False,'error':type(error).__name__}
-    return {'preview':True,'card_inbox':card_inbox,'firm':firm,'analyst':analyst,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
+    try:
+        from .firm_lab_page import load as load_firm_lab
+        firm_lab=load_firm_lab(path)
+    except Exception as error:
+        firm_lab={'exists':False,'error':type(error).__name__,'mode':None}
+    return {'preview':True,'card_inbox':card_inbox,'firm':firm,'firm_lab':firm_lab,'analyst':analyst,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
         'decision_room':rooms,'paused':(Path(path).parent/'STOP_TRADING').exists(),
         'accounts':[], 'reports':[], 'tripwire':[],
         'handoffs':[public(json.loads(r['payload_json'])) for r in handoff_rows]}

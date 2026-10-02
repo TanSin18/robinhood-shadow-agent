@@ -33,8 +33,8 @@ ET = ZoneInfo('America/New_York')
 SUGGESTED = ('What did the desk do today, and why?', 'Why this pick and not the others?', 'What would make us sell what we hold?',
              'How is my paper book doing against the market?', 'What is the market regime and what does it mean?',
              'Which agents ran today and what did each one say?', 'What is the next thing that will happen, and when?')
-SCHEDULE = ((time(10, 0), '10:00 ET', 'official run: read market, signals, AI gate, risk checks, paper fills, decision record'),
-            (time(10, 5), '10:05-12:00 ET', 'team morning notes (advisory), written after the official run completed'),
+SCHEDULE = ((time(10, 0), '10:00 ET', 'registered paper run: read market, signals, AI gate, risk checks, paper fills, decision record'),
+            (time(10, 5), '10:05-12:00 ET', 'team morning notes (advisory), written after the registered paper run completed'),
             (time(15, 30), '15:30 ET', 'last moment to answer an approval card; it fills only at a fresh price within the limit'),
             (time(15, 50), '15:50-15:58 ET', 'protective check: sell at the bid if 8% below cost, at/below the 200-day average, or ETF momentum not positive'),
             (time(16, 15), '16:15-19:30 ET', 'after-close job: daily bars, regime model, shadow Kelly, exit guard, chop gate, news, team close notes'),
@@ -62,15 +62,18 @@ HOW_IT_WORKS = (
     'This is paper trading only: simulated money, real quotes read through a read-only connection. Real orders cannot be placed.',
     'ETFs are bought and sold by fixed, registered desk rules with no AI involved (momentum rule: only the strongest qualifying ETF; exits at the '
     '10:00 run and the 15:50 protective check).',
-    'The AI stages inside the official run (Blossom research, Mayor portfolio, Mojo Jojo critic) are called only when a single stock qualifies or a '
+    'The AI stages inside the registered paper run (Blossom research, Mayor portfolio, Mojo Jojo critic) are called only when a single stock qualifies or a '
     'holding needs a qualitative review. When the only signal is an ETF, the AI gate stays closed (recorded as AI_NOT_NEEDED) and AI cost is $0. That is the design, not a fault.',
     'Prof. X is the safety rule engine (code, not a model): it checks every order for size, cash, limits, loss breakers and stop flags.',
     'Separately, an advisory team (Blossom, Buttercup, Mayor, Mojo Jojo, Bubbles) writes notes every trading day after the 10:00 run and after the close. '
     'Their notes are never read by the trading rules. They carry memory forward: calls are scored at the next close and lessons are kept for five sessions.',
     'Two lanes are kept separate so results never mix: Lane A is stocks and ETFs with $25,000 of paper cash per account (since the v1.6 rules, Oct 1); '
     'Lane B is options with $500 per account, and new option buys are paused because one contract usually costs more than the lane holds.',
-    'Each lane has three accounts trading the same signals so their gaps can be measured: AI alone (takes every pick at once), AI + your approval '
-    '(fills only when the operator answers YES on a card), and Rules only (no AI at all, the control).',
+    'Each lane has three paper arms with the same starting capital and the same opportunity set: the Automatic arm (executes eligible registered '
+    'decisions at once; each trade records its actual decision source, and ETF trades come from the desk rule in code, not from an AI), the Approval arm '
+    '(fills only after the operator answers YES on a card, so its timing and price can differ), and Rules only (never asks a model).',
+    'The strategy is NOT PROVEN: it has not passed its registered test against VTI. "Registered" describes the process (signed rules, counted '
+    'runs), not the quality of the result.',
     'The trading rules are pre-registered and signed. They do not change day to day; a change needs a new signed amendment, so results stay honest.',
     'Position size comes from the risk engine: at most 25% of an account in one position, sized down for volatility; at most 5 positions; new buys '
     'stop after a 3% daily loss or a 10% drawdown from the peak.',
@@ -161,7 +164,7 @@ def _activity(state, now):
         add(t.get('created_at'), f'Account tripwire check: {t.get("status")}' + (f' ({t.get("change_class")})' if t.get('change_class') else ''))
     for r in state.get('decision_room') or []:
         group = (r.get('category') or {}).get('group')
-        add(r.get('timestamp'), ('Official run finished: ' if group == 'official' else 'Build/test run finished: ') + str((r.get('header') or {}).get('outcome') or r.get('decision_type'))
+        add(r.get('timestamp'), ('Registered paper run finished: ' if group == 'official' else 'Build/test run finished: ') + str((r.get('header') or {}).get('outcome') or r.get('decision_type'))
             + '. ' + str(r.get('decision_reason') or '')[:220])
     for f in pf.get('fills') or []:
         add(f.get('timestamp'), f'Paper fill, account {f.get("track")}: {f.get("side")} {f.get("quantity")} {f.get("ticker")} at {f.get("price")} ({f.get("status")})')
@@ -296,7 +299,7 @@ def build_packet(state, question, context='', run=None, step=None, now=None):
     pkt['team_status'] = {'id': 'team_status', 'prof_x': 'safety rules (code, not a model): checks every order inside each run',
                           'wrote_notes': [SEATS[s] for s in (a.get('team') or {})] + (['Bubbles (explainer)'] if a.get('morning') or a.get('close') else []),
                           'not_written_yet': waiting,
-                          'when_they_write': 'every trading day: after the 10:00 ET official run, and again in the after-close job; advisory only, no trade reads their notes'}
+                          'when_they_write': 'every trading day: after the 10:00 ET registered paper run, and again in the after-close job; advisory only, no trade reads their notes'}
     if notes:
         pkt['TEAM_NOTES'] = notes
     mem = a.get('memory') or {}
