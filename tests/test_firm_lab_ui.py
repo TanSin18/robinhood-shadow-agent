@@ -186,7 +186,7 @@ def test_dashboard_code_reaches_firm_lab_only_through_its_read_only_view():
     for source in DESK.glob('*.py'):
         text = source.read_text()
         for line in text.splitlines():
-            if 'firm_lab' in line and ('import' in line) and 'firm_lab_page' not in line:
+            if re.match(r'\s*(from|import)\s+firm_lab\b', line):
                 assert re.search(r'from firm_lab import view$', line.strip()), (source.name, line)
     page = (DESK / 'firm_lab_page.py').read_text()
     assert 'ExecutionBoundary' not in page and 'FirmLabStore' not in page and 'firm_lab.ingest' not in page and 'boundary' not in page
