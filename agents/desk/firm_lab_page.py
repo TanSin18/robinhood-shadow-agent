@@ -5,6 +5,7 @@ cannot change without an operator decision. It has no form and no action of its 
 """
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .components import esc
@@ -24,9 +25,36 @@ WARNING = ('Counterfactual results generated during Firm Lab development are dev
            'and do not count as results of any registered Firm trading trial.')
 
 
+def _view():
+    """firm_lab.view, the package's read-only view. Nothing else of the package is used by the dashboard.
+
+    The dashboard service runs the frozen runtime and overlays only the ``agents`` package, so the research package that
+    sits beside it is not on the import path there. In that case exactly that one package is loaded from its own folder;
+    the import path itself is left as it is."""
+    try:
+        from firm_lab import view
+    except ModuleNotFoundError as error:
+        if error.name != 'firm_lab':
+            raise
+        import importlib.util
+        import sys
+        folder = Path(__file__).resolve().parents[2] / 'firm_lab'
+        spec = importlib.util.spec_from_file_location('firm_lab', folder / '__init__.py', submodule_search_locations=[str(folder)])
+        if spec is None or not (folder / '__init__.py').is_file():
+            raise
+        module = importlib.util.module_from_spec(spec)
+        sys.modules['firm_lab'] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            sys.modules.pop('firm_lab', None)
+            raise
+        from firm_lab import view
+    return view
+
+
 def load(official_db):
-    from firm_lab import view
-    return view.load(official_db=official_db)
+    return _view().load(official_db=official_db)
 
 
 def _when(value):
@@ -57,8 +85,7 @@ def _capabilities(fl):
     rows = fl.get('capabilities')
     note = ''
     if not rows:
-        from firm_lab import view
-        rows = view.defaults()['capabilities']
+        rows = _view().defaults()['capabilities']
         note = '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>'
     body = ''.join(f'<tr><td><b>{esc(LABELS.get(r["capability"], r["capability"]))}</b></td><td>{_chip(r["status"])}</td>'
                    f'<td>{esc(r.get("provider") or "no provider connected")}</td><td class="small">{esc(r.get("detail") or "")}</td></tr>' for r in rows)
@@ -108,8 +135,7 @@ def _baseline(fl):
 def _benchmarks(fl):
     rows = fl.get('benchmarks')
     if not rows:                                          # database not created yet: show the definitions it starts with
-        from firm_lab import view
-        rows = view.defaults()['benchmarks']
+        rows = _view().defaults()['benchmarks']
     out = ''
     for b in rows:
         if b['benchmark_id'] == 'VTI_100':

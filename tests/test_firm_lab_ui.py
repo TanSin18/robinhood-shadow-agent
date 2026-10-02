@@ -190,3 +190,45 @@ def test_dashboard_code_reaches_firm_lab_only_through_its_read_only_view():
                 assert re.search(r'from firm_lab import view$', line.strip()), (source.name, line)
     page = (DESK / 'firm_lab_page.py').read_text()
     assert 'ExecutionBoundary' not in page and 'FirmLabStore' not in page and 'firm_lab.ingest' not in page and 'boundary' not in page
+
+
+def test_firm_lab_view_loads_in_the_dashboard_service_where_only_the_agents_package_is_overlaid(tmp_path):
+    """The dashboard launcher puts the frozen runtime on the import path and appends only the overlay's ``agents`` folder.
+    Found live on the Mac: there ``import firm_lab`` fails, so the page must load that one package from its own folder."""
+    import json
+    import subprocess
+    import sys
+    root = Path(__file__).resolve().parents[1]
+    off = _official_with_capsule(tmp_path)
+    assert cli.main(['ingest', '--official-database', str(off)]) == 0
+    runtime = tmp_path / 'frozen-runtime'                       # a stand-in runtime: an ``agents`` package and no firm_lab
+    (runtime / 'agents').mkdir(parents=True)
+    (runtime / 'agents' / '__init__.py').write_text('')
+    code = f"""
+import json, sys
+sys.path[:] = [p for p in sys.path if p not in ('', {str(root)!r})]
+sys.path.insert(0, {str(runtime)!r})
+import agents
+agents.__path__.append({str(root / 'agents')!r})
+try:
+    import firm_lab
+    found_directly = True
+except ModuleNotFoundError:
+    found_directly = False
+before = list(sys.path)
+from agents.desk import firm_lab_page
+state = firm_lab_page.load({str(off)!r})
+html = firm_lab_page.render({{'firm_lab': state}})
+trading = sorted(m for m in sys.modules if m.split('.')[0] in ('broker', 'risk', 'data', 'eval', 'research', 'scripts', 'config'))
+print(json.dumps({{'found_directly': found_directly, 'path_unchanged': sys.path == before, 'mode': state.get('mode'), 'error': state.get('error'),
+                  'selected': (state.get('baseline') or {{}}).get('selected_instrument'), 'no_fills': 'NO FILLS' in html,
+                  'firm_lab_modules': sorted(m for m in sys.modules if m.startswith('firm_lab')), 'trading_modules': trading}}))
+"""
+    env = {k: v for k, v in __import__('os').environ.items() if k != 'PYTHONPATH'}
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, cwd=tmp_path, env=env, timeout=60)
+    assert out.returncode == 0, out.stderr
+    result = json.loads(out.stdout.strip().splitlines()[-1])
+    assert result['found_directly'] is False                                           # the situation on the Mac
+    assert result['error'] is None and result['mode'] == 'BUILD_OBSERVE' and result['selected'] == 'BBB' and result['no_fills']
+    assert result['path_unchanged'] and result['trading_modules'] == []
+    assert not {'firm_lab.boundary', 'firm_lab.ingest', 'firm_lab.cli'} & set(result['firm_lab_modules'])   # only the read-only view
