@@ -48,6 +48,7 @@ class FillResult(FrozenModel):
     price: Decimal | None = None
     reason: str | None = None
     spread_cost: Decimal = Decimal("0")
+    slippage_cost: Decimal = Decimal("0")
     track: str = "paper"
 
 

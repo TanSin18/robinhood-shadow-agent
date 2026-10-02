@@ -22,9 +22,13 @@ class PaperBroker:
         now: Callable[[], datetime] | None = None,
         max_quote_age_seconds: int = 60,
         track: str = "paper",
+        slippage: Decimal = Decimal("0"),
     ) -> None:
         if starting_cash <= 0:
             raise ValueError("starting cash must be positive")
+        if not Decimal("0") <= slippage < Decimal("0.01"):
+            raise ValueError("slippage must be a small non-negative fraction")
+        self.slippage = Decimal(slippage)
         self.settled_cash = Decimal(starting_cash)
         self.unsettled_cash = Decimal("0")
         self.positions: dict[str, Position] = {}
@@ -45,8 +49,12 @@ class PaperBroker:
         if quote.halted:
             return self._result(order, "rejected", reason="halted_ticker")
 
+        # Modeled slippage (v1.7): a buy pays a little above the ask, a sale receives a little below the bid.
+        # A buy must still fit inside its limit; a closing sale at the bid is treated as marketable.
+        touch = quote.ask if order.side == "buy" else quote.bid
+        price = touch * (1 + self.slippage) if order.side == "buy" else touch * (1 - self.slippage)
         market_reached = (
-            order.limit_price >= quote.ask
+            order.limit_price >= price
             if order.side == "buy"
             else order.limit_price <= quote.bid
         )
@@ -54,11 +62,11 @@ class PaperBroker:
             self._pending[order.client_order_id] = order
             return self._result(order, "pending", reason="limit_not_reached")
 
-        price = quote.ask if order.side == "buy" else quote.bid
         units = order.quantity * Decimal(order.multiplier)
         notional = price * units
         midpoint = (quote.bid + quote.ask) / Decimal("2")
         spread_cost = abs(price - midpoint) * units
+        slippage_cost = abs(price - touch) * units
 
         if order.side == "buy":
             if notional > self.settled_cash:
@@ -81,7 +89,7 @@ class PaperBroker:
             self.unsettled_cash += notional
 
         return self._result(
-            order, "filled", price=price, spread_cost=spread_cost
+            order, "filled", price=price, spread_cost=spread_cost, slippage_cost=slippage_cost
         )
 
     def process_quote(self, quote: Quote) -> tuple[FillResult, ...]:
@@ -126,6 +134,7 @@ class PaperBroker:
         price: Decimal | None = None,
         reason: str | None = None,
         spread_cost: Decimal = Decimal("0"),
+        slippage_cost: Decimal = Decimal("0"),
     ) -> FillResult:
         return FillResult(
             client_order_id=order.client_order_id,
@@ -135,6 +144,7 @@ class PaperBroker:
             price=price,
             reason=reason,
             spread_cost=spread_cost,
+            slippage_cost=slippage_cost,
             track=self.track,
         )
 

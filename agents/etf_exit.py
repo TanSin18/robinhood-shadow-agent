@@ -42,7 +42,12 @@ REASON_TEXT = {'CLOSED_AT_OR_BELOW_200_DAY_AVERAGE': 'closed at or below its 200
                # v1.6 protective exit (same-day, 15:50 ET)
                'PROTECTIVE_STOP_BELOW_AVERAGE_COST': 'fell to the registered protective stop below its average cost',
                'LIVE_PRICE_AT_OR_BELOW_200_DAY_AVERAGE': 'is trading at or below its 200-session average near the close',
-               'LIVE_MOMENTUM_126D_NOT_POSITIVE': 'shows non-positive 126-session momentum near the close'}
+               'LIVE_MOMENTUM_126D_NOT_POSITIVE': 'shows non-positive 126-session momentum near the close',
+               # v1.7 exit guard (15:50 ET, satellites only)
+               'GUARD_TRAILING_STOP': 'fell to its trailing stop (highest close since entry minus 3 x ATR)',
+               'GUARD_PROFIT_LOCK': 'fell back to its profit-lock floor',
+               'GUARD_GIVE_BACK': 'gave back half of a peak gain of 10% or more',
+               'GUARD_FAST_TREND_BREAK': 'is below its 50-session average while the market regime is stressed'}
 HORIZON_SESSIONS = 20
 
 
@@ -57,6 +62,15 @@ def _sell(config, cycle_id, ticker, arm, quantity, quote, reason, asset_class='e
         model_name='deterministic_not_a_model', config_hash='0' * 64, is_closing=True)
 
 
+def _is_core(state, ticker, now):
+    """v1.7: an arm's market core (VTI) is held, not traded on signals. False whenever v1.7 is not active."""
+    try:
+        from agents.v17_policy import is_core, v17_active
+        return v17_active(now=now) and is_core(state, ticker)
+    except Exception:
+        return False
+
+
 def issue_desk_exits(inbox, config, *, strategy_assessment, snapshot, now, cycle_id, lifecycle=None):
     from agents.approval import ApprovalCardRenderer
     from research.strategy_signals import ETF_UNIVERSE
@@ -68,8 +82,9 @@ def issue_desk_exits(inbox, config, *, strategy_assessment, snapshot, now, cycle
             positions = inbox.state('A', track)['positions']
         except (KeyError, TypeError, ValueError):
             continue  # arm not present in this ledger
+        state = inbox.state('A', track)
         for ticker, position in positions.items():
-            if ticker in ETF_UNIVERSE:
+            if ticker in ETF_UNIVERSE and not _is_core(state, ticker, now):
                 held.setdefault(ticker, {})[track] = position
     results = []
     for ticker, by_arm in sorted(held.items()):

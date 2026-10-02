@@ -1,0 +1,119 @@
+# WITHDRAWN 2026-10-01 20:30 ET. NEVER INSTALLED, NEVER ACTIVE, NOT SIGNED.
+# The operator's Firm Lab order of the same evening freezes the registered system as Control A; nothing in this
+# file or in agents/v17_policy.py may be installed into it. Kept only as a record of unfinished work.
+# v1.7.0 amendment layer (withdrawn): a market core plus satellites, exits that act, entry filters, honest fill costs.
+# Active only when this file's SHA-256 matches APPROVED_V170_SHA256 in agents/v17_policy.py, the effective
+# time has passed and the v1.6.0 amendment is active. Paper only. Real orders stay blocked; nothing here
+# unlocks live money. The v1.6 promotion gate still decides that.
+amendment:
+  id: intelligent-agentic-investment-organization
+  version: 1.7.0
+  kind: scoped_amendment_layer
+  base_version: 1.6.0
+  requires_active: preregistration-amendment-v1.6.0.yaml
+  effective_from_et: '2026-10-02T09:30:00-04:00'
+  operator_signature:
+    status: WITHDRAWN_NEVER_INSTALLED
+    signed_by: operator
+    signed_at_et: '2026-10-01T17:57:00-04:00'
+    signature_source: operator_chat_2026-10-01_1757_ET_sign_v1.7_if_good_enough_exits_that_act_more_than_one_position_news_and_regime_filters_now_latch_reset_slippage
+    final_act: the_operator_runs_the_release_install_that_places_this_file
+  rationale: >-
+    After one official day each Lane A account was about 95% cash with one 5% ETF position, so it trails
+    the market almost by construction, and its exits (200-session average, 8% below cost) do nothing to
+    protect an open gain. The operator's goal is profit, beating the market and staying safe, with paper
+    results good enough to decide about real money. This layer gives every account market exposure,
+    lets it hold more than one position, makes the exit guard act, applies entry filters and charges the
+    modeled fill cost.
+  evidence_status: >-
+    None of these parts has passed a statistical test. The operator chose to run them forward in paper
+    instead of waiting for shadow evidence or the trial-19 backtest. Paper results under this layer are
+    a forward test, judged only by the unchanged v1.6 promotion gate.
+  record: official_results_under_v1.7_are_counted_from_the_effective_time_and_never_mixed_with_v1.6_days
+
+core:                                   # every Lane A account holds the market; excess must come from the satellites
+  instrument: VTI
+  target_weight: '0.70'
+  top_up_below_weight: '0.65'           # bought back to the target at the 10:00 run when the weight is below this
+  trims: none_in_v1.7.0
+  held_in: all_three_arms_identically_bought_by_rule_without_an_approval_card
+  exits: none                           # not sold by the trend exits, the 15:50 protective check or the exit guard
+  market_risk_accepted: a_20_percent_market_fall_takes_about_14_percent_off_each_account
+  risk_checks: all_existing_checks_except_the_per_position_size_caps
+  not_a_satellite: VTI_is_never_a_satellite_entry
+
+satellites:                             # the traded part; at most the cash the core leaves free (about 30%)
+  momentum_rule: registered_v1.5_momentum_rule_holding_up_to_the_top_3_ranked_ETFs
+  max_momentum_positions: 3
+  max_new_entries_per_run: 2
+  strategy_label_for_ranks_2_and_3: momentum_rotation_126d_trend200_top3
+  sizing: unchanged_risk_engine_fraction_of_account_value
+  ai_stock_picks: unchanged_v1.5_path_and_no_longer_take_the_only_entry_slot
+  rotation: none_a_holding_leaves_only_through_an_exit
+
+entry_filters:                          # each can only keep the desk out; none can cause or enlarge a buy
+  chop_gate:
+    applies_to: all_three_arms
+    rule: new_satellite_ETF_entry_only_when_the_name_is_TRENDING
+    trending_means: ADX14_at_least_20_and_ATR_percent_not_in_its_lowest_fifth_of_the_last_year_and_within_3_ATR14_of_the_50_session_average
+    computed_from: completed_daily_bars_in_the_official_run
+    missing_evidence_action: block_and_record
+  regime:
+    applies_to: all_three_arms
+    rule: no_new_satellite_entry_while_the_market_regime_model_says_stressed
+    source: latest_code_fitted_three_state_model_on_VTI_daily_returns_from_the_after_close_job
+    valid_for_calendar_days: 4
+    missing_or_stale_action: no_effect_and_record
+  news_veto:
+    applies_to: [agent_alone, with_approvals]   # never the rules-only control arm, so the arms measure whether it helps
+    rule: no_new_satellite_entry_in_a_ticker_with_a_negative_high_relevance_news_call_in_the_latest_after_close_note
+    source: language_model_note_checked_by_code_never_read_for_anything_except_this_veto
+    valid_for_calendar_days: 4
+    missing_or_stale_action: no_effect_and_record
+    evidence: unproven_the_scorecard_keeps_scoring_these_calls
+
+exit_guard:                             # satellites only, all three arms, acts at the existing 15:50 window
+  checked: once_per_session_inside_the_v1.6_protective_window_with_a_fresh_bid
+  after: the_v1.6_protective_triggers_which_are_unchanged
+  trailing_stop: highest_completed_close_since_entry_minus_3_x_ATR22
+  profit_lock: floor_at_cost_once_the_best_close_is_2_ATR22_above_cost_and_at_cost_plus_2_ATR22_once_it_is_4_ATR22_above
+  stop_never_moves_down: true
+  give_back: sell_when_half_of_a_peak_gain_of_at_least_10_percent_is_gone
+  fast_trend_break: sell_when_the_bid_is_below_the_50_session_average_while_the_regime_is_stressed
+  atr_multiple: '3'
+  give_back_min_peak_gain: '0.10'
+  immediate_arms: [agent_alone, deterministic_no_ai]
+  approval_arm: with_approvals_SELL_card_expiring_at_the_close
+  missing_evidence_action: hold_and_record
+
+fill_costs:
+  slippage_fraction: '0.001'            # buys fill at ask x 1.001, sells at bid x 0.999; charged in the ledger
+
+drawdown_latch:
+  release_when_drawdown_from_peak_at_or_below: '0.05'
+  rebase_peak_after_latched_calendar_days: 28
+  hard_kill_switch_at_15_percent: unchanged_manual_review
+
+aligned_pick_marker:                    # information for the operator; never changes a trade
+  checks:
+    - trend_rule_passed
+    - momentum_positive_on_63_126_and_252_sessions
+    - tape_is_trending
+    - regime_confirmed_calm_or_normal
+    - news_checked_and_no_negative_high_relevance_call
+    - liquidity_and_spread_checks_passed
+  starred_when: all_six_pass
+  claim: none_a_star_means_the_checks_agree_not_that_the_trade_will_work
+  record: every_starred_entry_is_tracked_against_VTI_from_its_fill
+
+options_lane:
+  status: unchanged_paused_and_hidden_from_the_default_view
+
+unchanged:
+  - registered_universe_and_entry_rules_of_v1.5.0_except_the_number_of_momentum_positions
+  - v1.5.1_etf_exit_and_v1.5.2_stock_backstop_for_satellites
+  - v1.6_protective_exit_triggers_for_satellites
+  - v1.6_promotion_gate
+  - daily_api_budget_usd_0.40
+  - risk_fractions_and_breakers_except_the_latch_release
+  - real_execution_blocked

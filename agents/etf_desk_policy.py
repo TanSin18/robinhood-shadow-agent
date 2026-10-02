@@ -17,6 +17,7 @@ ET = ZoneInfo('America/New_York')
 APPROVED_V15_SHA256 = None
 ARMS = ('agent_alone', 'with_approvals', 'deterministic_no_ai')
 STRATEGIES = frozenset({'momentum_rotation_126d_trend200_top1',
+                        'momentum_rotation_126d_trend200_top3',     # v1.7: the same rule holding up to the top three
                         'mean_reversion_drop3_above_ma200'})
 
 
@@ -39,7 +40,7 @@ def entry_deadline(evaluated_at):
 def plan_entry(*, symbol, quote, reference_quote, evaluated_at, now,
                holdings_review_complete, approved_ai_stock_pick, entry_slot_used,
                median_spread_fraction, median_dollar_volume, context, risk_config,
-               signal, cycle_id):
+               signal, cycle_id, order_tag=None):
     """Plan one arm from trusted evaluate_daily_signals output, not model text.
 
     The issuance layer must persist the first reference once per official
@@ -102,7 +103,9 @@ def plan_entry(*, symbol, quote, reference_quote, evaluated_at, now,
     for name in ('strategy','thesis','good_if','invalidation'):
         if not isinstance(signal.get(name),str) or not signal[name]:
             return blocked('SIGNAL_EXIT_PLAN_REQUIRED')
-    proposal = TradeProposal(proposal_id=f'{cycle_id}-A-etf', client_order_id=f'{cycle_id}-A-etf',
+    # v1.7 may issue more than one ETF entry per cycle, so each order id carries its ticker.
+    ident = f'{cycle_id}-A-etf' + (f'-{order_tag}' if order_tag else '')
+    proposal = TradeProposal(proposal_id=ident, client_order_id=ident,
         account_id=risk_config.agentic_account_id, ticker=symbol, asset_class='etf', side='buy',
         quantity=quantity, limit_price=limit, thesis=signal['thesis'], good_if=signal['good_if'],
         invalidation=signal['invalidation'], horizon_days=20,

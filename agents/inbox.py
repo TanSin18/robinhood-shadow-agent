@@ -73,6 +73,13 @@ class PaperInbox:
     def mark_accounts(self, quotes, now, data_mode):
         records=[]
         today=now.astimezone(ET).date().isoformat()
+        latch_params=None
+        try:
+            from agents.v17_policy import v17_active, params as v17_params
+            if v17_active(now=now):
+                latch_params=v17_params()
+        except Exception:
+            latch_params=None
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             for lane in ('A','B'):
@@ -107,6 +114,17 @@ class PaperInbox:
                             state['peak_breaker_latched']=True
                         if drawdown>=D('.15'):
                             state['global_kill_switch']=True
+                        if latch_params is not None:
+                            # v1.7: the 10% latch releases after recovery to within 5% of the peak, or the peak is
+                            # re-based after 28 latched days. The 15% hard switch is never released here.
+                            try:
+                                from agents.v17_policy import latch_step
+                                latch_event=latch_step(state,value,now.astimezone(ET).date(),latch_params)
+                                if latch_event:
+                                    db.execute('INSERT INTO daily_values(created_at,payload_json) VALUES (?,?)',(now.isoformat(),json.dumps(
+                                        {'kind':'drawdown_latch','event':latch_event,'lane':lane,'track':track,'timestamp':now.isoformat(),'value':str(value)})))
+                            except Exception:
+                                pass
                     db.execute('UPDATE paper_accounts SET payload=? WHERE lane=? AND track=?',(json.dumps(state),lane,track))
                     record={'kind':'paper_valuation','timestamp':now.isoformat(),'data_mode':data_mode,'lane':lane,'track':track,'value':str(value) if value is not None else None,'missing_marks':missing}
                     records.append(record)
@@ -151,13 +169,18 @@ class PaperInbox:
                 db.execute('UPDATE paper_accounts SET payload=? WHERE lane=? AND track=?',(json.dumps(state),'B',track))
         return events
 
-    def _execute(self, db, lane, track, proposal, quote, vol, vol_as_of, now, *, etf_entry_reference=None):
+    def _execute(self, db, lane, track, proposal, quote, vol, vol_as_of, now, *, etf_entry_reference=None,
+                 ignore_reasons=frozenset(), extra=None):
+        """One paper order for one arm. ``ignore_reasons`` is used only by the signed v1.7 core purchase
+        (the per-position size caps do not apply to the market core); every other check still applies."""
         state = self.state(lane,track,db)
         engine = RiskEngine(self.config.risk)
         verdict = engine.evaluate(proposal,self._context(state,quote,vol,vol_as_of,now),etf_entry_reference=etf_entry_reference)
-        if not verdict.allowed:
-            return {'status':'RISK_BLOCKED','reasons':[r.value for r in verdict.reasons]}
-        broker = PaperBroker(D(state['start']),now=lambda:now,track=f'{lane}:{track}')
+        blocking = [r.value for r in verdict.reasons if r.value not in ignore_reasons]
+        if blocking:
+            return {'status':'RISK_BLOCKED','reasons':blocking}
+        from agents.v17_policy import slippage_fraction
+        broker = PaperBroker(D(state['start']),now=lambda:now,track=f'{lane}:{track}',slippage=slippage_fraction(now=now))
         broker.settled_cash,broker.unsettled_cash = D(state['settled_cash']),D(state['unsettled_cash'])
         broker.positions = {t:Position.model_validate(p) for t,p in state['positions'].items()}
         order = PaperOrder(client_order_id=proposal.client_order_id or proposal.proposal_id,ticker=proposal.ticker,asset_class=proposal.asset_class,side=proposal.side,quantity=proposal.quantity,limit_price=proposal.limit_price,multiplier=proposal.multiplier,underlying_ticker=proposal.underlying_ticker,option_type=proposal.option_type,strike=proposal.strike,expiry=proposal.expiry)
@@ -165,7 +188,11 @@ class PaperInbox:
         # This runtime only accepts immediate paper fills; resting orders are not silently lost.
         if fill.status != 'filled':
             return {'status':'UNFILLED','reason':fill.reason}
-        record = {**fill.model_dump(mode='json'),'side':proposal.side,'timestamp':now.isoformat(),'lane':lane,'comparison':'proposal_time_counterfactual'}
+        record = {**fill.model_dump(mode='json'),'side':proposal.side,'timestamp':now.isoformat(),'lane':lane,'comparison':'proposal_time_counterfactual',**(extra or {})}
+        if proposal.side=='sell' and proposal.ticker not in broker.positions:
+            state.get('guard_stops',{}).pop(proposal.ticker,None)      # the position is closed: its trailing stop goes with it
+            if (state.get('core') or {}).get('ticker')==proposal.ticker:
+                state.pop('core',None)
         state.update(settled_cash=str(broker.settled_cash),unsettled_cash=str(broker.unsettled_cash),positions={t:p.model_dump(mode='json') for t,p in broker.positions.items()})
         state['seen'].append(order.client_order_id)
         state['fills'].append(record)
@@ -238,7 +265,7 @@ class PaperInbox:
                 f'Good if: {proposal.good_if} Wrong if: {proposal.invalidation} '
                 f'If you say YES, it fills only at a fresh price at or under the limit before '
                 f'{datetime.fromisoformat(plan["expires_at"]).astimezone(ET).strftime("%-I:%M %p ET")}. '
-                f'Not an AI pick. Paper only.')
+                f'Not an AI pick. Paper only.' + (f' {plan["alignment_text"]}' if plan.get('alignment_text') else ''))
         payload = {'id':proposal.proposal_id,'status':'PENDING','lane':'A','author':DESK_AUTHOR,
                    'attribution':'desk_policy_not_ai','fill_policy':'fresh_quote_at_approval',
                    'body':body,'trace_url':self.config.notifications.dashboard_url(f'trace/{proposal.proposal_id}', fragment=False),
@@ -246,11 +273,13 @@ class PaperInbox:
                    'reference_midpoint':plan['reference_midpoint'],'limit_price':plan['limit_price'],
                    'vol':str(vol[0]) if vol[0] is not None else None,'vol_as_of':vol[1].isoformat() if vol[1] is not None else None,
                    'issued':now.isoformat(),'expires':plan['expires_at'],
-                   'comparison':'Approval-time fresh quote within the registered limit.'}
+                   'comparison':'Approval-time fresh quote within the registered limit.',
+                   **({'alignment':plan['alignment']} if plan.get('alignment') else {})}
         db.execute('INSERT INTO approval_inbox VALUES (?,?,?,?,?)',(proposal.proposal_id,'PENDING',payload['issued'],payload['expires'],json.dumps(payload)))
         from agents.notification_outbox import enqueue
         enqueue(db,'card-'+proposal.proposal_id,'Desk rule card waiting',
-                f'Lane A: a desk-rule (no AI) paper buy of {proposal.ticker} needs YES or NO.',now,
+                f'Lane A: a desk-rule (no AI) paper buy of {proposal.ticker} needs YES or NO.'
+                + (f' {plan["alignment_text"]}' if plan.get('alignment_text') else ''),now,
                 priority=0,url=self.config.notifications.dashboard_url('decisions'))
         return payload
 
