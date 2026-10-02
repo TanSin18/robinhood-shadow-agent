@@ -1,4 +1,4 @@
-"""Data-provider interfaces. Definitions only: no provider is connected at this checkpoint.
+"""Data-provider interfaces. Definitions only: the adapters that reach a real provider live in ``firm_lab_collectors``.
 
 Every method returns a ``ProviderResult``. With no provider behind it the status is ``UNAVAILABLE`` and there are
 no records: never a guessed value, a stale hard-coded value, a web search or a model-written number. A connected
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from . import quality
-from .errors import CapabilityUnavailable
+from .errors import CapabilityUnavailable, ProviderRejected, ProviderUnavailable
 from .provenance import Provenance
 from .schemas import SCHEMA_VERSION
 
@@ -88,6 +88,13 @@ class Provider:
             records, provenance = self._fetch(method, **request)
         except NotImplementedError:
             return unavailable(domain, method, f'{self.name} does not supply {method}')
+        except ProviderUnavailable as error:
+            return unavailable(domain, method, error.reason)
+        except ProviderRejected as error:
+            return ProviderResult(REJECTED, domain, method, 'the provider response was refused; nothing was kept', error.provenance,
+                                  tuple(quality.Issue(code, detail) for code, detail in error.issues))
+        if callable(now):
+            now = now()                                    # a clock: read after the provider answered, so "now" is not before the answer
         return deliver(domain, method, records, provenance, now=now, expected_instrument=expected_instrument,
                        max_age=request.get('max_age'), expected_window=request.get('expected_window'), window_field=request.get('window_field'))
 
@@ -149,8 +156,8 @@ class FilingsProvider(Provider):
     domain = 'filings'
     capability = 'sec_filings'
 
-    def filings(self, instrument, *, start, end, now=None):
-        return self._call('filings', now=now, expected_instrument=instrument, instrument=instrument, start=start, end=end)
+    def filings(self, instrument, *, start, end, now=None, limit=None):
+        return self._call('filings', now=now, expected_instrument=instrument, instrument=instrument, start=start, end=end, limit=limit)
 
 
 class NewsProvider(Provider):
@@ -183,8 +190,8 @@ class OptionsMarketDataProvider(Provider):
     domain = 'options_chain'
     capability = 'options_chain'
 
-    def chain(self, underlying, *, as_of, now=None):
-        return self._call('chain', now=now, underlying=underlying, as_of=as_of)
+    def chain(self, underlying, *, as_of, now=None, expiration=None):
+        return self._call('chain', now=now, underlying=underlying, as_of=as_of, expiration=expiration)
 
     def quotes(self, contract_ids, *, as_of, now=None):
         return self._call('quotes', now=now, contract_ids=tuple(contract_ids), as_of=as_of)

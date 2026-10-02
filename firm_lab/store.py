@@ -34,15 +34,55 @@ SCHEMA = (
     "UNIQUE (benchmark_id, exchange_session_date, kind, value, source))",
     "CREATE TABLE IF NOT EXISTS experiment_registry (experiment_id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, "
     "registered_at TEXT, recipe_hash TEXT, start_at TEXT, end_at TEXT, status TEXT NOT NULL, notes TEXT)",
-    # Raw option-chain facts if a provider ever supplies them. Storage schema only: nothing reads this to recommend a trade.
-    "CREATE TABLE IF NOT EXISTS option_chain_observations (id INTEGER PRIMARY KEY, contract_id TEXT NOT NULL, underlying TEXT NOT NULL, "
-    "expiry TEXT, strike TEXT, option_type TEXT, bid TEXT, ask TEXT, volume TEXT, open_interest TEXT, provider_implied_volatility TEXT, "
-    "provider_delta TEXT, provider_gamma TEXT, provider_theta TEXT, provider_vega TEXT, provider TEXT NOT NULL, as_of TEXT NOT NULL, "
-    "ingested_at TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS ingest_runs (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT, source TEXT NOT NULL, "
     "source_hash TEXT, status TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}')",
     "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL)",
 )
+# Raw provider data (Checkpoint 3). Rows are only ever inserted. The UNIQUE key includes the content hash, so an identical
+# record is ignored (resumable ingestion) and a changed record is kept as a new row beside the old one.
+_PROV = ("provider TEXT NOT NULL, source_id TEXT NOT NULL, source_timestamp TEXT NOT NULL, known_at TEXT NOT NULL, ingested_at TEXT NOT NULL, "
+         "schema_version TEXT NOT NULL, content_hash TEXT NOT NULL, run_id INTEGER NOT NULL")
+RAW_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS provider_runs (id INTEGER PRIMARY KEY, batch TEXT NOT NULL, provider TEXT NOT NULL, domain TEXT NOT NULL, method TEXT NOT NULL, "
+    "instrument TEXT, started_at TEXT NOT NULL, finished_at TEXT NOT NULL, status TEXT NOT NULL, reason TEXT, received INTEGER NOT NULL, "
+    "stored INTEGER NOT NULL, duplicates INTEGER NOT NULL, issues_json TEXT NOT NULL DEFAULT '[]', diagnostics_json TEXT NOT NULL DEFAULT '{}', "
+    "provenance_json TEXT)",
+    "CREATE TABLE IF NOT EXISTS provider_connections (provider TEXT PRIMARY KEY, state TEXT NOT NULL, detail TEXT, checked_at TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS filing_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, accession_number TEXT NOT NULL, "
+    "form_type TEXT NOT NULL, filing_date TEXT NOT NULL, report_date TEXT, accepted_timestamp TEXT NOT NULL, accepted_timestamp_raw TEXT NOT NULL, "
+    "accepted_timestamp_basis TEXT NOT NULL, header_acceptance_raw TEXT, url TEXT NOT NULL, primary_document TEXT, items TEXT, entity_name TEXT, "
+    "series_id TEXT, class_id TEXT, " + _PROV + ", UNIQUE (accession_number, instrument, content_hash))",
+    "CREATE TABLE IF NOT EXISTS intraday_bar_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, bar_start TEXT NOT NULL, "
+    "bar_start_raw TEXT NOT NULL, interval TEXT NOT NULL, open TEXT NOT NULL, high TEXT NOT NULL, low TEXT NOT NULL, close TEXT NOT NULL, "
+    "volume TEXT NOT NULL, vwap TEXT, trade_count TEXT, session TEXT NOT NULL, exchange_session_date TEXT NOT NULL, adjusted TEXT NOT NULL, "
+    "feed TEXT NOT NULL, " + _PROV + ", UNIQUE (provider, instrument, bar_start, interval, adjusted, content_hash))",
+    "CREATE TABLE IF NOT EXISTS trade_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, trade_timestamp TEXT NOT NULL, "
+    "trade_timestamp_raw TEXT NOT NULL, participant_timestamp_raw TEXT, price TEXT NOT NULL, size TEXT NOT NULL, decimal_size TEXT, exchange TEXT NOT NULL, "
+    "conditions_json TEXT, trade_id TEXT NOT NULL, sequence_number TEXT, tape TEXT, trf_id TEXT, correction TEXT, feed TEXT NOT NULL, " + _PROV
+    + ", UNIQUE (provider, instrument, exchange, trade_id, trade_timestamp_raw, content_hash))",
+    "CREATE TABLE IF NOT EXISTS quote_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, quote_timestamp TEXT NOT NULL, "
+    "quote_timestamp_raw TEXT NOT NULL, participant_timestamp_raw TEXT, bid TEXT NOT NULL, bid_size TEXT NOT NULL, bid_exchange TEXT, ask TEXT NOT NULL, "
+    "ask_size TEXT NOT NULL, ask_exchange TEXT, conditions_json TEXT, indicators_json TEXT, sequence_number TEXT, tape TEXT, feed TEXT NOT NULL, "
+    + _PROV + ", UNIQUE (provider, instrument, quote_timestamp_raw, sequence_number, content_hash))",
+    "CREATE TABLE IF NOT EXISTS fundamental_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, provider_instrument_id TEXT, "
+    "dimension TEXT NOT NULL, reporting_basis TEXT NOT NULL, fiscal_period TEXT, period_end TEXT NOT NULL, calendar_date TEXT, filing_date TEXT NOT NULL, "
+    "filing_timestamp TEXT NOT NULL, provider_datekey TEXT, last_updated TEXT NOT NULL, metric TEXT NOT NULL, provider_metric TEXT, value TEXT NOT NULL, "
+    "units TEXT NOT NULL, currency TEXT, is_delisted TEXT, " + _PROV
+    + ", UNIQUE (provider, instrument, dimension, period_end, filing_date, metric, content_hash))",
+    "CREATE TABLE IF NOT EXISTS corporate_action_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, action_type TEXT NOT NULL, "
+    "provider_action TEXT NOT NULL, effective_date TEXT NOT NULL, effective_date_basis TEXT, announcement_timestamp TEXT NOT NULL, value TEXT, "
+    "value_meaning TEXT, currency TEXT, contra_instrument TEXT, contra_name TEXT, name TEXT, " + _PROV
+    + ", UNIQUE (provider, instrument, provider_action, effective_date, contra_instrument, content_hash))",
+    # Greeks and implied volatility are stored only as provider values, with who computed them and under which model.
+    "CREATE TABLE IF NOT EXISTS option_chain_observations (id INTEGER PRIMARY KEY, contract_id TEXT NOT NULL, underlying TEXT NOT NULL, "
+    "expiration TEXT NOT NULL, strike TEXT NOT NULL, option_type TEXT NOT NULL, quote_timestamp TEXT NOT NULL, quote_timestamp_raw TEXT, bid TEXT NOT NULL, "
+    "bid_size TEXT, ask TEXT NOT NULL, ask_size TEXT, volume TEXT NOT NULL, open_interest TEXT NOT NULL, open_interest_timestamp TEXT, "
+    "provider_implied_volatility TEXT, provider_delta TEXT, provider_gamma TEXT, provider_theta TEXT, provider_vega TEXT, provider_rho TEXT, "
+    "greeks_provider TEXT, greeks_model TEXT, greeks_model_version TEXT, greeks_timestamp TEXT, underlying_price TEXT, underlying_timestamp TEXT, "
+    + _PROV + ", UNIQUE (provider, contract_id, quote_timestamp, content_hash))",
+)
+RAW_TABLES = ('filing_observations', 'intraday_bar_observations', 'trade_observations', 'quote_observations', 'fundamental_observations',
+              'corporate_action_observations', 'option_chain_observations')
 # Names that must never appear as Firm Lab tables while the mode is BUILD_OBSERVE (checked by a test).
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'paper_account', 'cash', 'portfolio')
 
@@ -74,6 +114,17 @@ class FirmLabStore:
             for stmt in SCHEMA:
                 db.execute(stmt)
             now = now_utc().isoformat()
+            # Checkpoint 1 created an option table that never held a row; its Checkpoint 3 shape adds provenance and model fields.
+            old = [r[1] for r in db.execute('PRAGMA table_info(option_chain_observations)')]
+            if old and 'run_id' not in old:
+                if db.execute('SELECT COUNT(*) FROM option_chain_observations').fetchone()[0]:
+                    raise FirmLabError('OPTION_TABLE_HAS_ROWS_IN_THE_OLD_SHAPE: refusing to replace it')
+                db.execute('DROP TABLE option_chain_observations')
+                db.execute('INSERT INTO events(at, kind, payload_json) VALUES (?,?,?)',
+                           (now, 'SCHEMA_CHANGE', canonical({'table': 'option_chain_observations', 'change': 'empty table recreated with '
+                                                             'provenance and model columns', 'rows_before': 0})))
+            for stmt in RAW_SCHEMA:
+                db.execute(stmt)
             # The mode is set once, at creation. Nothing in this package can move it away from BUILD_OBSERVE.
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('mode', MODE_BUILD_OBSERVE, now))
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('schema_version', str(SCHEMA_VERSION), now))

@@ -114,7 +114,7 @@ def test_truth_bar_and_truthful_names_reach_the_operational_page(tmp_path, monke
 # ---------------------------------------------------------------- 35: the Firm Lab page
 def test_firm_lab_page_says_no_fills_before_the_database_exists():                                  # 35
     html = firm_lab_page.render({'firm_lab': view.load(path='/nonexistent/firm_lab.db')})
-    assert '<h1>Firm Lab</h1>' in html and '>BUILD / OBSERVE</span>' in html and '>NO FILLS</span>' in html
+    assert '<h1>Firm Lab</h1>' in html and '>BUILD / OBSERVE</span>' in html and '>NO FILLS</span>' in html and '>NO FIRM TRADING TRACK RECORD</span>' in html
     assert '<b>Development data only. No Firm trading track record exists.</b>' in html
     assert '<dt>Firm fills</dt><dd><b>0</b>' in html and '<dt>Firm trading trial</dt><dd><b>NOT REGISTERED</b>' in html and 'Trial 18' not in html
     assert 'not created on this machine yet' in html and 'No baseline evaluation is recorded yet.' in html
@@ -141,7 +141,7 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     assert '<dt>Rule would select</dt><dd><b>BBB</b></dd>' in html and '<dt>Exchange session date</dt><dd>2026-09-30</dd>' in html
     assert '<dt>Same selection from the new store</dt><dd><b>Yes</b></dd>' in html
     assert 'Firm strategy' not in html.replace('It is not a Firm strategy', '')
-    rows = dict(re.findall(r'<tr><td(?: data-label="Data")?><b>([^<]+)</b></td><td(?: data-label="State")?><span class="cat cat-\w+">([^<]+)</span>', html))
+    rows = dict(re.findall(r'<tr><td(?: data-label="Data")?><b>([^<]+)</b></td><td(?: data-label="Capability")?><span class="cat cat-\w+">([^<]+)</span>', html))
     assert rows['Daily closes'] == 'AVAILABLE' and rows['Daily baseline features'] == 'AVAILABLE'      # stored closes that passed validation
     for name in ('Fundamentals', 'Analyst estimates and revisions', 'Intraday 1-minute bars', 'VWAP', 'Time-of-day RVOL', 'Order flow and microstructure',
                  'Options Greeks', 'T-bill total return', 'Corporate actions and dividends', 'Earnings and transcripts'):
@@ -149,7 +149,8 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     assert rows['Options strategy'] == 'NOT_STARTED' and rows['ML ranker'] == 'NOT_STARTED' and rows['Options chains'] == 'BUILD_ONLY'
     assert rows['Live quotes and trades'] == rows['General news'] == rows['SEC filings'] == 'PARTIAL_EXISTING'
     assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>DATA_SOURCE_PENDING</span>' in html
-    assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'no other asset stands in for it' in html
+    assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'no fund or other asset stands in for the bill' in html
+    assert '>DRAFT_FOR_OPERATOR_REVIEW</span>' in html and '>NOT_COMPUTED</span>' in html and 'Not approved and not frozen' in html
     assert '<dt>Rebalancing</dt><dd>monthly, on the first NYSE trading session of each calendar month</dd>' in html
     assert '<dt>Observations stored</dt><dd>0</dd>' in html and 'Trial 18' not in html
     lowered = html.lower()

@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from .schemas import BARE_GREEK_NAMES, NOT_A_TOTAL_RETURN, SCHEMAS
+from .schemas import BARE_GREEK_NAMES, MONEY_UNITS, NOT_A_TOTAL_RETURN, SCHEMAS, UNAVAILABLE
+from .sessions import ET
 
 STALE_TIMESTAMP = 'STALE_TIMESTAMP'
 FUTURE_TIMESTAMP = 'FUTURE_TIMESTAMP'
@@ -32,6 +33,10 @@ NOT_A_RECORD = 'NOT_A_RECORD'
 UNKNOWN_DOMAIN = 'UNKNOWN_DOMAIN'
 INCOMPLETE_PROVENANCE = 'INCOMPLETE_PROVENANCE'
 KNOWN_BEFORE_SOURCE = 'KNOWN_BEFORE_SOURCE'
+SESSION_MISMATCH = 'SESSION_MISMATCH'
+OUTSIDE_SESSION_HOURS = 'OUTSIDE_SESSION_HOURS'
+SESSION_DATE_MISMATCH = 'SESSION_DATE_MISMATCH'
+CROSSED_MARKET = 'CROSSED_MARKET'
 
 
 @dataclass(frozen=True)
@@ -130,12 +135,12 @@ def check_duplicates(records, key) -> list:
     return out
 
 
-def check_values(records, *, positive=(), non_negative=()) -> list:
+def check_values(records, *, positive=(), non_negative=(), numeric=()) -> list:
     """Values that cannot be true: a non-number where a number belongs, a price at or below zero, a negative count,
     a high below a low, an ask below a bid."""
     out = []
     for i, r in enumerate(records):
-        for name in tuple(positive) + tuple(non_negative):
+        for name in tuple(positive) + tuple(non_negative) + tuple(numeric):
             if not _present(r.get(name)):
                 continue
             number = _number(r[name])
@@ -154,8 +159,9 @@ def check_values(records, *, positive=(), non_negative=()) -> list:
                 if value is not None and not low <= value <= high:
                     out.append(Issue(IMPOSSIBLE_VALUE, f'{name} {r[name]!r} is outside low/high', i, name))
         bid, ask = _number(r.get('bid')), _number(r.get('ask'))
-        if bid is not None and ask is not None and ask < bid:
-            out.append(Issue(IMPOSSIBLE_VALUE, f'ask {r["ask"]!r} is below bid {r["bid"]!r}', i, 'ask'))
+        if bid is not None and ask is not None and bid > 0 and ask > 0 and ask < bid:      # a side at 0 means no quote on that side
+            out.append(Issue(IMPOSSIBLE_VALUE, f'ask {r["ask"]!r} is below bid {r["bid"]!r} (crossed market)', i, 'ask'))
+            out.append(Issue(CROSSED_MARKET, f'bid {r["bid"]!r} above ask {r["ask"]!r}', i, 'ask'))
     return out
 
 
@@ -171,7 +177,8 @@ def check_units(records, money) -> list:
     """An amount of money without a currency is not usable."""
     out = []
     for i, r in enumerate(records):
-        if any(_present(r.get(name)) for name in money) and not _present(r.get('currency')):
+        is_money = any(_present(r.get(name)) for name in money) or r.get('units') in MONEY_UNITS
+        if is_money and not _present(r.get('currency')):
             out.append(Issue(MISSING_UNITS_OR_CURRENCY, 'money amounts without a currency', i, 'currency'))
     return out
 
@@ -206,6 +213,80 @@ def check_point_in_time(records, field_name) -> list:
         return []
     return [Issue(NOT_POINT_IN_TIME, f'{field_name} is missing: this is not a dated snapshot', i, field_name)
             for i, r in enumerate(records) if not _present(r.get(field_name))]
+
+
+def check_timestamp_or_unavailable(records, fields) -> list:
+    """The field must be there, as a timezone-aware timestamp or as the literal UNAVAILABLE. A date alone is not a timestamp."""
+    out = []
+    for i, r in enumerate(records):
+        for name in fields:
+            value = r.get(name)
+            if value == UNAVAILABLE:
+                continue
+            if not _present(value):
+                out.append(Issue(MISSING_FIELD, f'{name} must be a timestamp or the literal UNAVAILABLE', i, name))
+                continue
+            _, problem = parse_timestamp(value)
+            if problem:
+                out.append(Issue(problem, f'{name}={value!r} is not a timezone-aware timestamp (use UNAVAILABLE if it is not known)', i, name))
+    return out
+
+
+def check_any_of(records, groups) -> list:
+    """At least one field of each group must be present. A name starting with ``*`` matches any field ending with the rest."""
+    out = []
+    for i, r in enumerate(records):
+        for group in groups or ():
+            found = any((_present(r.get(n)) if not n.startswith('*') else any(k.endswith(n[1:]) and _present(v) for k, v in r.items())) for n in group)
+            if not found:
+                out.append(Issue(MISSING_FIELD, 'one of ' + ', '.join(group) + ' is required', i, group[0]))
+    return out
+
+
+def session_of(stamp) -> str:
+    """pre_market 04:00-09:30, regular 09:30-16:00, post_market 16:00-20:00 New York clock time; '' outside those hours.
+    Clock only: an exchange early close is not known here, so a bar after an early close is still labelled regular."""
+    local = stamp.astimezone(ET)
+    minutes = local.hour * 60 + local.minute
+    if 240 <= minutes < 570:
+        return 'pre_market'
+    if 570 <= minutes < 960:
+        return 'regular'
+    if 960 <= minutes < 1200:
+        return 'post_market'
+    return ''
+
+
+def check_sessions(records, field_name='bar_start') -> list:
+    """The stated session and session date must agree with the bar's own timestamp."""
+    out = []
+    for i, r in enumerate(records):
+        if 'session' not in r or not _present(r.get(field_name)):
+            continue
+        stamp, problem = parse_timestamp(r[field_name])
+        if problem:
+            continue
+        actual = session_of(stamp)
+        if not actual:
+            out.append(Issue(OUTSIDE_SESSION_HOURS, f'{field_name}={r[field_name]!r} is outside 04:00-20:00 New York time', i, field_name))
+        elif r.get('session') != actual:
+            out.append(Issue(SESSION_MISMATCH, f'labelled {r.get("session")!r} but the timestamp is in {actual}', i, 'session'))
+        if _present(r.get('exchange_session_date')) and str(r['exchange_session_date']) != stamp.astimezone(ET).date().isoformat():
+            out.append(Issue(SESSION_DATE_MISMATCH, f'exchange_session_date {r["exchange_session_date"]!r} is not the New York date of the bar', i,
+                             'exchange_session_date'))
+    return out
+
+
+def missing_regular_minutes(records, field_name='bar_start') -> dict:
+    """A diagnostic, not a failure: how many regular-session minutes have no bar, per session date. A minute with no
+    eligible trade legitimately has no bar."""
+    seen = {}
+    for r in records:
+        stamp, problem = parse_timestamp(r.get(field_name)) if _present(r.get(field_name)) else (None, 'absent')
+        if problem or session_of(stamp) != 'regular':
+            continue
+        seen.setdefault(stamp.astimezone(ET).date().isoformat(), set()).add(stamp.astimezone(ET).strftime('%H:%M'))
+    return {day: 390 - len(minutes) for day, minutes in sorted(seen.items())}
 
 
 def check_greek_namespaces(records) -> list:
@@ -262,7 +343,11 @@ def validate(domain, records, *, now, provenance=None, expected_instrument=None,
     issues += check_allowed(records, schema.allowed)
     issues += check_timestamps(records, schema.timestamps, now=now, max_age=max_age)
     issues += check_duplicates(records, schema.key)
-    issues += check_values(records, positive=schema.positive, non_negative=schema.non_negative)
+    issues += check_values(records, positive=schema.positive, non_negative=schema.non_negative, numeric=schema.numeric)
+    issues += check_timestamp_or_unavailable(records, schema.timestamp_or_unavailable)
+    issues += check_any_of(records, schema.any_of)
+    if domain == 'intraday_bars':
+        issues += check_sessions(records)
     issues += check_identity(records, schema.identifier, expected_instrument)
     issues += check_units(records, schema.money)
     issues += check_monotonic(records, schema.order_by)

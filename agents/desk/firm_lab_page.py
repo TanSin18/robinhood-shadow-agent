@@ -92,21 +92,70 @@ def _registry(fl):
             '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>')
 
 
+CONNECTION_TONE = {'ACTIVE': 'good', 'CONFIGURED': 'warn', 'NOT CONFIGURED': 'stop', 'ERROR': 'stop', 'NOT SELECTED': 'neutral'}
+VALIDATION_TONE = {'PASS': 'good', 'FAIL': 'stop', 'INCOMPLETE': 'warn', 'NOT RUN': 'neutral'}
+
+
+def _stamp(value):
+    """A stored time in New York time when it is a full timestamp; a stored date is shown as the date it is."""
+    if not value:
+        return ''
+    text = _when(value)
+    return str(value) if text == 'not recorded' else text
+
+
+def _tag(text, tones, fallback):
+    """A state word with its tone. An unknown word is shown with the cautious fallback tone, never a better one."""
+    return f'<span class="cat cat-{tones.get(text, fallback)}">{esc(text)}</span>'
+
+
 def _readiness(fl):
-    """Data Readiness: which data exists, from where, with what limits. Infrastructure, not a trading feature."""
+    """Data Readiness: per data domain, the chosen provider, whether it is connected, whether its data passed validation,
+    what is actually stored, and the capability state. Infrastructure, not a trading feature."""
     _, ready, note = _registry(fl)
-    body = ''.join(f'<tr><td data-label="Data"><b>{esc(r["domain"])}</b></td><td data-label="State">{_chip(r["status"])}</td>'
-                   f'<td data-label="Current source">{esc(r.get("source") or "none")}</td>'
-                   f'<td data-label="Limitation" class="small">{esc(r.get("limitation") or "")}</td>'
-                   f'<td data-label="Required next" class="small">{esc(r.get("required_next") or "")}</td></tr>' for r in ready)
-    return (note + '<p class="v10-note">Infrastructure readiness only: which data Firm Lab could trust, where it would come from and what is missing. '
-            'No new provider is connected, and nothing on this list feeds a ranking, a selection or a trade.</p>'
-            '<div class="table-wrap"><table class="mini fl-ready"><colgroup><col class="fl-r1"><col class="fl-r2"><col class="fl-r3"><col><col></colgroup>'
-            '<thead><tr><th>Data</th><th>State</th><th>Current source</th><th>Limitation</th><th>Required next</th></tr></thead>'
-            f'<tbody>{body}</tbody></table></div>'
-            '<p class="v10-note">AVAILABLE: stored data that passed validation. PARTIAL_EXISTING: a source exists elsewhere in the system but is not '
-            'sufficient for, or not connected to, Firm Lab. BUILD_ONLY: storage exists and nothing reads it. UNAVAILABLE: no source; no value is '
-            'stored, estimated or filled in. Details: docs/firm_lab/data_sources.md and docs/firm_lab/provider_matrix.md.</p>')
+    body = ''
+    for r in ready:
+        provider = r.get('provider')
+        connection = str(r.get('connection') or 'NOT SELECTED')
+        validation = str(r.get('validation') or 'NOT RUN')
+        count = int(r.get('observations') or 0)
+        span = ' to '.join(x for x in (_stamp(r.get('oldest')), _stamp(r.get('newest'))) if x)
+        failures = r.get('failures') or {}
+        issues = ', '.join(r.get('validation_issues') or [])
+        sample = ' · '.join(f'{s.get("instrument")} {s.get("status")}' for s in (r.get('sample') or [])[:12])
+        body += (
+            f'<tr><td data-label="Data"><b>{esc(r["domain"])}</b></td><td data-label="Capability">{_chip(r["status"])}</td>'
+            f'<td data-label="Provider">{esc(provider) if provider else "none selected"}</td>'
+            f'<td data-label="Connection">{_tag(connection, CONNECTION_TONE, "stop")}'
+            f'<span class="small fl-sub">{esc(r.get("connection_detail") or "")}</span></td>'
+            f'<td data-label="Validation">{_tag(validation, VALIDATION_TONE, "neutral")}'
+            f'<span class="small fl-sub">{esc(issues or sample)}</span></td>'
+            f'<td data-label="Stored"><b>{count:,}</b><span class="small fl-sub">{esc(span) if count else "nothing stored"}</span></td>'
+            f'<td data-label="Last successful ingest">{esc(_stamp(r.get("last_successful_ingest")) or "never")}</td>'
+            f'<td data-label="Quality failures" class="small">'
+            f'{esc("; ".join(f"{code} × {n}" for code, n in sorted(failures.items()))) if failures else "none recorded"}</td></tr>'
+            f'<tr class="fl-ready-note"><td colspan="8" class="small"><b>Limitation.</b> <span class="fl-limit">{esc(r.get("limitation") or "")}</span> '
+            f'<b>Required next.</b> <span class="fl-next">{esc(r.get("required_next") or "")}</span></td></tr>')
+    cross = fl.get('sec_cross_check')
+    cross_note = ''
+    if cross:
+        cross_note = ('<p class="v10-note">SEC cross-check: of '
+                      f'{esc(cross.get("reports", 0))} as-reported filings stored from the fundamentals provider, {esc(cross.get("MATCH", 0))} match exactly one '
+                      f'stored SEC filing on the filing date, {esc(cross.get("NO_SEC_FILING_STORED", 0))} have no stored SEC filing and '
+                      f'{esc(cross.get("AMBIGUOUS", 0))} are ambiguous. An acceptance time is read from the SEC record only; none is built from a date.</p>')
+    return (note + '<p class="v10-note">Infrastructure readiness only: which raw data Firm Lab holds, from which provider, and whether it passed validation. '
+            'Choosing a provider is not a connection, and a connection is not a capability: a row becomes AVAILABLE only after real rows are stored and '
+            'validated. Nothing on this list feeds a ranking, a selection or a trade.</p>'
+            '<div class="table-wrap"><table class="mini fl-ready"><colgroup><col class="fl-r1"><col class="fl-r2"><col class="fl-r3"><col class="fl-r4">'
+            '<col class="fl-r5"><col class="fl-r6"><col class="fl-r7"><col></colgroup>'
+            '<thead><tr><th>Data</th><th>Capability</th><th>Provider</th><th>Connection</th><th>Validation</th><th>Stored</th>'
+            '<th>Last successful ingest</th><th>Quality failures</th></tr></thead>'
+            f'<tbody>{body}</tbody></table></div>' + cross_note +
+            '<p class="v10-note">Capability — AVAILABLE: stored data that passed validation. PARTIAL_EXISTING: a source exists elsewhere in the system but is '
+            'not sufficient for, or not connected to, Firm Lab. BUILD_ONLY: storage exists and nothing reads it. UNAVAILABLE: no value is stored, estimated '
+            'or filled in. Connection — NOT CONFIGURED: credentials or provider activation by the operator are required. Validation — PASS: every run of the '
+            'latest sample was accepted; FAIL: a response was refused whole and nothing from it was kept. Details: docs/firm_lab/data_sources.md and '
+            'docs/firm_lab/provider_matrix.md.</p>')
 
 
 def _capabilities(fl):
@@ -162,6 +211,7 @@ def _benchmarks(fl):
     rows = fl.get('benchmarks')
     if not rows:                                          # database not created yet: show the definitions it starts with
         rows = _view().defaults()['benchmarks']
+    method = fl.get('treasury_methodology') or _view().defaults().get('treasury_methodology') or {}
     out = ''
     for b in rows:
         if b['benchmark_id'] == 'VTI_100':
@@ -179,8 +229,12 @@ def _benchmarks(fl):
             body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
                            ('Definition', f'<b>{esc(b.get("name"))}</b>'),
                            ('Implementation status', f'<span class="cat cat-warn">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
-                           ('Treasury-bill data', 'No clean 3-month Treasury-bill total-return source is chosen. A yield series is not a total '
-                                                  'return. Nothing is computed and no other asset stands in for it.'),
+                           ('Treasury-bill data', 'Official U.S. Treasury auction and bill-rate data are the chosen inputs. A yield series is not a '
+                                                  'total return, and no fund or other asset stands in for the bill.'),
+                           ('Methodology', f'<span class="cat cat-warn">{esc(method.get("status", "DRAFT_FOR_OPERATOR_REVIEW"))}</span> '
+                                           f'{esc(method.get("document", ""))}. Not approved and not frozen.'),
+                           ('Computation', f'<span class="cat cat-neutral">{esc(method.get("computation", "NOT_COMPUTED"))}</span> '
+                                           'Nothing is calculated until the methodology is approved and frozen.'),
                            ('Rules', esc(rules[:1].upper() + rules[1:] + '.') if rules else 'not recorded'),
                            ('Rebalancing', esc(f'{rebalancing.get("frequency")}, on {rebalancing.get("on")}') if isinstance(rebalancing, dict)
                             and rebalancing.get('frequency') else 'not specified by the operator yet'),
@@ -194,7 +248,8 @@ def _benchmarks(fl):
 def render(state):
     fl = state.get('firm_lab') or {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'firm_trading_trial': 'NOT REGISTERED'}
     head = ('<div class="room-head fl-head"><div><h1>Firm Lab</h1>'
-            '<p class="fl-flags"><span class="fl-flag">BUILD / OBSERVE</span><span class="fl-flag">NO FILLS</span></p>'
+            '<p class="fl-flags"><span class="fl-flag">BUILD / OBSERVE</span><span class="fl-flag">NO FILLS</span>'
+            '<span class="fl-flag">NO FIRM TRADING TRACK RECORD</span></p>'
             '<p><b>Development data only. No Firm trading track record exists.</b> Firm Lab is the foundation of the next system, built beside the registered paper run '
             '(Control A) and kept separate from it. It stores data and checks its own plumbing. It cannot place a paper trade or a real one.</p></div></div>')
     if fl.get('error'):

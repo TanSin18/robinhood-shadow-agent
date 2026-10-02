@@ -5,6 +5,8 @@ validation. Nothing is inferred at run time and nothing falls back to a substitu
 """
 from __future__ import annotations
 
+import json
+
 from . import quality
 from .errors import CapabilityUnavailable, FirmLabError
 from .store import canonical, now_utc
@@ -14,7 +16,7 @@ PARTIAL_EXISTING, BLOCKED = 'PARTIAL_EXISTING', 'BLOCKED'
 # PARTIAL_EXISTING: a source exists somewhere in the system but is not sufficient for, or not connected to, Firm Lab.
 # BLOCKED: no candidate provider can supply it cleanly.
 STATUSES = (AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY, PARTIAL_EXISTING, BLOCKED)
-REGISTRY_VERSION = 2
+REGISTRY_VERSION = 3
 CONTROL_A_CLOSES = 'Robinhood read gateway, as recorded by Control A'
 
 # (capability, status, provider, detail). Edited only by a deliberate change here, never inferred at run time.
@@ -24,54 +26,94 @@ INITIAL = (
      'Completed-session closes for the registered names, read from Control A’s decision capsules (read-only). None is stored yet.'),
     ('daily_baseline_features', UNAVAILABLE, 'Firm Lab feature store',
      'Completed-session count, 200-session average, above-average flag and 126-session momentum. None is stored yet.'),
-    ('fundamentals', UNAVAILABLE, None, 'No provider is connected. No fundamental value is stored or estimated.'),
+    ('fundamentals', UNAVAILABLE, None, 'Sharadar is chosen; it is not connected and nothing is stored. No fundamental value is stored or estimated.'),
     ('analyst_revisions', UNAVAILABLE, None, 'No provider is connected. No estimate or revision value is stored or estimated.'),
     ('earnings_transcripts', UNAVAILABLE, None, 'No earnings-event or transcript source is connected.'),
-    ('intraday_bars', UNAVAILABLE, None, 'The registered read path supplies daily bars only.'),
+    ('intraday_bars', UNAVAILABLE, None, 'Massive is chosen; it is not connected and nothing is stored. The registered read path supplies daily bars only.'),
     ('vwap', UNAVAILABLE, None, 'Needs intraday bars.'),
     ('opening_range', UNAVAILABLE, None, 'Needs intraday bars.'),
     ('time_of_day_rvol', UNAVAILABLE, None, 'Needs intraday bars.'),
     ('trade_flow', UNAVAILABLE, None, 'Aggressive buying and selling, signed volume: needs trade and quote data.'),
     ('order_book', UNAVAILABLE, None, 'Quote and order-book imbalance: needs depth data.'),
-    ('options_chain', BUILD_ONLY, 'Robinhood read gateway',
-     'Storage schema only. The registered read path can list contracts and bid/ask quotes, but Firm Lab ingests none yet, and implied '
-     'volatility and Greeks have never been captured from the provider.'),
+    ('options_chain', BUILD_ONLY, None,
+     'Storage and an adapter exist; ThetaData is chosen and not connected, and nothing is stored. Control A’s read path can list contracts and '
+     'quotes for its own runs; Firm Lab does not use it.'),
     ('options_strategy', NOT_STARTED, None, 'No option recommendation, scenario engine or matched book exists.'),
     ('news_catalysts', PARTIAL_EXISTING, 'Google News RSS (Control A’s advisory desk only)',
      'Headlines are fetched for the advisory notes. No archive, coarse timestamps, aggregator links and no ticker mapping. Firm Lab ingests none.'),
     ('sec_filings', PARTIAL_EXISTING, 'SEC EDGAR submissions API (Control A’s advisory desk only)',
-     'Recent filing index entries are read for the advisory notes. Authoritative for filings; not a fundamentals or estimates source. '
-     'Firm Lab ingests none.'),
+     'Control A’s advisory desk reads recent filing index entries for its notes. Firm Lab has its own research-only EDGAR reader; nothing is '
+     'stored until the operator runs it. Authoritative for filings; not a fundamentals or estimates source.'),
     ('sector_engine', NOT_STARTED, None, 'Not built.'),
     ('ml_ranker', NOT_STARTED, None, 'No model is fitted. Model, target and features are strategy choices for a registered recipe.'),
     ('portfolio_optimizer', NOT_STARTED, None, 'Not built.'),
     ('live_quotes', PARTIAL_EXISTING, 'Robinhood read gateway (Control A’s runs only)',
      'Control A reads bid/ask snapshots during its own runs. There is no streaming feed and no trade data, and Firm Lab ingests none.'),
-    ('options_greeks', UNAVAILABLE, None, 'No provider-supplied Greeks or implied volatility have ever been captured; none is estimated.'),
+    ('options_greeks', UNAVAILABLE, None, 'ThetaData is chosen and not connected. No provider-supplied Greeks or implied volatility are stored; none is estimated.'),
     ('treasury_total_return', UNAVAILABLE, None,
-     'No 3-month Treasury-bill total-return source is chosen. The free official series are yields, not total return.'),
+     'Official U.S. Treasury auction and bill-rate data are the chosen inputs. The construction methodology is a draft awaiting operator '
+     'approval, so nothing is computed. A yield series is not a total return.'),
     ('corporate_actions', UNAVAILABLE, None,
-     'Stored closes are split-adjusted by the provider. Dividends, spin-offs, symbol changes, mergers and delistings are not recorded, so '
-     'nothing here is a total return.'),
+     'Sharadar is chosen; it is not connected and nothing is stored. Stored closes are split-adjusted by their provider; dividends, spin-offs, '
+     'symbol changes, mergers and delistings are not recorded, so nothing here is a total return.'),
+    ('tick_trades_quotes', UNAVAILABLE, None, 'No historical trades or NBBO quotes are stored.'),
 )
-# Registry version 2 (2026-10-01): (capability, status it must currently have, new status). Applied once to an existing database.
+# The research data stack the operator chose on 2026-10-01. A choice is not a connection and not a capability:
+# (capability, chosen provider, raw domains whose stored rows are the evidence, what is still needed).
+PROVIDER_PLAN = {
+    'sec_filings': ('SEC EDGAR', ('filings',), 'a declared User-Agent (FIRM_LAB_SEC_USER_AGENT), set by the operator'),
+    'intraday_bars': ('Massive', ('intraday_bars',), 'an operator-purchased plan and API key'),
+    'tick_trades_quotes': ('Massive', ('trades', 'quotes'), 'a plan that includes trades and NBBO quotes, and an API key'),
+    'fundamentals': ('Sharadar', ('fundamentals',), 'an operator-purchased subscription and API key'),
+    'corporate_actions': ('Sharadar', ('corporate_actions',), 'an operator-purchased subscription and API key'),
+    'options_chain': ('ThetaData', ('options_chain',), 'an operator-purchased subscription and a running Theta Terminal'),
+    'options_greeks': ('ThetaData', ('options_chain',), 'a ThetaData tier that includes implied volatility and Greeks'),
+}
+NOT_SELECTED = {
+    'analyst_revisions': 'No provider selected: no inferior substitute is connected.',
+    'earnings_transcripts': 'Deferred until storage and licensing terms are settled. EDGAR event times arrive with SEC filings.',
+    'news_catalysts': 'No paid provider yet. Google News RSS stays advisory and discovery only.',
+    'trade_flow': 'Needs validated trades and quotes first.',
+    'order_book': 'Depth provider (Databento) deliberately not connected yet.',
+    'live_quotes': 'No streaming feed selected; Control A’s run-time snapshots only.',
+    'treasury_total_return': 'Official U.S. Treasury data; construction methodology drafted, not yet approved.',
+    'daily_closes': '',
+}
+# Registry version 3 (research data stack chosen, 2026-10-01): the description of these rows changes, their status does not.
+# capability -> (provider, detail) exactly as version 2 wrote them. A row is rewritten only while it still holds exactly this.
+V2_TEXT = {
+    'fundamentals': (None, 'No provider is connected. No fundamental value is stored or estimated.'),
+    'intraday_bars': (None, 'The registered read path supplies daily bars only.'),
+    'options_chain': ('Robinhood read gateway',
+                      'Storage schema only. The registered read path can list contracts and bid/ask quotes, but Firm Lab ingests none yet, and implied '
+                      'volatility and Greeks have never been captured from the provider.'),
+    'sec_filings': ('SEC EDGAR submissions API (Control A’s advisory desk only)',
+                    'Recent filing index entries are read for the advisory notes. Authoritative for filings; not a fundamentals or estimates source. '
+                    'Firm Lab ingests none.'),
+    'options_greeks': (None, 'No provider-supplied Greeks or implied volatility have ever been captured; none is estimated.'),
+    'treasury_total_return': (None, 'No 3-month Treasury-bill total-return source is chosen. The free official series are yields, not total return.'),
+    'corporate_actions': (None, 'Stored closes are split-adjusted by the provider. Dividends, spin-offs, symbol changes, mergers and delistings are not '
+                                'recorded, so nothing here is a total return.'),
+}
+# Registry versions: (capability, status it must currently have, new status). Each is applied once to an existing database.
 CHANGES_V2 = (('news_catalysts', NOT_STARTED, PARTIAL_EXISTING), ('sec_filings', NOT_STARTED, PARTIAL_EXISTING))
 
 # The Data Readiness view: (label, capability, what is required next). Infrastructure readiness, not a trading feature.
 DATA_READINESS = (
     ('Daily closes', 'daily_closes', 'A direct, research-only read of provider daily bars, so raw timestamps are stored instead of reconstructed ones.'),
-    ('Fundamentals', 'fundamentals', 'Choose a provider with as-originally-reported history and filing timestamps.'),
+    ('Fundamentals', 'fundamentals', 'Operator access to Sharadar, then a small validated sample with as-reported and restated values kept apart.'),
     ('Analyst estimates and revisions', 'analyst_revisions', 'A feed with dated historical consensus snapshots. Today’s consensus alone is not enough.'),
-    ('Earnings and transcripts', 'earnings_transcripts', 'Choose a source with event timestamps, before/after-market timing and source URLs.'),
-    ('SEC filings', 'sec_filings', 'A research-only EDGAR reader for Firm Lab that stores acceptance timestamps.'),
+    ('Earnings and transcripts', 'earnings_transcripts', 'Storage and licensing terms for transcripts. Earnings-related SEC filings arrive through the SEC filings row.'),
+    ('SEC filings', 'sec_filings', 'The operator declares a User-Agent and runs the research-only EDGAR sample. Each acceptance time is checked against the filing’s own header.'),
     ('General news', 'news_catalysts', 'A licensed news source with a stable archive, precise publication times and ticker mapping.'),
-    ('Intraday 1-minute bars', 'intraday_bars', 'Choose an intraday provider (consolidated feed, session flags, deep history).'),
+    ('Intraday 1-minute bars', 'intraday_bars', 'Operator access to Massive, then a small validated sample of unadjusted 1-minute bars.'),
+    ('Historical trades and quotes', 'tick_trades_quotes', 'Operator access to Massive, then a small validated sample of trades and NBBO quotes.'),
     ('Live quotes and trades', 'live_quotes', 'A streaming quote and trade feed with exchange timestamps and condition codes.'),
     ('Order flow and microstructure', 'trade_flow', 'Tick trades and quotes (to sign trades) and, for book imbalance, depth data.'),
-    ('Options chains', 'options_chain', 'Choose an options source; ingest raw chains with quote timestamps, volume and open interest.'),
-    ('Options Greeks', 'options_greeks', 'Provider-supplied Greeks stored as provider_*; any Firm Lab estimate would be model_estimated_*.'),
-    ('T-bill total return', 'treasury_total_return', 'Choose a 3-month Treasury-bill total-return source on purpose. A yield series does not qualify.'),
-    ('Corporate actions and dividends', 'corporate_actions', 'A point-in-time corporate-actions source, before anything is called a total return.'),
+    ('Options chains', 'options_chain', 'Operator access to ThetaData (subscription and a running Theta Terminal), then a small validated sample.'),
+    ('Options Greeks', 'options_greeks', 'A ThetaData tier with implied volatility and Greeks. Stored under the vendor’s name with its model; never as a bare Greek.'),
+    ('T-bill total return', 'treasury_total_return', 'Operator review and approval of the construction methodology. Nothing is computed before it is frozen; a yield series does not qualify.'),
+    ('Corporate actions and dividends', 'corporate_actions', 'Operator access to Sharadar, then a small validated sample of raw events. This source gives no announcement time.'),
 )
 READINESS_KEYS = tuple(c for _, c, _ in DATA_READINESS)
 
@@ -152,7 +194,75 @@ def seed(store, now=None):
             if known.get(capability) == old:
                 set_status(store, capability, new, *initial[capability], now, reason='registry version 2: current sources documented')
         store.set_meta('capability_registry_version', REGISTRY_VERSION, now)
+    if version < 3:
+        rows = {c['capability']: c for c in store.capabilities()}
+        initial = {c: (s, p, d) for c, s, p, d in INITIAL}
+        for capability, before in V2_TEXT.items():
+            row = rows.get(capability)
+            status, provider, detail = initial[capability]
+            if row and row['status'] == status and (row['provider'], row['detail']) == before:
+                set_status(store, capability, status, provider, detail, now, reason='registry version 3: research data stack chosen')
+    if version < REGISTRY_VERSION:
+        store.set_meta('capability_registry_version', REGISTRY_VERSION, now)
     confirm_daily_data(store, now)
+    confirm_provider_data(store, now)
+
+
+def confirm_provider_data(store, now=None):
+    """Provider-backed capabilities follow the stored evidence. A capability is AVAILABLE only when, for each of its raw
+    domains, every run of the chosen provider's latest sample is OK, rows are actually stored, and each run carries
+    complete provenance.
+    Configuration alone promotes nothing; a failed validation or missing data leaves (or returns) it below AVAILABLE."""
+    from . import rawstore
+    at = now or now_utc()
+    current = {c['capability']: c for c in store.capabilities()}
+    base = {c: (s, p, d) for c, s, p, d in INITIAL}
+    outcome = {}
+    with store.connect() as db:
+        evidence = {}
+        for capability, (provider, domains, _) in PROVIDER_PLAN.items():
+            rows, proof, problem = 0, [], ''
+            for domain in domains:
+                table = rawstore.DOMAIN_TABLE[domain]
+                count = db.execute(f'SELECT COUNT(*) FROM {table} WHERE provider=?', (provider,)).fetchone()[0]
+                batch = rawstore.latest_batch(db, provider, domain)          # one run per instrument of the latest sample
+                bad = [r for r in batch if r['status'] != 'OK']
+                if not batch:
+                    problem = problem or f'no {domain} run recorded'
+                elif bad:
+                    codes = sorted({c for r in bad for c in r['issues']})
+                    first = bad[0]
+                    problem = problem or (f'latest {domain} sample: {len(bad)} of {len(batch)} runs not OK ({first["instrument"]}: {first["status"]}'
+                                          + (': ' + ', '.join(codes) if codes else f', {first["reason"]}' if first['reason'] else '') + ')')
+                elif not count:
+                    problem = problem or f'no {domain} rows stored'
+                elif any(not r['provenance'] or any(not r['provenance'].get(k) for k in ('provider', 'source_id', 'source_timestamp', 'known_at',
+                                                                                         'ingested_at', 'schema_version')) for r in batch):
+                    problem = problem or f'{domain} provenance incomplete'
+                else:
+                    proof.append({'domain': domain, 'run_ids': [r['run_id'] for r in batch], 'instruments': [r['instrument'] for r in batch],
+                                  'finished_at': batch[-1]['finished_at'], 'rows': count})
+                rows += count
+            if capability == 'options_greeks' and not problem:
+                greeks = db.execute('SELECT COUNT(*) FROM option_chain_observations WHERE provider=? AND provider_implied_volatility IS NOT NULL '
+                                    'AND greeks_provider IS NOT NULL AND greeks_model IS NOT NULL', (provider,)).fetchone()[0]
+                problem = '' if greeks else 'no provider Greeks stored with their model named'
+                rows = greeks
+            evidence[capability] = (provider, rows, proof, problem)
+    for capability, (provider, rows, proof, problem) in evidence.items():
+        status_now = current.get(capability, {}).get('status')
+        if not problem and rows > 0:
+            detail = f'{rows:,} validated rows stored from {provider}; last run {proof[-1]["finished_at"][:19]} UTC.'
+            if status_now != AVAILABLE or current[capability].get('detail') != detail:
+                set_status(store, capability, AVAILABLE, provider, detail, at, reason='validated provider data',
+                           evidence={'provider': provider, 'records': rows, 'validation_passed': True, 'validated_at': at.isoformat(), 'runs': proof})
+            outcome[capability] = AVAILABLE
+        else:
+            floor, source, text = base[capability]
+            if status_now == AVAILABLE:                      # the evidence is gone or the latest validation failed: take it back
+                set_status(store, capability, floor, source, f'{text} Not available: {problem}.', at, reason=problem)
+            outcome[capability] = current.get(capability, {}).get('status') if status_now != AVAILABLE else floor
+    return outcome
 
 
 def require(store, capability):

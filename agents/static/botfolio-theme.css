@@ -526,10 +526,21 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 
 /* ---------- Firm Lab: Data Readiness ---------- */
 .agent-desk table.fl-ready{table-layout:fixed;width:100%}
-.agent-desk table.fl-ready .fl-r1{width:190px}.agent-desk table.fl-ready .fl-r2{width:150px}.agent-desk table.fl-ready .fl-r3{width:200px}
+.agent-desk table.fl-ready .fl-r1{width:12%}.agent-desk table.fl-ready .fl-r2{width:12%}.agent-desk table.fl-ready .fl-r3{width:11%}
+.agent-desk table.fl-ready .fl-r4{width:20%}.agent-desk table.fl-ready .fl-r5{width:11%}.agent-desk table.fl-ready .fl-r6{width:11%}.agent-desk table.fl-ready .fl-r7{width:10%}
+.agent-desk table.fl-ready thead th{white-space:normal;vertical-align:bottom}
+.agent-desk table.fl-ready tbody td{vertical-align:top!important}
+.agent-desk table.fl-ready tr.fl-ready-note td{border-top:0!important;padding-top:0!important;padding-bottom:14px!important}
+.agent-desk table.fl-ready .fl-sub{display:block;margin-top:4px;color:var(--text-4);line-height:1.35}
+.agent-desk table.fl-ready tr:not(.fl-ready-note) td{border-bottom:0;padding-bottom:4px}
+.agent-desk table.fl-ready tr.fl-ready-note td{padding-top:2px;padding-bottom:12px;color:var(--text-3)}
+.agent-desk table.fl-ready tr.fl-ready-note b{font-weight:600;color:var(--text-2)}
 .agent-desk table.fl-ready td{vertical-align:top;white-space:normal;overflow-wrap:anywhere}
 @media (max-width:900px){.agent-desk table.fl-ready,.agent-desk table.fl-ready tbody,.agent-desk table.fl-ready tr,.agent-desk table.fl-ready td{display:block;width:auto}
   .agent-desk table.fl-ready thead,.agent-desk table.fl-ready colgroup{display:none}
   .agent-desk table.fl-ready tr{padding:12px;border-bottom:1px solid var(--hair-2)}.agent-desk table.fl-ready td{padding:3px 0;border:0}
   .agent-desk table.fl-ready td[data-label]:not(:first-child):before{content:attr(data-label) ' · ';font-family:var(--bf-mono);font-size:11px;letter-spacing:.06em;
     text-transform:uppercase;color:var(--text-4)}}
+@media (max-width:900px){.agent-desk table.fl-ready tr:not(.fl-ready-note){border-bottom:0;padding-bottom:2px}
+  .agent-desk table.fl-ready tr.fl-ready-note{padding-top:2px}.agent-desk table.fl-ready .fl-sub{display:inline;margin:0 0 0 6px}
+  .agent-desk table.fl-ready td.num{text-align:left}}

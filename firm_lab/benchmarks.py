@@ -11,6 +11,11 @@ VTI = 'VTI_100'
 RULER_70_30 = 'FIXED_70_30'
 DATA_SOURCE_PENDING = 'DATA_SOURCE_PENDING'
 TREASURY_CAPABILITY = 'treasury_total_return'
+# The construction of the Treasury-bill leg is written down first, reviewed by the operator, then frozen. Until the status
+# here is APPROVED_AND_FROZEN nothing is computed. It is changed only by a deliberate, dated operator approval.
+METHODOLOGY_FROZEN = 'APPROVED_AND_FROZEN'
+TREASURY_METHODOLOGY = {'document': 'docs/firm_lab/treasury_bill_total_return_methodology.md', 'status': 'DRAFT_FOR_OPERATOR_REVIEW',
+                        'computation': 'NOT_COMPUTED'}
 # (id, name, status, definition, defined_by, note, implementation_status)
 DEFINITIONS = (
     (VTI, '100% VTI', 'DEFINED', {'weights': {'VTI': '1.00'}, 'rebalancing': 'none', 'basis': 'price return; dividends not yet included'},
@@ -58,6 +63,8 @@ def compute_fixed_70_30(store, *_, **__):
     """The 70/30 ruler cannot be computed until a 3-month Treasury-bill total-return source is AVAILABLE. Until then this
     raises: no yield is treated as a return and no other asset is substituted."""
     capabilities.require(store, TREASURY_CAPABILITY)
+    if TREASURY_METHODOLOGY['status'] != METHODOLOGY_FROZEN:
+        raise FirmLabError('TREASURY_METHODOLOGY_NOT_FROZEN: the construction methodology must be approved and frozen first')
     raise FirmLabError('FIXED_70_30_COMPUTATION_NOT_BUILT: a Treasury-bill total-return source must be chosen and validated first')
 
 

@@ -60,7 +60,8 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** at least 10 years, including delisted companies.
 - **Live requirements:** none beyond the daily update.
 - **Licensing and API:** most retail plans are personal or internal use with no redistribution.
-- **Current status:** `UNAVAILABLE`. Interface: `FundamentalsProvider`.
+- **Current status:** `UNAVAILABLE`. Sharadar is chosen; the adapter is built and needs operator access
+  (`research_data_stack.md`). Interface: `FundamentalsProvider`.
 
 ### 2. Analyst estimates and revisions
 - **What Firm Lab needs:** consensus EPS and revenue, the number of analysts, dispersion, and how the consensus
@@ -100,8 +101,8 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** indexes from 1994 Q3.
 - **Live requirements:** none.
 - **Licensing and API:** free; a declared User-Agent is required; 10 requests per second.
-- **Current status:** `PARTIAL_EXISTING` (a source exists in the system; Firm Lab ingests none).
-  Interface: `FilingsProvider`.
+- **Current status:** `PARTIAL_EXISTING` until the operator runs Firm Lab's own research-only EDGAR reader and
+  its sample validates (`research_data_stack.md`). Interface: `FilingsProvider`.
 
 ### 5. General news
 - **What Firm Lab needs:** headlines with source, precise publication time, a stable URL, entity mapping and
@@ -129,7 +130,8 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** at least 5 years; 10 or more preferred.
 - **Live requirements:** live quote updates and bars with a known feed (consolidated versus single venue).
 - **Licensing and API:** real-time consolidated data needs exchange agreements and non-professional status.
-- **Current status:** `UNAVAILABLE`. Interface: `IntradayMarketDataProvider.bars_1m`.
+- **Current status:** `UNAVAILABLE`. Massive is chosen; the adapter is built and needs operator access
+  (`research_data_stack.md`). Interface: `IntradayMarketDataProvider.bars_1m`.
 - Only after such a provider exists can Firm Lab legitimately calculate VWAP, time-of-day RVOL, opening range,
   intraday volatility or aggressive-flow proxies. None is calculated now.
 
@@ -173,7 +175,8 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** at least 5 years of end-of-day chains.
 - **Live requirements:** consolidated (OPRA) quotes if ever used live.
 - **Licensing and API:** personal-use plans exist; live OPRA needs agreements.
-- **Current status:** `BUILD_ONLY`. Interface: `OptionsMarketDataProvider`.
+- **Current status:** `BUILD_ONLY`. ThetaData is chosen; the adapter is built and needs operator access
+  (`research_data_stack.md`). Interface: `OptionsMarketDataProvider`.
 
 ### 10. Options Greeks
 - **What Firm Lab needs:** preferred: provider delta, gamma, theta, vega, the underlying quote and a theoretical
@@ -203,7 +206,9 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** back to the start of any comparison window.
 - **Live requirements:** none.
 - **Licensing and API:** the true index series are proprietary and restrict storage and redistribution.
-- **Current status:** `UNAVAILABLE`; the ruler's implementation status is `DATA_SOURCE_PENDING`.
+- **Current status:** `UNAVAILABLE`; the ruler's implementation status is `DATA_SOURCE_PENDING`. A construction
+  methodology from official Treasury auction data is drafted (`treasury_bill_total_return_methodology.md`) and
+  awaits operator approval. Nothing is computed.
   Interface: `RiskFreeBenchmarkProvider`.
 
 ### 12. Corporate actions and dividends
@@ -218,10 +223,12 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** as deep as the price history, including delisted names.
 - **Live requirements:** none.
 - **Licensing and API:** as for the price source.
-- **Current status:** `UNAVAILABLE`. Interface: `CorporateActionsProvider`.
+- **Current status:** `UNAVAILABLE`. Sharadar is chosen; the adapter is built and needs operator access
+  (`research_data_stack.md`). Interface: `CorporateActionsProvider`.
 
-## What a provider connection would involve later (not started)
+## What a provider connection involves
 
 A deliberate operator choice of source; a research-only collector that cannot import trading code; raw responses
 stored with provenance; validation; only then a capability promoted to `AVAILABLE`. The `firm_lab` package itself
-contains no network code, and a test keeps it that way.
+contains no network code, and a test keeps it that way. The collectors built at Checkpoint 3 are described in
+`research_data_stack.md`.

@@ -5,7 +5,7 @@ in `BUILD_OBSERVE`: it may store data, features, research records, capability st
 recommendations and benchmark observations, and show them read-only. It may not create a paper order, write a
 paper fill, change a paper portfolio, write an Official decision or reach real execution.
 
-## Component status (2026-10-01)
+## Component status (2026-10-02)
 
 ```text
 Daily data            AVAILABLE      completed-session closes, read from Control A's decision capsules (read-only)
@@ -15,22 +15,26 @@ Baseline check        BUILT          control_a_baseline_counterfactual, DEVELOPM
 Capability registry   BUILT
 VTI ruler             DEFINED        price return; dividends not included yet
 70/30 ruler           DEFINED — 70% VTI + 30% 3-month U.S. Treasury-bill total return, rebalanced monthly on the
-                      first NYSE trading session; DATA_SOURCE_PENDING (no Treasury source chosen; not computed)
-Provider interfaces   BUILT — definitions only; nine interfaces; none connected; all return UNAVAILABLE
+                      first NYSE trading session; DATA_SOURCE_PENDING (methodology drafted, not approved; not computed)
+Provider interfaces   BUILT — nine interfaces in firm_lab; without a collector behind them they return UNAVAILABLE
+Research collectors   BUILT — firm_lab_collectors: SEC EDGAR, Massive, Sharadar, ThetaData; hand-started samples only;
+                      cannot trade; each stays NOT CONFIGURED until the operator supplies access
+Raw provider storage  BUILT — seven raw tables with provenance; provider_runs; provider_connections
 Provenance standard   BUILT
 Data-quality checks   BUILT — flag and reject, never repair
 Data Readiness view   BUILT — read-only, on /firm-lab
-T-bill total return   BLOCKED — NO SOURCE CHOSEN
-Corporate actions     BLOCKED — NO PROVIDER
-Fundamentals          BLOCKED — NO PROVIDER
-Analyst revisions     BLOCKED — NO PROVIDER
+T-bill total return   METHODOLOGY DRAFT — official Treasury auction data; awaiting operator approval; nothing computed
+Corporate actions     ADAPTER BUILT — Sharadar; needs operator access; nothing stored
+Fundamentals          ADAPTER BUILT — Sharadar; needs operator access; nothing stored
+Analyst revisions     BLOCKED — NO PROVIDER SELECTED
 Earnings calls        PLANNED — NO SOURCE CONNECTED
 News / catalysts      PLANNED
-SEC filings           PLANNED
+SEC filings           ADAPTER BUILT — SEC EDGAR; runs once the operator declares a User-Agent
 Sector model          PLANNED
 ML ranker             PLANNED — STRATEGY COMPONENT (belongs to a registered recipe)
-Intraday              BLOCKED — NO PROVIDER (bars, VWAP, opening range, RVOL, flow, order book)
-Options analytics     DATA ONLY — storage schema; nothing is ingested; no recommendation
+Intraday              ADAPTER BUILT — Massive raw bars, trades, quotes; needs operator access. VWAP, opening range,
+                      RVOL, flow and order book are not computed
+Options analytics     DATA ONLY — ThetaData adapter and storage; needs operator access; no recommendation
 Portfolio optimizer   PLANNED
 Scheduler             NOT BUILT — ingestion is a manual research-only command
 Experiment registry   EMPTY — no active Firm Lab experiment
@@ -152,3 +156,11 @@ registered trial.
   `daily_closes` and `daily_baseline_features` are re-confirmed from the stored data at every seed and ingest.
 - None of these modules is imported by the baseline, the feature calculations, the execution boundary or the
   Official reader, and a test keeps it that way. They contain no network code.
+
+## Research data stack (Checkpoint 3, 2026-10-02)
+
+See `research_data_stack.md`. In short: `firm_lab_collectors` is the only package that opens a network connection,
+it cannot import trading code, and it is started by hand. Raw answers are validated and either stored whole with
+provenance or refused whole. A capability becomes `AVAILABLE` only from stored, validated rows. The Treasury-bill
+leg of the 70/30 ruler has a written draft methodology (`treasury_bill_total_return_methodology.md`) and no
+computation.

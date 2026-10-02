@@ -196,10 +196,10 @@ def test_stale_data_and_incomplete_windows_are_flagged():
 
 def test_each_domain_schema_carries_the_minimum_fields():
     need = {
-        'fundamentals': {'required': {'instrument', 'fiscal_period', 'filing_timestamp', 'known_at', 'currency'},
-                         'optional': {'revenue', 'operating_income', 'ebitda', 'eps_diluted', 'gross_margin', 'operating_margin', 'free_cash_flow',
-                                      'total_debt', 'cash_and_equivalents', 'shares_outstanding', 'invested_capital', 'tax_expense',
-                                      'market_capitalization', 'enterprise_value'}},
+        # one row per reported value since Checkpoint 3: the value's name is in `metric`, its unit in `units`
+        'fundamentals': {'required': {'instrument', 'dimension', 'reporting_basis', 'period_end', 'filing_date', 'filing_timestamp', 'last_updated',
+                                      'metric', 'value', 'units', 'known_at'},
+                         'optional': {'fiscal_period', 'currency', 'provider_datekey', 'is_delisted'}},
         'estimates': {'required': {'instrument', 'fiscal_period', 'metric', 'consensus_estimate', 'analyst_count', 'effective_timestamp',
                                    'snapshot_timestamp'}, 'optional': {'prior_consensus', 'revision_magnitude', 'dispersion'}},
         'earnings': {'required': {'instrument', 'event_timestamp', 'session_timing', 'release_source_url'},
@@ -209,11 +209,18 @@ def test_each_domain_schema_carries_the_minimum_fields():
         'intraday_bars': {'required': {'instrument', 'bar_start', 'open', 'high', 'low', 'close', 'volume', 'session', 'exchange_session_date'},
                           'optional': set()},
         'options_chain': {'required': {'contract_id', 'underlying', 'option_type', 'strike', 'expiration', 'bid', 'ask', 'quote_timestamp', 'volume',
-                                       'open_interest', 'provider_implied_volatility'},
-                          'optional': {'provider_delta', 'provider_gamma', 'provider_theta', 'provider_vega', 'underlying_bid',
-                                       'provider_theoretical_price'}},
+                                       'open_interest'},
+                          'optional': {'provider_implied_volatility', 'provider_delta', 'provider_gamma', 'provider_theta', 'provider_vega',
+                                       'underlying_bid', 'provider_theoretical_price', 'greeks_provider', 'greeks_model', 'greeks_model_version'}},
         'risk_free': {'required': {'series_id', 'measure', 'observation_date', 'value', 'published_timestamp'}, 'optional': set()},
-        'corporate_actions': {'required': {'instrument', 'action_type', 'effective_date', 'announced_timestamp'}, 'optional': {'cash_amount', 'split_ratio'}},
+        'corporate_actions': {'required': {'instrument', 'action_type', 'effective_date', 'announcement_timestamp', 'provider_action'},
+                              'optional': {'cash_amount', 'split_ratio', 'value', 'contra_instrument'}},
+        'filings': {'required': {'instrument', 'cik', 'accession_number', 'form_type', 'accepted_timestamp', 'accepted_timestamp_raw',
+                                 'accepted_timestamp_basis', 'filing_date', 'url', 'ingestion_timestamp'}, 'optional': {'report_date', 'items'}},
+        'trades': {'required': {'instrument', 'trade_timestamp', 'trade_timestamp_raw', 'price', 'size', 'feed', 'trade_id', 'exchange'},
+                   'optional': {'conditions', 'sequence_number'}},
+        'quotes': {'required': {'instrument', 'quote_timestamp', 'quote_timestamp_raw', 'bid', 'ask', 'bid_size', 'ask_size', 'feed'},
+                   'optional': {'bid_exchange', 'ask_exchange'}},
     }
     for domain, fields in need.items():
         schema = schemas.SCHEMAS[domain]
@@ -221,7 +228,11 @@ def test_each_domain_schema_carries_the_minimum_fields():
         assert fields['optional'] <= set(schema.optional) | set(schema.required), domain
     assert schemas.SCHEMAS['estimates'].point_in_time == 'snapshot_timestamp'                    # point-in-time history is mandatory
     assert set(schemas.SCHEMAS['corporate_actions'].allowed['action_type']) == {'cash_dividend', 'split', 'spin_off', 'symbol_change', 'merger',
-                                                                                 'delisting'}
+                                                                                 'delisting', 'other'}
+    assert schemas.SCHEMAS['corporate_actions'].timestamp_or_unavailable == ('announcement_timestamp',)     # a timestamp or UNAVAILABLE, never a date
+    assert schemas.SCHEMAS['fundamentals'].timestamp_or_unavailable == ('filing_timestamp',)
+    assert set(schemas.SCHEMAS['fundamentals'].allowed['reporting_basis']) == {'as_reported', 'restated'}
+    assert schemas.SCHEMAS['options_chain'].any_of == (('provider_implied_volatility', '*_provider_implied_volatility'),)
     assert schemas.SCHEMAS['risk_free'].allowed['measure'] == ('TOTAL_RETURN_INDEX', 'PERIOD_TOTAL_RETURN')
     assert set(schemas.SCHEMAS['intraday_bars'].allowed['session']) == {'pre_market', 'regular', 'post_market'}
 
@@ -296,14 +307,14 @@ def test_an_existing_checkpoint_1_database_is_upgraded_without_touching_delibera
     assert status['sec_filings'] == 'BUILD_ONLY'                                        # a row someone had edited is left alone
     assert status['daily_closes'] == 'UNAVAILABLE'                                      # it claimed AVAILABLE with nothing stored
     assert status['live_quotes'] == 'PARTIAL_EXISTING' and status['treasury_total_return'] == 'UNAVAILABLE' and len(status) == len(capabilities.INITIAL)
-    assert lab.meta('capability_registry_version') == '2'
+    assert lab.meta('capability_registry_version') == str(capabilities.REGISTRY_VERSION) == '3'
     capabilities.seed(lab)
     assert {c['capability']: c['status'] for c in lab.capabilities()} == status
 
 
 def test_no_capability_is_a_silent_stand_in_for_another():
     names = [c for c, *_ in capabilities.INITIAL]
-    assert len(names) == len(set(names)) and set(capabilities.READINESS_KEYS) <= set(names) and len(capabilities.DATA_READINESS) == 13
+    assert len(names) == len(set(names)) and set(capabilities.READINESS_KEYS) <= set(names) and len(capabilities.DATA_READINESS) == 14
     assert not [c for c, s, *_ in capabilities.INITIAL if s == 'AVAILABLE']             # availability is earned from stored data, never declared
     source = (ROOT / 'firm_lab' / 'capabilities.py').read_text() + (ROOT / 'firm_lab' / 'providers.py').read_text()
     for word in ('fallback', 'default_value', 'estimate_from', 'proxy_for', 'substitute('):
@@ -406,9 +417,17 @@ def test_the_data_layer_imports_no_trading_code_and_no_decision_code_reads_it():
 def _ready_rows(html):
     section = html[html.index('id="fl-readiness"'):html.index('id="fl-capabilities"')]
     return section, {m[0]: m[1:] for m in re.findall(
-        r'<tr><td data-label="Data"><b>([^<]+)</b></td><td data-label="State"><span class="cat cat-\w+">([^<]+)</span></td>'
-        r'<td data-label="Current source">([^<]*)</td><td data-label="Limitation" class="small">([^<]*)</td>'
-        r'<td data-label="Required next" class="small">([^<]*)</td></tr>', section)}
+        r'<tr><td data-label="Data"><b>([^<]+)</b></td><td data-label="Capability"><span class="cat cat-\w+">([^<]+)</span></td>'
+        r'<td data-label="Provider">([^<]*)</td>.*?<span class="fl-limit">([^<]*)</span> <b>Required next.</b> <span class="fl-next">([^<]*)</span>',
+        section, re.S)}
+
+
+def _ready_cells(html, label):
+    """The eight cells of one Data Readiness row, as plain text keyed by column name."""
+    section = html[html.index('id="fl-readiness"'):html.index('id="fl-capabilities"')]
+    row = section[section.index(f'<b>{label}</b>'):]
+    row = row[:row.index('</tr>')]
+    return {name: re.sub(r'<[^>]+>', ' ', cell).strip() for name, cell in re.findall(r'<td data-label="([^"]+)"[^>]*>(.*?)</td>', '<td data-label="Data">' + row, re.S)}
 
 
 def test_data_readiness_renders_truthfully_from_the_registry(tmp_path, capsys):
@@ -418,18 +437,29 @@ def test_data_readiness_renders_truthfully_from_the_registry(tmp_path, capsys):
     html = firm_lab_page.render({'firm_lab': firm_lab_page.load(off)})
     section, rows = _ready_rows(html)
     assert '<h2>Data Readiness</h2>' in section and list(rows) == [label for label, *_ in capabilities.DATA_READINESS]
-    assert '<th>Data</th><th>State</th><th>Current source</th><th>Limitation</th><th>Required next</th>' in section
+    assert ('<th>Data</th><th>Capability</th><th>Provider</th><th>Connection</th><th>Validation</th><th>Stored</th>'
+            '<th>Last successful ingest</th><th>Quality failures</th>') in section
     expect = {'Daily closes': 'AVAILABLE', 'Fundamentals': 'UNAVAILABLE', 'Analyst estimates and revisions': 'UNAVAILABLE',
               'Earnings and transcripts': 'UNAVAILABLE', 'SEC filings': 'PARTIAL_EXISTING', 'General news': 'PARTIAL_EXISTING',
-              'Intraday 1-minute bars': 'UNAVAILABLE', 'Live quotes and trades': 'PARTIAL_EXISTING', 'Order flow and microstructure': 'UNAVAILABLE',
+              'Intraday 1-minute bars': 'UNAVAILABLE', 'Historical trades and quotes': 'UNAVAILABLE', 'Live quotes and trades': 'PARTIAL_EXISTING', 'Order flow and microstructure': 'UNAVAILABLE',
               'Options chains': 'BUILD_ONLY', 'Options Greeks': 'UNAVAILABLE', 'T-bill total return': 'UNAVAILABLE',
               'Corporate actions and dividends': 'UNAVAILABLE'}
     assert {k: v[0] for k, v in rows.items()} == expect
-    for label, (state, source, limitation, required) in rows.items():
+    chosen = {'Fundamentals': 'Sharadar', 'SEC filings': 'SEC EDGAR', 'Intraday 1-minute bars': 'Massive', 'Historical trades and quotes': 'Massive',
+              'Options chains': 'ThetaData', 'Options Greeks': 'ThetaData', 'Corporate actions and dividends': 'Sharadar'}
+    for label, (state, provider, limitation, required) in rows.items():
         assert limitation and required, label                                           # every row says what is wrong and what is needed
-        if state == 'UNAVAILABLE':
-            assert source == 'none', label                                              # a missing provider is shown as missing
-    assert rows['Daily closes'][1].startswith('Robinhood read gateway') and 'Control A' in rows['Daily closes'][1]
+        cells = _ready_cells(html, label)
+        if label in chosen:                                                             # chosen is not connected, and not a capability
+            assert provider == chosen[label] and cells['Connection'].startswith('NOT CONFIGURED'), label
+            assert 'Credentials or provider activation required' in cells['Connection'], label
+            assert cells['Validation'].startswith('NOT RUN') and cells['Stored'].startswith('0') and 'nothing stored' in cells['Stored'], label
+            assert cells['Last successful ingest'] == 'never' and cells['Quality failures'] == 'none recorded' and state != 'AVAILABLE', label
+        elif label != 'Daily closes':
+            assert provider == 'none selected' and cells['Connection'].startswith('NOT SELECTED') and cells['Stored'].startswith('0'), label
+    daily = _ready_cells(html, 'Daily closes')
+    assert 'Control A' in rows['Daily closes'][1] and daily['Connection'].startswith('ACTIVE') and daily['Validation'].startswith('PASS')
+    assert not daily['Stored'].startswith('0') and daily['Last successful ingest'] != 'never'
     assert 'yield' in rows['T-bill total return'][2] and 'Infrastructure readiness only' in section
     # it is not a trading feature and shows no intraday anything
     for forbidden in ('<svg', '<canvas', 'chart', 'VWAP', 'signal', 'buy ', 'sell '):
@@ -442,7 +472,7 @@ def test_data_readiness_before_the_database_exists_and_with_an_unknown_status():
     html = firm_lab_page.render({'firm_lab': view.load(path='/nonexistent/firm_lab.db')})
     section, rows = _ready_rows(html)
     assert rows['Daily closes'][0] == 'UNAVAILABLE' and 'AVAILABLE</span>' not in section.replace('UNAVAILABLE</span>', '')
-    assert 'not created on this machine yet' in section and len(rows) == 13
+    assert 'not created on this machine yet' in section and len(rows) == 14
     odd = dict(view.load(path='/nonexistent/x.db'), exists=True, mode='BUILD_OBSERVE',
                capabilities=[{'capability': 'fundamentals', 'status': 'LOOKS_GREAT', 'provider': 'x', 'detail': 'd'}])
     section, rows = _ready_rows(firm_lab_page.render({'firm_lab': odd}))
