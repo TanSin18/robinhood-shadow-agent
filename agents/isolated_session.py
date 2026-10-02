@@ -11,8 +11,22 @@ import shutil
 from agents.rpc_transport import RpcTransport
 from broker.read_gateway import CapabilityError, SCHEMAS, inventory
 
+# Where the ChatGPT app has shipped the Codex executable. The app update of 2026-10-02 moved it from the first to the second.
+CODEX_LOCATIONS=('/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex')
+
+def find_codex(executable=None):
+    """An explicit path, else PATH, else the first known location that is a file. None when it is nowhere."""
+    return executable or shutil.which('codex') or next((p for p in CODEX_LOCATIONS if Path(p).is_file()),None)
+
+def require_codex(executable=None):
+    found=find_codex(executable)
+    if not found or not Path(found).is_file():
+        # The same error type a missing executable raised before this change, with a message that says what was checked.
+        raise FileNotFoundError('CODEX_EXECUTABLE_NOT_FOUND: not on PATH and not at '+' or '.join(CODEX_LOCATIONS))
+    return found
+
 def cli_identity(executable=None):
-    path=Path(executable or shutil.which('codex') or '/Applications/ChatGPT.app/Contents/Resources/codex').resolve()
+    path=Path(require_codex(executable)).resolve()
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 

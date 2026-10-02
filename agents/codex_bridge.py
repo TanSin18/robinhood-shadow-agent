@@ -73,7 +73,8 @@ class CodexBridge:
                  dashboard_base_url='http://127.0.0.1:8765'):
         self.store = SQLiteStore(path)
         self.ledger = CostLedger(path, limit)
-        self.executable = executable or shutil.which('codex') or '/Applications/ChatGPT.app/Contents/Resources/codex'
+        from agents.isolated_session import find_codex
+        self.executable = executable or find_codex()          # None when not installed; run() then fails with a clear error
         self.dashboard_base_url = dashboard_base_url
         self.last_result = None
         self.isolation_evidence=[]
@@ -113,16 +114,17 @@ class CodexBridge:
         now = now or datetime.now(timezone.utc)
         if model not in PRICING:
             raise ValueError('model has no reviewed pricing')
-        from agents.isolated_session import command, start, verify_inference_inventory, collect_turn, cli_identity
+        from agents.isolated_session import command, start, verify_inference_inventory, collect_turn, cli_identity, require_codex
         from agents.rpc_transport import RpcTransport
         from agents.safety_events import record_incident, safety_stopped
         from broker.read_gateway import CapabilityError
         if safety_stopped(self.ledger.path): raise BrokerError('Safety stop is active')
+        executable=require_codex(self.executable)             # a missing executable is a plain FileNotFoundError, never a safety incident
         try:
-            with RpcTransport(command(self.executable,model=model)) as rpc:
+            with RpcTransport(command(executable,model=model)) as rpc:
                 thread=start(rpc,model)
                 isolation=verify_inference_inventory(rpc,thread)
-                isolation['cli_sha256']=cli_identity(self.executable)
+                isolation['cli_sha256']=cli_identity(executable)
                 if safety_stopped(self.ledger.path): raise BrokerError('Safety stop is active')
                 reservation=self.ledger.reserve(now,Decimal('.06') if model.endswith('luna') else Decimal('.14'))
                 # A request may be charged even if the connection then fails; retain its hold.

@@ -8,9 +8,10 @@ def test_installed_child_filters_tools_and_denies_unexpected_server(tmp_path):
     from agents.rpc_transport import RpcTransport
     from agents.isolated_session import command,start,verify_inference_inventory
     from broker.read_gateway import CapabilityError,inventory
-    executable='/Applications/ChatGPT.app/Contents/Resources/codex'
     if sys.platform != 'darwin':
         pytest.skip('Installed-Codex isolation evidence exists only on the operator Mac')
+    from agents.isolated_session import require_codex
+    executable=require_codex()   # PATH, then the app's known locations; a clear error when it is nowhere
     assert Path(executable).is_file(), 'Installed Codex is required for runtime isolation evidence'
     script=tmp_path/'fake_mcp.py'; marker=tmp_path/'called'
     script.write_text('''import sys,json
