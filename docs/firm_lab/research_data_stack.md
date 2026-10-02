@@ -116,6 +116,13 @@ evidence. One sample is judged as a whole: if any symbol's answer is refused, th
   fits neither reading. Nothing from those two answers was kept and the capability was not promoted. The operator
   then decided the rule above; rows stored before it are left as they were (their new columns are empty) and the
   same filings are stored again as new rows under the new rule.
+* **Second live run, 2026-10-02 11:04 ET, under the header-authoritative rule (32 requests).** All five symbols were
+  accepted: 25 filings, each timed by its header. Ten are flagged `ACCEPTANCE_TIME_CONFLICT` (all five SOXX and all
+  five AAPL filings, dated 2026-09-25 to 2026-10-01); in every one the JSON value is exactly 14,400 seconds later than
+  the header time. Filings dated 2026-09-23 or earlier in this sample agree. The filing dates support the header: four
+  AAPL Form 4 filings have a filing date equal to the header's New York date, which the JSON value read as UTC would
+  put after the 10 p.m. cut-off and on the next day. `sec_filings` is `AVAILABLE`. The 15 rows from the first run are
+  kept as they were, beside the new versions (40 rows, 25 filings).
 * Still not verified: the header file's availability for every form type.
 * Control A's advisory EDGAR reader is a different module and was not changed.
 
@@ -182,6 +189,12 @@ evidence. One sample is judged as a whole: if any symbol's answer is refused, th
 * `firm_lab.benchmarks.compute_fixed_70_30` then builds the accrual index and the monthly-rebalanced 70/30 ruler from
   what is stored, refuses unless the methodology file on disk has the approved hash, stops at the first gap, and never
   changes an observation that is already stored.
+* **First live run, 2026-10-02 11:04 ET (one request).** 96 auction records from the auction of 2024-12-02 to that of
+  2026-09-28 were accepted; one announced auction was left out as not yet known. Every published price equals the
+  official formula. Terms: 91 days (87), 92 (5), 90 (4); around holidays the issue and maturity dates moved together,
+  so no day was uninvested. The index was computed for all 378 stored VTI sessions from the development base
+  2025-03-31 = 100, holding seven bills in turn with 18 monthly rebalances, and matched an independent recomputation
+  on every session. `treasury_total_return` is `AVAILABLE`. The Fiscal Data response format was as documented.
 * A ruler only. Nothing reads it to rank, select or trade. See `treasury_bill_total_return_methodology.md` (frozen),
   its `.APPROVAL.md` record and `treasury_index_implementation_note.md`.
 
