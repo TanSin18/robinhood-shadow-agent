@@ -97,8 +97,15 @@ evidence. One sample is judged as a whole: if any symbol's answer is refused, th
   `accepted_timestamp_raw` is the JSON text as sent, and `accepted_timestamp_basis` says which reading the JSON
   matched. If the two disagree under both readings, or the header cannot be read, the response is refused.
 * HTTP 403 or 429 is recorded as unavailable and not retried. The collector sends at most five requests a second.
-* Not verified until the operator's first live run: the header file's availability for every form type, and the
-  exact shape of the fund ticker file.
+* **First live run, 2026-10-02 10:23 ET (operator-run, 24 requests).** SPY, VTI and NVDA: 5 filings each accepted
+  and stored (15 rows), every acceptance time verified against the filing header. The fund ticker file resolved VTI
+  with its series and class. Both JSON conventions were seen in the same response: 13 values were true UTC and 2
+  were the New York clock with a `Z`. SOXX and AAPL were **refused** (`ACCEPTANCE_TIME_CONFLICT`): for one filing
+  each, filed 2026-10-01, the JSON value was exactly four hours later than the header time converted to UTC, which
+  fits neither reading. Nothing from those two answers was kept and the capability was not promoted. Whether the
+  SEC corrects such values later, and whether the header should be accepted alone in that case, is an operator
+  decision; the rule was not relaxed to make the sample pass.
+* Still not verified: the header file's availability for every form type.
 * Control A's advisory EDGAR reader is a different module and was not changed.
 
 ## Massive
