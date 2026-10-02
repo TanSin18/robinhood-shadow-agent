@@ -174,7 +174,10 @@ def test_firm_lab_imports_nothing_from_the_trading_system():
             if isinstance(node, (ast.Name, ast.Attribute)):
                 ident = node.id if isinstance(node, ast.Name) else node.attr
                 assert ident not in TRADING_NAMES, f'{path.name} refers to {ident}'
-    third_party = {'yaml', 'pydantic', 'jsonschema', 'openai', 'numpy', 'requests'}
+                assert ident not in ('__import__', 'exec', 'eval', 'system', 'popen'), f'{path.name} uses {ident}'
+    # no third-party package, and nothing that can open a network connection, start a process or load code by name
+    third_party = {'yaml', 'pydantic', 'jsonschema', 'openai', 'numpy', 'requests', 'socket', 'urllib', 'http', 'ssl', 'smtplib', 'ftplib',
+                   'subprocess', 'multiprocessing', 'importlib', 'ctypes', 'asyncio'}
     for path in files:
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.Import):
