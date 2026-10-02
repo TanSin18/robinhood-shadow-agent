@@ -34,8 +34,8 @@ Who uses the executable:
 
 ## Is it only a test assumption, or a real risk?
 
-* **Scheduled trading runs: not affected.** Today's 10:00 run completed after the app update. The last scheduled AI
-  inference recorded in the database is from 2026-09-29, on the API path.
+* **Scheduled trading runs: not affected.** They do not start the executable. Today's 10:00 run completed and needed
+  no AI. The last scheduled AI inference recorded in the database is from 2026-09-29, on the API path.
 * **A waiver rehearsal through Codex would fail today**, at process start, with a file-not-found error. Nothing is
   recorded as an incident.
 * **The next Control A release install would roll back.** `scripts/release_install.py` runs the installed test suite
