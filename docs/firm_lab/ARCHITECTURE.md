@@ -14,7 +14,14 @@ Session dates         BUILT          exchange_session_date stored beside the raw
 Baseline check        BUILT          control_a_baseline_counterfactual, DEVELOPMENT_ONLY
 Capability registry   BUILT
 VTI ruler             DEFINED        price return; dividends not included yet
-70/30 ruler           DEFINED — 70% VTI + 30% 3-month U.S. Treasury-bill total return; DATA_SOURCE_PENDING
+70/30 ruler           DEFINED — 70% VTI + 30% 3-month U.S. Treasury-bill total return, rebalanced monthly on the
+                      first NYSE trading session; DATA_SOURCE_PENDING (no Treasury source chosen; not computed)
+Provider interfaces   BUILT — definitions only; nine interfaces; none connected; all return UNAVAILABLE
+Provenance standard   BUILT
+Data-quality checks   BUILT — flag and reject, never repair
+Data Readiness view   BUILT — read-only, on /firm-lab
+T-bill total return   BLOCKED — NO SOURCE CHOSEN
+Corporate actions     BLOCKED — NO PROVIDER
 Fundamentals          BLOCKED — NO PROVIDER
 Analyst revisions     BLOCKED — NO PROVIDER
 Earnings calls        PLANNED — NO SOURCE CONNECTED
@@ -98,7 +105,9 @@ pricing model would write separate `model_estimated_*` fields; the two are never
 Ruler 1: 100% VTI (the 100% equity benchmark). Ruler 2, defined by the operator on 2026-10-01: 70% VTI + 30%
 3-month U.S. Treasury-bill total return, a fixed allocation with no tactical reallocation. No clean Treasury-bill
 total-return series is connected, so its `implementation_status` is `DATA_SOURCE_PENDING`: nothing is computed and
-no other asset stands in for it. Its rebalancing convention has not been specified yet. The Firm
+no other asset stands in for it. It is rebalanced monthly, on the first NYSE trading session of each calendar month, with fixed weights, no tactical
+changes and no retroactive asset substitution. A ruler's definition can be replaced only while it has no
+observations, and the change is recorded; once observations exist it is locked. The Firm
 cannot trade a ruler, change it, or choose it after seeing performance. No outperformance figure is computed or
 shown in `BUILD_OBSERVE`.
 
@@ -124,7 +133,22 @@ Three layers, kept apart:
 
 ## What comes next (not started; each needs an operator decision)
 
-Which external datasets to introduce deliberately (fundamentals, revisions, intraday), the Treasury-bill series and
-rebalancing convention of the 70/30
+Which external datasets to introduce deliberately (see `data_sources.md` and `provider_matrix.md`), the Treasury-bill
+series of the 70/30
 ruler, how the October research stop is treated, the trial number and the exact recipe that becomes the Firm's
 registered trial.
+
+## Data-source capability layer (Checkpoint 2, 2026-10-01)
+
+- `firm_lab/providers.py`: nine interface definitions (fundamentals, estimates, earnings, filings, news, intraday
+  market data, options market data, risk-free benchmark, corporate actions). None is connected. A call returns a
+  `ProviderResult` whose status is `UNAVAILABLE`, `REJECTED` or `OK`; records can be read only from an `OK` result.
+- `firm_lab/schemas.py`: the minimum fields per domain, and the Greeks naming rule (`provider_*` versus
+  `model_estimated_*`).
+- `firm_lab/provenance.py`: the provenance every response must carry.
+- `firm_lab/quality.py`: validation that flags and rejects; records are never modified.
+- `firm_lab/capabilities.py`: statuses `AVAILABLE`, `UNAVAILABLE`, `NOT_STARTED`, `BUILD_ONLY`, `PARTIAL_EXISTING`,
+  `BLOCKED`. `AVAILABLE` can be written only with evidence: a named source, stored records and a passed validation.
+  `daily_closes` and `daily_baseline_features` are re-confirmed from the stored data at every seed and ingest.
+- None of these modules is imported by the baseline, the feature calculations, the execution boundary or the
+  Official reader, and a test keeps it that way. They contain no network code.

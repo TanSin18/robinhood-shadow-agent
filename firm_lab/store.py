@@ -128,14 +128,10 @@ class FirmLabStore:
                     sorted(r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'"))}
 
     # ------------------------------------------------------------------ capabilities
-    def set_capability(self, capability, status, provider=None, detail=None, now=None):
-        from .capabilities import STATUSES
-        if status not in STATUSES:
-            raise FirmLabError(f'UNKNOWN_CAPABILITY_STATUS:{status}')
-        with self.connect() as db:
-            db.execute('INSERT INTO data_capabilities VALUES (?,?,?,?,?) ON CONFLICT(capability) DO UPDATE SET status=excluded.status, '
-                       'provider=excluded.provider, detail=excluded.detail, updated_at=excluded.updated_at',
-                       (capability, status, provider, detail, (now or now_utc()).isoformat()))
+    def set_capability(self, capability, status, provider=None, detail=None, now=None, *, evidence=None, reason=''):
+        """Kept for callers; the rule lives in capabilities.set_status (AVAILABLE needs a validated source)."""
+        from . import capabilities
+        capabilities.set_status(self, capability, status, provider, detail, now, evidence=evidence, reason=reason)
 
     def capability(self, capability) -> str:
         with self.connect() as db:

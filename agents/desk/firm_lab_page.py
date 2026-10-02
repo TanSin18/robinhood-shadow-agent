@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 from .components import esc
 
 ET = ZoneInfo('America/New_York')
-STATUS_WORD = {'AVAILABLE': 'Available', 'UNAVAILABLE': 'Unavailable', 'NOT_STARTED': 'Not started', 'BUILD_ONLY': 'Build only'}
-STATUS_TONE = {'AVAILABLE': 'good', 'UNAVAILABLE': 'stop', 'NOT_STARTED': 'neutral', 'BUILD_ONLY': 'warn'}
+STATUS_TONE = {'AVAILABLE': 'good', 'UNAVAILABLE': 'stop', 'NOT_STARTED': 'neutral', 'BUILD_ONLY': 'warn', 'PARTIAL_EXISTING': 'warn',
+               'BLOCKED': 'stop'}
 LABELS = {
     'daily_closes': 'Daily closes', 'daily_baseline_features': 'Daily baseline features', 'fundamentals': 'Fundamentals',
     'analyst_revisions': 'Analyst revisions', 'earnings_transcripts': 'Earnings-call transcripts', 'intraday_bars': 'Intraday bars',
@@ -74,26 +74,52 @@ def _num(value, places=2, pct=False):
 
 
 def _chip(status):
-    return f'<span class="cat cat-{STATUS_TONE.get(status, "stop")}">{esc(STATUS_WORD.get(status, "Unavailable"))}</span>'
+    """The exact registry status. An unknown status is shown as UNAVAILABLE, never as something better."""
+    status = status if status in STATUS_TONE else 'UNAVAILABLE'
+    return f'<span class="cat cat-{STATUS_TONE[status]}">{esc(status)}</span>'
 
 
 def _facts(rows):
     return '<dl class="v10-facts fl-facts">' + ''.join(f'<div><dt>{esc(k)}</dt><dd>{v}</dd></div>' for k, v in rows) + '</dl>'
 
 
-def _capabilities(fl):
+def _registry(fl):
     rows = fl.get('capabilities')
-    note = ''
-    if not rows:
-        rows = _view().defaults()['capabilities']
-        note = '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>'
-    body = ''.join(f'<tr><td><b>{esc(LABELS.get(r["capability"], r["capability"]))}</b></td><td>{_chip(r["status"])}</td>'
-                   f'<td>{esc(r.get("provider") or "no provider connected")}</td><td class="small">{esc(r.get("detail") or "")}</td></tr>' for r in rows)
-    return (note + '<div class="table-wrap"><table class="mini fl-cap"><colgroup><col class="fl-c1"><col class="fl-c2"><col class="fl-c3"><col></colgroup>'
-            '<thead><tr><th>Capability</th><th>Status</th><th>Source</th><th>What that means</th></tr></thead>'
+    if rows:
+        return rows, fl.get('data_readiness') or _view().readiness(rows), ''
+    defaults = _view().defaults()
+    return (defaults['capabilities'], defaults['data_readiness'],
+            '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>')
+
+
+def _readiness(fl):
+    """Data Readiness: which data exists, from where, with what limits. Infrastructure, not a trading feature."""
+    _, ready, note = _registry(fl)
+    body = ''.join(f'<tr><td data-label="Data"><b>{esc(r["domain"])}</b></td><td data-label="State">{_chip(r["status"])}</td>'
+                   f'<td data-label="Current source">{esc(r.get("source") or "none")}</td>'
+                   f'<td data-label="Limitation" class="small">{esc(r.get("limitation") or "")}</td>'
+                   f'<td data-label="Required next" class="small">{esc(r.get("required_next") or "")}</td></tr>' for r in ready)
+    return (note + '<p class="v10-note">Infrastructure readiness only: which data Firm Lab could trust, where it would come from and what is missing. '
+            'No new provider is connected, and nothing on this list feeds a ranking, a selection or a trade.</p>'
+            '<div class="table-wrap"><table class="mini fl-ready"><colgroup><col class="fl-r1"><col class="fl-r2"><col class="fl-r3"><col><col></colgroup>'
+            '<thead><tr><th>Data</th><th>State</th><th>Current source</th><th>Limitation</th><th>Required next</th></tr></thead>'
             f'<tbody>{body}</tbody></table></div>'
-            '<p class="v10-note">Unavailable means no data source is connected: no value is stored, estimated or filled in. Not started means '
-            'nothing is built. Build only means storage exists and nothing reads it to make a decision.</p>')
+            '<p class="v10-note">AVAILABLE: stored data that passed validation. PARTIAL_EXISTING: a source exists elsewhere in the system but is not '
+            'sufficient for, or not connected to, Firm Lab. BUILD_ONLY: storage exists and nothing reads it. UNAVAILABLE: no source; no value is '
+            'stored, estimated or filled in. Details: docs/firm_lab/data_sources.md and docs/firm_lab/provider_matrix.md.</p>')
+
+
+def _capabilities(fl):
+    """Everything in the registry that is not a data domain: derived measures and strategy components."""
+    rows, ready, _ = _registry(fl)
+    data_keys = {r['capability'] for r in ready}
+    body = ''.join(f'<tr><td><b>{esc(LABELS.get(r["capability"], r["capability"]))}</b></td><td>{_chip(r["status"])}</td>'
+                   f'<td>{esc(r.get("provider") or "none")}</td><td class="small">{esc(r.get("detail") or "")}</td></tr>'
+                   for r in rows if r['capability'] not in data_keys)
+    return ('<div class="table-wrap"><table class="mini fl-cap"><colgroup><col class="fl-c1"><col class="fl-c2"><col class="fl-c3"><col></colgroup>'
+            '<thead><tr><th>Component</th><th>Status</th><th>Source</th><th>What that means</th></tr></thead>'
+            f'<tbody>{body}</tbody></table></div>'
+            '<p class="v10-note">Measures that need intraday data are not calculated from daily bars. NOT_STARTED means nothing is built.</p>')
 
 
 def _baseline(fl):
@@ -153,11 +179,11 @@ def _benchmarks(fl):
             body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
                            ('Definition', f'<b>{esc(b.get("name"))}</b>'),
                            ('Implementation status', f'<span class="cat cat-warn">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
-                           ('Treasury-bill data', 'No clean 3-month Treasury-bill total-return series is connected. Nothing is computed and no other '
-                                                  'asset stands in for it.'),
+                           ('Treasury-bill data', 'No clean 3-month Treasury-bill total-return source is chosen. A yield series is not a total '
+                                                  'return. Nothing is computed and no other asset stands in for it.'),
                            ('Rules', esc(rules[:1].upper() + rules[1:] + '.') if rules else 'not recorded'),
-                           ('Rebalancing convention', 'not specified by the operator yet' if rebalancing == 'NOT_SPECIFIED_BY_OPERATOR'
-                            else esc(rebalancing or 'not recorded')),
+                           ('Rebalancing', esc(f'{rebalancing.get("frequency")}, on {rebalancing.get("on")}') if isinstance(rebalancing, dict)
+                            and rebalancing.get('frequency') else 'not specified by the operator yet'),
                            ('Defined by', esc(b.get('defined_by') or 'not recorded')),
                            ('Observations stored', esc(b.get('observations') or 0))))
             out += f'<article class="fl-bench"><h3>70/30</h3>{body}</article>'
@@ -194,7 +220,8 @@ def render(state):
               ('Real execution', esc(fl.get('real_execution', 'DISABLED')))]
     return (head
             + f'<section class="v10-panel" id="fl-status"><h2>System status</h2>{_facts(status)}</section>'
-            + f'<section class="v10-panel" id="fl-capabilities"><h2>Capabilities</h2>{_capabilities(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-readiness"><h2>Data Readiness</h2>{_readiness(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-capabilities"><h2>Derived measures and strategy components</h2>{_capabilities(fl)}</section>'
             + f'<section class="v10-panel" id="fl-baseline"><h2>Control A baseline — counterfactual plumbing test</h2>{_baseline(fl)}</section>'
             + f'<section class="v10-panel" id="fl-benchmarks"><h2>Benchmarks</h2>{_benchmarks(fl)}</section>'
             + f'<section class="v10-panel fl-warning" id="fl-warning"><h2>Development warning</h2><p>{esc(WARNING)}</p></section>')

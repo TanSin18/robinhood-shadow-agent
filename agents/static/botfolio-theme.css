@@ -523,3 +523,13 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 @media (max-width:760px){.agent-desk table.fl-cap,.agent-desk table.fl-cap tbody,.agent-desk table.fl-cap tr,.agent-desk table.fl-cap td{display:block;width:auto}
   .agent-desk table.fl-cap thead,.agent-desk table.fl-cap colgroup,.agent-desk table.fl-cap td:nth-child(3){display:none}
   .agent-desk table.fl-cap tr{padding:10px 12px;border-bottom:1px solid var(--hair-2)}.agent-desk table.fl-cap td{padding:2px 0;border:0}}
+
+/* ---------- Firm Lab: Data Readiness ---------- */
+.agent-desk table.fl-ready{table-layout:fixed;width:100%}
+.agent-desk table.fl-ready .fl-r1{width:190px}.agent-desk table.fl-ready .fl-r2{width:150px}.agent-desk table.fl-ready .fl-r3{width:200px}
+.agent-desk table.fl-ready td{vertical-align:top;white-space:normal;overflow-wrap:anywhere}
+@media (max-width:900px){.agent-desk table.fl-ready,.agent-desk table.fl-ready tbody,.agent-desk table.fl-ready tr,.agent-desk table.fl-ready td{display:block;width:auto}
+  .agent-desk table.fl-ready thead,.agent-desk table.fl-ready colgroup{display:none}
+  .agent-desk table.fl-ready tr{padding:12px;border-bottom:1px solid var(--hair-2)}.agent-desk table.fl-ready td{padding:3px 0;border:0}
+  .agent-desk table.fl-ready td[data-label]:not(:first-child):before{content:attr(data-label) ' · ';font-family:var(--bf-mono);font-size:11px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--text-4)}}

@@ -226,21 +226,27 @@ def test_blocked_capabilities_are_unavailable(tmp_path):                        
     lab = _lab(tmp_path)
     capabilities.seed(lab)
     status = {c['capability']: c['status'] for c in lab.capabilities()}
-    assert status['daily_closes'] == 'AVAILABLE' and status['daily_baseline_features'] == 'AVAILABLE'
+    # nothing is stored yet, so even the daily data is not called available
+    assert status['daily_closes'] == 'UNAVAILABLE' and status['daily_baseline_features'] == 'UNAVAILABLE'
     for name in ('fundamentals', 'analyst_revisions', 'earnings_transcripts', 'intraday_bars', 'vwap', 'opening_range', 'time_of_day_rvol',
-                 'trade_flow', 'order_book'):
+                 'trade_flow', 'order_book', 'options_greeks', 'treasury_total_return', 'corporate_actions'):
         assert status[name] == 'UNAVAILABLE', name
     assert status['options_chain'] == 'BUILD_ONLY'
-    for name in ('options_strategy', 'ml_ranker', 'sector_engine', 'portfolio_optimizer', 'news_catalysts', 'sec_filings'):
+    for name in ('options_strategy', 'ml_ranker', 'sector_engine', 'portfolio_optimizer'):
         assert status[name] == 'NOT_STARTED', name
-    assert set(status.values()) <= set(capabilities.STATUSES) == {'AVAILABLE', 'UNAVAILABLE', 'NOT_STARTED', 'BUILD_ONLY'}
+    for name in ('live_quotes', 'news_catalysts', 'sec_filings'):
+        assert status[name] == 'PARTIAL_EXISTING', name
+    assert set(status.values()) <= set(capabilities.STATUSES)
+    assert set(capabilities.STATUSES) == {'AVAILABLE', 'UNAVAILABLE', 'NOT_STARTED', 'BUILD_ONLY', 'PARTIAL_EXISTING', 'BLOCKED'}
     assert lab.capability('something_nobody_registered') == 'UNAVAILABLE'
     with pytest.raises(FirmLabError):
         lab.set_capability('fundamentals', 'COMING_SOON')
-    capabilities.require(lab, 'daily_closes')
-    for name in ('fundamentals', 'analyst_revisions', 'intraday_bars', 'options_chain', 'ml_ranker'):
+    for name in ('daily_closes', 'fundamentals', 'analyst_revisions', 'intraday_bars', 'options_chain', 'ml_ranker', 'live_quotes'):
         with pytest.raises(CapabilityUnavailable):
             capabilities.require(lab, name)
+    features.ingest_provider_daily_bars(lab, 'VTI', _bars([D(300) + D(i) for i in range(5)]), known_at=KNOWN)
+    assert capabilities.confirm_daily_data(lab)['daily_closes'] == 'AVAILABLE'             # stored closes that validate
+    capabilities.require(lab, 'daily_closes')
 
 
 def test_a_deliberate_capability_edit_survives_reseeding(tmp_path):
@@ -253,16 +259,17 @@ def test_a_deliberate_capability_edit_survives_reseeding(tmp_path):
 
 def test_missing_provider_never_returns_a_made_up_value(tmp_path):                                  # 27
     lab = _lab(tmp_path)
-    calls = [lambda: providers.FundamentalsProvider().snapshot('AAPL', KNOWN),
-             lambda: providers.AnalystRevisionsProvider().revisions('AAPL', KNOWN),
-             lambda: providers.IntradayMarketDataProvider().historical_bars('AAPL', KNOWN, KNOWN),
-             lambda: providers.IntradayMarketDataProvider().live_bars('AAPL'),
-             lambda: providers.IntradayMarketDataProvider().quotes('AAPL'),
-             lambda: providers.IntradayMarketDataProvider().trades('AAPL'),
-             lambda: providers.IntradayMarketDataProvider().option_quotes('contract')]
+    calls = [lambda: providers.FundamentalsProvider().financial_statements('AAPL', known_at=KNOWN, now=KNOWN),
+             lambda: providers.EstimatesProvider().consensus('AAPL', 'eps', '2026Q3', known_at=KNOWN, now=KNOWN),
+             lambda: providers.IntradayMarketDataProvider().bars_1m('AAPL', session_date='2026-09-30', now=KNOWN),
+             lambda: providers.IntradayMarketDataProvider().quote_snapshots('AAPL', start=KNOWN, end=KNOWN, now=KNOWN),
+             lambda: providers.IntradayMarketDataProvider().trades('AAPL', start=KNOWN, end=KNOWN, now=KNOWN),
+             lambda: providers.OptionsMarketDataProvider().chain('AAPL', as_of=KNOWN, now=KNOWN)]
     for call in calls:
-        with pytest.raises(CapabilityUnavailable):
-            call()
+        result = call()
+        assert result.status == 'UNAVAILABLE' and result.available is False and result.summary()['records'] == 0
+        with pytest.raises(CapabilityUnavailable):                                      # there is no value to read, not an empty answer
+            result.records()
     assert lab.counts()['feature_observations'] == 0 and lab.counts()['option_chain_observations'] == 0
     with lab.connect() as db:
         option_columns = [r[1] for r in db.execute('PRAGMA table_info(option_chain_observations)')]
@@ -283,8 +290,9 @@ def test_vti_ruler_is_defined_and_the_70_30_ruler_is_defined_but_waits_for_treas
     assert pending['name'] == '70% VTI + 30% 3-month U.S. Treasury-bill total return'
     definition = json.loads(pending['definition_json'])
     assert definition['weights'] == {'VTI': '0.70', 'US_TREASURY_BILL_3M_TOTAL_RETURN': '0.30'} and definition['allocation'] == 'fixed'
-    assert definition['treasury_bill_series'] is None and definition['rebalancing'] == 'NOT_SPECIFIED_BY_OPERATOR'   # nothing chosen silently
-    assert len(definition['rules']) == 4 and defs['VTI_100']['implementation_status'] == 'PRICE_RETURN_ONLY'
+    assert definition['treasury_bill_series'] is None                                                   # nothing chosen silently
+    assert definition['rebalancing'] == {'frequency': 'monthly', 'on': 'the first NYSE trading session of each calendar month', 'calendar': 'XNYS'}
+    assert len(definition['rules']) == 5 and defs['VTI_100']['implementation_status'] == 'PRICE_RETURN_ONLY'
     features.ingest_provider_daily_bars(lab, 'VTI', _bars([D(300) + D(i) for i in range(5)]), known_at=KNOWN)
     assert benchmarks.record_vti(lab, known_at=KNOWN) == 5 and benchmarks.record_vti(lab, known_at=KNOWN) == 0
     defs = {d['benchmark_id']: d for d in benchmarks.definitions(lab)}

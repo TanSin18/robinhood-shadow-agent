@@ -73,4 +73,5 @@ def ingest_official(store, official_db, now=None):
         store.event('INGEST', {'source': SOURCE, 'capsule_hash': capsule['hash'], 'status': status}, now)
         report['runs'].append({'capsule_hash': capsule['hash'], 'cycle_id': capsule['cycle_id'], 'status': status, **detail})
         report['capsules_ingested'] += status == 'OK'
+    report['daily_data'] = capabilities.confirm_daily_data(store, now)      # AVAILABLE only if the stored closes validate
     return report

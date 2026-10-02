@@ -132,21 +132,25 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     before = hashlib.sha256(path.read_bytes()).hexdigest()
     html = firm_lab_page.render({'firm_lab': firm_lab_page.load(off)})
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before                              # rendering writes nothing
-    for heading in ('System status', 'Capabilities', 'Control A baseline — counterfactual plumbing test', 'Benchmarks', 'Development warning'):
+    for heading in ('System status', 'Data Readiness', 'Derived measures and strategy components', 'Control A baseline — counterfactual plumbing test',
+                    'Benchmarks', 'Development warning'):
         assert f'<h2>{heading}</h2>' in html
-    assert html.index('System status') < html.index('Capabilities') < html.index('counterfactual plumbing test') < html.index('Benchmarks')
+    assert html.index('System status') < html.index('Data Readiness') < html.index('counterfactual plumbing test') < html.index('Benchmarks')
     assert '<dt>Mode</dt><dd><b>BUILD / OBSERVE</b></dd>' in html and 'robinhood-diagnostics/firm_lab/firm_lab.db' in html
     assert 'DEVELOPMENT COUNTERFACTUAL — NOT A PAPER TRADE' in html and '>DEVELOPMENT_ONLY</span>' in html
     assert '<dt>Rule would select</dt><dd><b>BBB</b></dd>' in html and '<dt>Exchange session date</dt><dd>2026-09-30</dd>' in html
     assert '<dt>Same selection from the new store</dt><dd><b>Yes</b></dd>' in html
     assert 'Firm strategy' not in html.replace('It is not a Firm strategy', '')
-    rows = dict(re.findall(r'<tr><td><b>([^<]+)</b></td><td><span class="cat cat-\w+">([^<]+)</span>', html))
-    assert rows['Daily closes'] == 'Available' and rows['Daily baseline features'] == 'Available'
-    for name in ('Fundamentals', 'Analyst revisions', 'Intraday bars', 'VWAP', 'Time-of-day RVOL', 'Aggressive order flow'):
-        assert rows[name] == 'Unavailable', name
-    assert rows['Options strategy'] == 'Not started' and rows['ML ranker'] == 'Not started' and rows['Option chain data'] == 'Build only'
+    rows = dict(re.findall(r'<tr><td(?: data-label="Data")?><b>([^<]+)</b></td><td(?: data-label="State")?><span class="cat cat-\w+">([^<]+)</span>', html))
+    assert rows['Daily closes'] == 'AVAILABLE' and rows['Daily baseline features'] == 'AVAILABLE'      # stored closes that passed validation
+    for name in ('Fundamentals', 'Analyst estimates and revisions', 'Intraday 1-minute bars', 'VWAP', 'Time-of-day RVOL', 'Order flow and microstructure',
+                 'Options Greeks', 'T-bill total return', 'Corporate actions and dividends', 'Earnings and transcripts'):
+        assert rows[name] == 'UNAVAILABLE', name
+    assert rows['Options strategy'] == 'NOT_STARTED' and rows['ML ranker'] == 'NOT_STARTED' and rows['Options chains'] == 'BUILD_ONLY'
+    assert rows['Live quotes and trades'] == rows['General news'] == rows['SEC filings'] == 'PARTIAL_EXISTING'
     assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>DATA_SOURCE_PENDING</span>' in html
     assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'no other asset stands in for it' in html
+    assert '<dt>Rebalancing</dt><dd>monthly, on the first NYSE trading session of each calendar month</dd>' in html
     assert '<dt>Observations stored</dt><dd>0</dd>' in html and 'Trial 18' not in html
     lowered = html.lower()
     for word in ('alpha', 'outperform', 'beat the market', 'bought ', 'paper trade placed', 'profit'):
