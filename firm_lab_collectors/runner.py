@@ -15,13 +15,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-from firm_lab import capabilities, crosscheck, quality, rawstore
+from firm_lab import benchmarks, capabilities, crosscheck, quality, rawstore
 from firm_lab.errors import FirmLabError
 from firm_lab.providers import OK, UNAVAILABLE
 from firm_lab.sessions import ET
 from firm_lab.store import now_utc
 
 from . import config, edgar, massive, sharadar, thetadata
+from . import treasury as treasury_source
 from .transport import HttpTransport
 
 EQUITY_SAMPLE = ('SPY', 'VTI', 'SOXX', 'AAPL', 'NVDA')
@@ -74,8 +75,16 @@ def run_edgar(store, *, symbols=EQUITY_SAMPLE, environ=None, transport=None, clo
     outcomes = []
     for symbol in symbols:
         result = provider.filings(symbol, start=start.isoformat(), end=end.isoformat(), now=clock)
-        outcomes.append(rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument=symbol,
-                                              diagnostics={'window': [start.isoformat(), end.isoformat()], 'max_filings': int(max_filings)}, now=clock()))
+        # A filing whose JSON time disagrees with its header is kept and timed by the header; the disagreement is recorded here.
+        conflicts = [{'accession_number': r['accession_number'], 'form_type': r['form_type'], 'filing_date': r['filing_date'],
+                      'accepted_timestamp_json': r['accepted_timestamp_json'], 'accepted_timestamp_header': r['accepted_timestamp_header'],
+                      'json_minus_header_seconds': r.get('acceptance_time_json_offset_seconds')}
+                     for r in (result.records() if result.status == OK else ()) if r.get('acceptance_time_conflict')]
+        outcome = rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument=symbol, now=clock(),
+                                        diagnostics={'window': [start.isoformat(), end.isoformat()], 'max_filings': int(max_filings),
+                                                     'acceptance_time_conflicts': conflicts})
+        outcome['flags'] = {'ACCEPTANCE_TIME_CONFLICT': len(conflicts)} if conflicts else {}
+        outcomes.append(outcome)
     return _finish(store, provider.name, outcomes, transport, clock)
 
 
@@ -188,4 +197,32 @@ def run_thetadata(store, *, symbols=OPTIONS_SAMPLE, environ=None, transport=None
     return _finish(store, provider.name, outcomes, transport, clock)
 
 
-RUNS = {'edgar': run_edgar, 'massive': run_massive, 'sharadar': run_sharadar, 'thetadata': run_thetadata}
+# ---------------------------------------------------------------------------- U.S. Treasury
+def run_treasury(store, *, environ=None, transport=None, clock=now_utc, start=None, lead_days=120) -> dict:
+    """13-week bill auction results since shortly before the first stored VTI session, then the accrual index and the
+    70/30 ruler under the frozen methodology. Public data: no credential. A ruler only; nothing here can trade."""
+    benchmarks.require_frozen_methodology()                     # nothing is fetched for a methodology that is not the approved file
+    benchmarks.seed(store, clock())
+    if start is None:
+        with store.connect() as db:
+            first = db.execute("SELECT MIN(exchange_session_date) FROM feature_observations WHERE feature_name='close' AND instrument='VTI'").fetchone()[0]
+        if not first:
+            raise FirmLabError('NO_VTI_SESSION_STORED: name a start date with --start')
+        start = (datetime.fromisoformat(first).date() - timedelta(days=int(lead_days))).isoformat()
+    transport = transport or HttpTransport([treasury_source.HOST], min_interval=0.5)
+    provider = treasury_source.FiscalDataAuctionsProvider(transport)
+    started, batch = clock().isoformat(), rawstore.new_batch(store, provider.name, clock())
+    result = provider.auctions(start=start, now=clock)
+    outcomes = [rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument='13-Week Bill', now=clock(),
+                                      diagnostics={'issue_date_from': start, 'left_out': dict(provider.skipped)})]
+    computed = benchmarks.compute_fixed_70_30(store, clock())       # reads only what is stored; stops at the first gap
+    report = _finish(store, provider.name, outcomes, transport, clock)
+    report['benchmark'] = {k: computed.get(k) for k in ('status', 'gap_date', 'gap_reason', 'stored', 'unchanged', 'base_date', 'last_session',
+                                                        'bills_stored', 'unusable_bills', 'uninvested_days', 'last_bill_index', 'last_bill_index_date',
+                                                        'last_ruler', 'last_ruler_date', 'vti_leg')}
+    report['benchmark']['rolls'] = len(computed.get('bills_used') or [])
+    report['benchmark']['rebalances'] = len(computed.get('rebalances') or [])
+    return report
+
+
+RUNS = {'edgar': run_edgar, 'massive': run_massive, 'sharadar': run_sharadar, 'thetadata': run_thetadata, 'treasury': run_treasury}

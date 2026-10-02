@@ -37,6 +37,8 @@ SESSION_MISMATCH = 'SESSION_MISMATCH'
 OUTSIDE_SESSION_HOURS = 'OUTSIDE_SESSION_HOURS'
 SESSION_DATE_MISMATCH = 'SESSION_DATE_MISMATCH'
 CROSSED_MARKET = 'CROSSED_MARKET'
+KNOWN_AT_NOT_HEADER = 'KNOWN_AT_NOT_HEADER'
+JSON_TIME_REWRITTEN = 'JSON_TIME_REWRITTEN'
 
 
 @dataclass(frozen=True)
@@ -243,6 +245,20 @@ def check_any_of(records, groups) -> list:
     return out
 
 
+def check_filing_times(records) -> list:
+    """The filing's known-at is its header time and nothing else, and the JSON text is carried exactly as sent: the two
+    copies of it must be identical, and a flagged conflict must not have been "fixed" into agreement."""
+    out = []
+    for i, r in enumerate(records):
+        if _present(r.get('accepted_timestamp')) and r.get('accepted_timestamp') != r.get('accepted_timestamp_header'):
+            out.append(Issue(KNOWN_AT_NOT_HEADER, 'accepted_timestamp must be the filing-header time', i, 'accepted_timestamp'))
+        if r.get('accepted_timestamp_json') != r.get('accepted_timestamp_raw'):
+            out.append(Issue(JSON_TIME_REWRITTEN, 'accepted_timestamp_json differs from the text the SEC sent', i, 'accepted_timestamp_json'))
+        if not isinstance(r.get('acceptance_time_conflict'), bool) and _present(r.get('acceptance_time_conflict')):
+            out.append(Issue(VALUE_NOT_ALLOWED, 'acceptance_time_conflict must be true or false', i, 'acceptance_time_conflict'))
+    return out
+
+
 def session_of(stamp) -> str:
     """pre_market 04:00-09:30, regular 09:30-16:00, post_market 16:00-20:00 New York clock time; '' outside those hours.
     Clock only: an exchange early close is not known here, so a bar after an early close is still labelled regular."""
@@ -348,6 +364,11 @@ def validate(domain, records, *, now, provenance=None, expected_instrument=None,
     issues += check_any_of(records, schema.any_of)
     if domain == 'intraday_bars':
         issues += check_sessions(records)
+    if domain == 'filings':
+        issues += check_filing_times(records)
+    if domain == 'treasury_auctions':
+        from . import treasury
+        issues += [Issue(code, detail, i) for i, code, detail in treasury.check_records(records)]
     issues += check_identity(records, schema.identifier, expected_instrument)
     issues += check_units(records, schema.money)
     issues += check_monotonic(records, schema.order_by)

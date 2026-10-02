@@ -75,14 +75,17 @@ SCHEMAS = {
         identifier='instrument', timestamps=('event_timestamp',), key=('instrument', 'fiscal_period'),
         optional=('transcript_source_url', 'transcript_timestamp', 'guidance_sections', 'prior_fiscal_period', 'release_timestamp', 'confirmed'),
         point_in_time='event_timestamp', allowed={'session_timing': ('pre_market', 'during_market', 'post_market', 'unknown')}),
-    # `accepted_timestamp` is the verified acceptance time in UTC; `accepted_timestamp_raw` is the provider's text exactly as sent.
+    # The filing header's acceptance time is authoritative. `accepted_timestamp` (the known-at Firm Lab uses) must equal
+    # `accepted_timestamp_header`; `accepted_timestamp_json` is the SEC JSON text exactly as sent and is never rewritten;
+    # `acceptance_time_conflict` says whether the two disagree under every reading.
     'filings': Schema(
         'filings',
-        required=('instrument', 'cik', 'accession_number', 'form_type', 'accepted_timestamp', 'accepted_timestamp_raw', 'accepted_timestamp_basis',
-                  'filing_date', 'url', 'ingestion_timestamp'),
-        identifier='instrument', timestamps=('accepted_timestamp', 'ingestion_timestamp'), key=('accession_number',),
-        optional=('report_date', 'primary_document', 'items', 'header_acceptance_raw', 'series_id', 'class_id', 'entity_name'),
-        point_in_time='accepted_timestamp'),
+        required=('instrument', 'cik', 'accession_number', 'form_type', 'accepted_timestamp', 'accepted_timestamp_header', 'accepted_timestamp_json',
+                  'acceptance_time_conflict', 'accepted_timestamp_raw', 'accepted_timestamp_basis', 'filing_date', 'url', 'ingestion_timestamp'),
+        identifier='instrument', timestamps=('accepted_timestamp', 'accepted_timestamp_header', 'ingestion_timestamp'), key=('accession_number',),
+        optional=('report_date', 'primary_document', 'items', 'header_acceptance_raw', 'series_id', 'class_id', 'entity_name',
+                  'acceptance_time_json_offset_seconds'),
+        point_in_time='accepted_timestamp_header', numeric=('acceptance_time_json_offset_seconds',)),
     'news': Schema(
         'news',
         required=('source', 'headline', 'published_timestamp', 'ingestion_timestamp', 'url', 'deduplication_key'),
@@ -126,6 +129,16 @@ SCHEMAS = {
         optional=('base_date', 'base_value', 'methodology_url'), point_in_time='published_timestamp',
         # A yield or a discount rate is not a total return. Only these two measures are accepted.
         allowed={'measure': ('TOTAL_RETURN_INDEX', 'PERIOD_TOTAL_RETURN')}),
+    # U.S. Treasury 13-week bill auction results, as published. `result_known_at` is 5:00 p.m. New York time on the auction
+    # date (frozen methodology, section 10). The price is checked against the official formula by firm_lab.treasury.
+    'treasury_auctions': Schema(
+        'treasury_auctions',
+        required=('cusip', 'security_type', 'security_term', 'auction_date', 'issue_date', 'maturity_date', 'high_discount_rate', 'price_per100',
+                  'result_known_at'),
+        identifier='cusip', timestamps=('result_known_at',), key=('cusip', 'auction_date'), positive=('price_per100',),
+        non_negative=('high_discount_rate',),
+        optional=('closing_time_comp', 'reopening', 'original_security_term', 'record_date', 'feed'),
+        allowed={'security_type': ('Bill',), 'security_term': ('13-Week',)}),
     # The announcement time is a timestamp or the literal UNAVAILABLE. It is never derived from the effective date.
     'corporate_actions': Schema(
         'corporate_actions',

@@ -15,7 +15,8 @@ Baseline check        BUILT          control_a_baseline_counterfactual, DEVELOPM
 Capability registry   BUILT
 VTI ruler             DEFINED        price return; dividends not included yet
 70/30 ruler           DEFINED — 70% VTI + 30% 3-month U.S. Treasury-bill total return, rebalanced monthly on the
-                      first NYSE trading session; DATA_SOURCE_PENDING (methodology drafted, not approved; not computed)
+                      first NYSE trading session; methodology APPROVED_AND_FROZEN 2026-10-02; computed from stored
+                      auction records as a ruler only (VTI leg is price return)
 Provider interfaces   BUILT — nine interfaces in firm_lab; without a collector behind them they return UNAVAILABLE
 Research collectors   BUILT — firm_lab_collectors: SEC EDGAR, Massive, Sharadar, ThetaData; hand-started samples only;
                       cannot trade; each stays NOT CONFIGURED until the operator supplies access
@@ -23,7 +24,7 @@ Raw provider storage  BUILT — seven raw tables with provenance; provider_runs;
 Provenance standard   BUILT
 Data-quality checks   BUILT — flag and reject, never repair
 Data Readiness view   BUILT — read-only, on /firm-lab
-T-bill total return   METHODOLOGY DRAFT — official Treasury auction data; awaiting operator approval; nothing computed
+T-bill total return   BUILT — 13-week bill accrual index from official auction records; frozen methodology; stops on a gap
 Corporate actions     ADAPTER BUILT — Sharadar; needs operator access; nothing stored
 Fundamentals          ADAPTER BUILT — Sharadar; needs operator access; nothing stored
 Analyst revisions     BLOCKED — NO PROVIDER SELECTED
@@ -107,9 +108,10 @@ pricing model would write separate `model_estimated_*` fields; the two are never
 ## Benchmarks
 
 Ruler 1: 100% VTI (the 100% equity benchmark). Ruler 2, defined by the operator on 2026-10-01: 70% VTI + 30%
-3-month U.S. Treasury-bill total return, a fixed allocation with no tactical reallocation. No clean Treasury-bill
-total-return series is connected, so its `implementation_status` is `DATA_SOURCE_PENDING`: nothing is computed and
-no other asset stands in for it. It is rebalanced monthly, on the first NYSE trading session of each calendar month, with fixed weights, no tactical
+3-month U.S. Treasury-bill total return, a fixed allocation with no tactical reallocation. Since 2026-10-02 its
+bill leg is an accrual index built from official 13-week auction records under the frozen methodology
+(`implementation_status` `AUCTION_ACCRUAL_INDEX_V1`); the VTI leg is price return. No other asset stands in for the
+bill, and the result is a ruler only. It is rebalanced monthly, on the first NYSE trading session of each calendar month, with fixed weights, no tactical
 changes and no retroactive asset substitution. A ruler's definition can be replaced only while it has no
 observations, and the change is recorded; once observations exist it is locked. The Firm
 cannot trade a ruler, change it, or choose it after seeing performance. No outperformance figure is computed or

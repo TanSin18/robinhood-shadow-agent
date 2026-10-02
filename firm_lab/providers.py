@@ -206,6 +206,15 @@ class RiskFreeBenchmarkProvider(Provider):
         return self._call('total_return_series', now=now, start=start, end=end, known_at=known_at)
 
 
+class TreasuryAuctionsProvider(Provider):
+    """Published U.S. Treasury bill auction results. Raw records only: the index built from them lives in firm_lab.treasury."""
+    domain = 'treasury_auctions'
+    capability = 'treasury_total_return'
+
+    def auctions(self, *, start, now=None):
+        return self._call('auctions', now=now, start=start)
+
+
 class CorporateActionsProvider(Provider):
     """Cash dividends, splits, spin-offs, symbol changes, mergers and delistings, each with its announcement time."""
     domain = capability = 'corporate_actions'
@@ -215,4 +224,4 @@ class CorporateActionsProvider(Provider):
 
 
 INTERFACES = (FundamentalsProvider, EstimatesProvider, EarningsProvider, FilingsProvider, NewsProvider, IntradayMarketDataProvider,
-              OptionsMarketDataProvider, RiskFreeBenchmarkProvider, CorporateActionsProvider)
+              OptionsMarketDataProvider, RiskFreeBenchmarkProvider, CorporateActionsProvider, TreasuryAuctionsProvider)

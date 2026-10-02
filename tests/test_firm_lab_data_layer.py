@@ -80,8 +80,9 @@ def test_every_interface_returns_unavailable_when_no_provider_is_connected():
         'options_chain': [lambda p: p.chain('SPY', as_of=NOW, now=NOW), lambda p: p.quotes(['SPY261016C00765000'], as_of=NOW, now=NOW)],
         'risk_free': [lambda p: p.total_return_series(start='2026-01-01', end='2026-09-30', known_at=NOW, now=NOW)],
         'corporate_actions': [lambda p: p.actions('AAPL', start=NOW, end=NOW, now=NOW)],
+        'treasury_auctions': [lambda p: p.auctions(start='2025-01-01', now=NOW)],
     }
-    assert {i.domain for i in providers.INTERFACES} == set(calls) and len(providers.INTERFACES) == 9
+    assert {i.domain for i in providers.INTERFACES} == set(calls) and len(providers.INTERFACES) == 10
     for interface in providers.INTERFACES:
         provider = interface()
         assert provider.connected is False and provider.name is None
@@ -307,7 +308,7 @@ def test_an_existing_checkpoint_1_database_is_upgraded_without_touching_delibera
     assert status['sec_filings'] == 'BUILD_ONLY'                                        # a row someone had edited is left alone
     assert status['daily_closes'] == 'UNAVAILABLE'                                      # it claimed AVAILABLE with nothing stored
     assert status['live_quotes'] == 'PARTIAL_EXISTING' and status['treasury_total_return'] == 'UNAVAILABLE' and len(status) == len(capabilities.INITIAL)
-    assert lab.meta('capability_registry_version') == str(capabilities.REGISTRY_VERSION) == '3'
+    assert lab.meta('capability_registry_version') == str(capabilities.REGISTRY_VERSION) == '4'
     capabilities.seed(lab)
     assert {c['capability']: c['status'] for c in lab.capabilities()} == status
 
@@ -322,7 +323,7 @@ def test_no_capability_is_a_silent_stand_in_for_another():
 
 
 # ---------------------------------------------------------------- 70/30 benchmark
-def test_the_70_30_ruler_is_exactly_70_30_rebalanced_monthly_and_cannot_be_computed_yet(tmp_path):
+def test_the_70_30_ruler_is_exactly_70_30_rebalanced_monthly_and_computes_nothing_without_auction_records(tmp_path):
     lab = _lab(tmp_path)
     capabilities.seed(lab)
     benchmarks.seed(lab)
@@ -333,13 +334,18 @@ def test_the_70_30_ruler_is_exactly_70_30_rebalanced_monthly_and_cannot_be_compu
     assert definition['rebalancing'] == {'frequency': 'monthly', 'on': 'the first NYSE trading session of each calendar month', 'calendar': 'XNYS'}
     assert definition['rules'] == ['fixed weights', 'no tactical changes', 'the Firm cannot trade, optimize or alter this benchmark',
                                    'no retroactive asset substitution',
-                                   'while no clean Treasury-bill total-return data exists, the computation is unavailable']
-    assert definition['treasury_bill_series'] is None and row['implementation_status'] == 'DATA_SOURCE_PENDING'
+                                   'computed only under the frozen methodology; a data gap stops the series and nothing is filled in']
+    series = definition['treasury_bill_series']
+    assert series['methodology_sha256'] == benchmarks.TREASURY_METHODOLOGY['sha256'] and series['methodology_version'] == 1
+    assert 'not a market value' in series['valuation'] and 'price return' in definition['vti_leg'] and row['implementation_status'] == 'AUCTION_ACCRUAL_INDEX_V1'
     assert row['name'] == '70% VTI + 30% 3-month U.S. Treasury-bill total return'
-    with pytest.raises(CapabilityUnavailable, match='treasury_total_return: UNAVAILABLE'):
-        benchmarks.compute_fixed_70_30(lab)
+    empty = benchmarks.compute_fixed_70_30(lab)                                         # no VTI session and no auction record: nothing to compute
+    assert empty['status'] == 'DATA_GAP' and empty['stored'] == 0 and 'no completed VTI session' in empty['gap_reason']
     features.ingest_provider_daily_bars(lab, 'VTI', _bars([D(300) + D(i) for i in range(5)]), known_at=KNOWN)
     benchmarks.record_vti(lab, known_at=KNOWN)
+    still = benchmarks.compute_fixed_70_30(lab)
+    assert still['status'] == 'DATA_GAP' and still['stored'] == 0 and still['gap_reason'].startswith('NO_AUCTION_RECORD')
+    assert lab.capability('treasury_total_return') == 'UNAVAILABLE'
     with lab.connect() as db:                                                           # VTI data alone computes nothing for the 70/30 ruler
         assert db.execute("SELECT COUNT(*) FROM benchmark_observations WHERE benchmark_id='FIXED_70_30'").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM benchmark_observations WHERE benchmark_id='VTI_100'").fetchone()[0] == 5
@@ -438,7 +444,7 @@ def test_data_readiness_renders_truthfully_from_the_registry(tmp_path, capsys):
     section, rows = _ready_rows(html)
     assert '<h2>Data Readiness</h2>' in section and list(rows) == [label for label, *_ in capabilities.DATA_READINESS]
     assert ('<th>Data</th><th>Capability</th><th>Provider</th><th>Connection</th><th>Validation</th><th>Stored</th>'
-            '<th>Last successful ingest</th><th>Quality failures</th>') in section
+            '<th>Last successful ingest</th><th>Quality failures and flags</th>') in section
     expect = {'Daily closes': 'AVAILABLE', 'Fundamentals': 'UNAVAILABLE', 'Analyst estimates and revisions': 'UNAVAILABLE',
               'Earnings and transcripts': 'UNAVAILABLE', 'SEC filings': 'PARTIAL_EXISTING', 'General news': 'PARTIAL_EXISTING',
               'Intraday 1-minute bars': 'UNAVAILABLE', 'Historical trades and quotes': 'UNAVAILABLE', 'Live quotes and trades': 'PARTIAL_EXISTING', 'Order flow and microstructure': 'UNAVAILABLE',
@@ -446,15 +452,19 @@ def test_data_readiness_renders_truthfully_from_the_registry(tmp_path, capsys):
               'Corporate actions and dividends': 'UNAVAILABLE'}
     assert {k: v[0] for k, v in rows.items()} == expect
     chosen = {'Fundamentals': 'Sharadar', 'SEC filings': 'SEC EDGAR', 'Intraday 1-minute bars': 'Massive', 'Historical trades and quotes': 'Massive',
-              'Options chains': 'ThetaData', 'Options Greeks': 'ThetaData', 'Corporate actions and dividends': 'Sharadar'}
+              'Options chains': 'ThetaData', 'Options Greeks': 'ThetaData', 'Corporate actions and dividends': 'Sharadar',
+              'T-bill total return': 'U.S. Treasury Fiscal Data'}
     for label, (state, provider, limitation, required) in rows.items():
         assert limitation and required, label                                           # every row says what is wrong and what is needed
         cells = _ready_cells(html, label)
         if label in chosen:                                                             # chosen is not connected, and not a capability
-            assert provider == chosen[label] and cells['Connection'].startswith('NOT CONFIGURED'), label
-            assert 'Credentials or provider activation required' in cells['Connection'], label
+            assert provider == chosen[label], label
+            if label == 'T-bill total return':                                          # public data: ready, simply not run yet
+                assert cells['Connection'].startswith('CONFIGURED') and 'Public data, no credential. Not run yet.' in cells['Connection']
+            else:
+                assert cells['Connection'].startswith('NOT CONFIGURED') and 'Credentials or provider activation required' in cells['Connection'], label
             assert cells['Validation'].startswith('NOT RUN') and cells['Stored'].startswith('0') and 'nothing stored' in cells['Stored'], label
-            assert cells['Last successful ingest'] == 'never' and cells['Quality failures'] == 'none recorded' and state != 'AVAILABLE', label
+            assert cells['Last successful ingest'] == 'never' and cells['Quality failures and flags'] == 'none recorded' and state != 'AVAILABLE', label
         elif label != 'Daily closes':
             assert provider == 'none selected' and cells['Connection'].startswith('NOT SELECTED') and cells['Stored'].startswith('0'), label
     daily = _ready_cells(html, 'Daily closes')

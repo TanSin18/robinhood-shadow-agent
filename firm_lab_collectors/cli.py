@@ -6,6 +6,7 @@ Firm Lab research package and this package, and it writes only the Firm Lab data
     python -m firm_lab_collectors.cli massive    [--symbols ...] [--session-date YYYY-MM-DD] [--no-ticks] [--min-interval SECONDS]
     python -m firm_lab_collectors.cli sharadar   [--symbols AAPL,NVDA] [--years 3]
     python -m firm_lab_collectors.cli thetadata  [--symbols SPY,QQQ,NVDA] [--session-date YYYY-MM-DD] [--expiration YYYY-MM-DD]
+    python -m firm_lab_collectors.cli treasury   [--start YYYY-MM-DD]      # 13-week bill auctions, then the 70/30 ruler
 
 ``--path`` names the Firm Lab database (default: ~/LocalProjects/robinhood-diagnostics/firm_lab/firm_lab.db). It must exist
 already (``python -m firm_lab.cli init``). The registered database is never opened, and its location is never given here.
@@ -44,6 +45,7 @@ def main(argv=None, environ=None, transport=None) -> int:
     p.add_argument('--symbols')
     p.add_argument('--session-date')
     p.add_argument('--expiration')
+    p.add_argument('--start')
     p.add_argument('--days', type=int)
     p.add_argument('--years', type=int)
     p.add_argument('--max-filings', type=int)
@@ -59,9 +61,9 @@ def main(argv=None, environ=None, transport=None) -> int:
             options = {'symbols': tuple(s.strip().upper() for s in a.symbols.split(',') if s.strip()) if a.symbols else None,
                        'days': a.days, 'years': a.years, 'max_filings': a.max_filings, 'min_interval': a.min_interval,
                        'session_date': a.session_date if a.command == 'massive' else None, 'as_of': a.session_date if a.command == 'thetadata' else None,
-                       'expiration': a.expiration, 'ticks': False if a.no_ticks else None}
+                       'expiration': a.expiration, 'ticks': False if a.no_ticks else None, 'start': a.start}
             allowed = {'edgar': ('symbols', 'days', 'max_filings'), 'massive': ('symbols', 'session_date', 'ticks', 'min_interval'),
-                       'sharadar': ('symbols', 'years'), 'thetadata': ('symbols', 'as_of', 'expiration')}[a.command]
+                       'sharadar': ('symbols', 'years'), 'thetadata': ('symbols', 'as_of', 'expiration'), 'treasury': ('start',)}[a.command]
             chosen = {k: v for k, v in options.items() if k in allowed and v is not None}
             out['run'] = runner.RUNS[a.command](store, environ=environ, transport=transport, **chosen)
         out['status'] = _status(path, environ)

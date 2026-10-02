@@ -1,4 +1,4 @@
-# Firm Lab — research data stack (Checkpoint 3, 2026-10-02)
+# Firm Lab — research data stack (Checkpoint 3 and follow-ups, 2026-10-02)
 
 Checkpoint 3 answers one question: **can the raw data be trusted and reproduced?** It does not answer "what should
 we buy?". Nothing described here ranks, scores, selects or trades.
@@ -11,7 +11,7 @@ we buy?". Nothing described here ranks, scores, selects or trades.
 | Equity 1-minute bars, trades, NBBO quotes | Massive (formerly Polygon.io) | Adapter built. Needs an operator-purchased plan and key. |
 | Fundamentals, corporate actions | Sharadar | Adapter built. Needs an operator-purchased subscription and key. |
 | Options chains, provider Greeks | ThetaData | Adapter built. Needs an operator-purchased subscription and a running Theta Terminal. |
-| 3-month Treasury-bill total return | Official U.S. Treasury data | Methodology drafted (`treasury_bill_total_return_methodology.md`). Not approved. Nothing computed. |
+| 3-month Treasury-bill total return | Official U.S. Treasury data (Fiscal Data auction records) | Methodology approved and frozen 2026-10-02. Adapter, accrual index and 70/30 ruler built. Public data, no credential. |
 | Analyst estimates and revisions | none selected | `UNAVAILABLE`. No inferior substitute. |
 | General news | none selected | `PARTIAL_EXISTING` (Google News RSS stays advisory only). |
 | Earnings transcripts | none selected | `UNAVAILABLE`. Earnings-related SEC filings arrive with the filing index. |
@@ -45,7 +45,8 @@ hosts named in advance, no redirect to another host, a minimum interval between 
 retry. A failure comes back as a status and is recorded; it is not retried in a loop. Secret query values are
 removed from every URL before it is stored as a source id.
 
-Hosts: `www.sec.gov`, `data.sec.gov`, `api.massive.com`, `api.sharadar.com`, `data.nasdaq.com`, `127.0.0.1:25503`.
+Hosts: `www.sec.gov`, `data.sec.gov`, `api.massive.com`, `api.sharadar.com`, `data.nasdaq.com`, `127.0.0.1:25503`,
+`api.fiscaldata.treasury.gov`.
 
 ## Settings and credentials
 
@@ -77,6 +78,7 @@ python -m firm_lab_collectors.cli edgar      [--symbols SPY,VTI,SOXX,AAPL,NVDA] 
 python -m firm_lab_collectors.cli massive    [--symbols ...] [--session-date YYYY-MM-DD] [--no-ticks] [--min-interval SECONDS]
 python -m firm_lab_collectors.cli sharadar   [--symbols AAPL,NVDA] [--years 3]
 python -m firm_lab_collectors.cli thetadata  [--symbols SPY,QQQ,NVDA] [--session-date YYYY-MM-DD] [--expiration YYYY-MM-DD]
+python -m firm_lab_collectors.cli treasury   [--start YYYY-MM-DD]
 ```
 
 Each run: checks configuration (otherwise records `NOT_CONFIGURED` and fetches nothing); asks the provider through
@@ -95,16 +97,25 @@ evidence. One sample is judged as a whole: if any symbol's answer is refused, th
   SEC header is read (`<ACCEPTANCE-DATETIME>YYYYMMDDHHMMSS`, New York clock; from `<accession>.hdr.sgml`, or the
   `-index-headers.html` page when that file is absent). `accepted_timestamp` is the header time in UTC,
   `accepted_timestamp_raw` is the JSON text as sent, and `accepted_timestamp_basis` says which reading the JSON
-  matched. If the two disagree under both readings, or the header cannot be read, the response is refused.
+  matched.
+* **Rule since 2026-10-02 10:31 ET (operator decision): the header time is authoritative.** When the JSON agrees with
+  the header under neither reading, the filing is kept, not refused. Stored on every row: `accepted_timestamp_header`
+  (the header time in UTC, and the known-at Firm Lab uses; `accepted_timestamp` is the same value),
+  `accepted_timestamp_json` (the SEC's text exactly as sent, never rewritten), `acceptance_time_conflict` (true or
+  false) and `acceptance_time_json_offset_seconds`. A conflict is recorded in the run's data-quality record, counted
+  in the table summary and shown on `/firm-lab` as "Kept and flagged".
+* Still refused: a filing whose header cannot be read (`ACCEPTANCE_TIME_UNVERIFIED`), a JSON value that is not a
+  timestamp, a record whose known-at is not its header time or whose JSON text was altered, and every other check
+  that existed before.
 * HTTP 403 or 429 is recorded as unavailable and not retried. The collector sends at most five requests a second.
 * **First live run, 2026-10-02 10:23 ET (operator-run, 24 requests).** SPY, VTI and NVDA: 5 filings each accepted
   and stored (15 rows), every acceptance time verified against the filing header. The fund ticker file resolved VTI
   with its series and class. Both JSON conventions were seen in the same response: 13 values were true UTC and 2
   were the New York clock with a `Z`. SOXX and AAPL were **refused** (`ACCEPTANCE_TIME_CONFLICT`): for one filing
   each, filed 2026-10-01, the JSON value was exactly four hours later than the header time converted to UTC, which
-  fits neither reading. Nothing from those two answers was kept and the capability was not promoted. Whether the
-  SEC corrects such values later, and whether the header should be accepted alone in that case, is an operator
-  decision; the rule was not relaxed to make the sample pass.
+  fits neither reading. Nothing from those two answers was kept and the capability was not promoted. The operator
+  then decided the rule above; rows stored before it are left as they were (their new columns are empty) and the
+  same filings are stored again as new rows under the new rule.
 * Still not verified: the header file's availability for every form type.
 * Control A's advisory EDGAR reader is a different module and was not changed.
 
@@ -161,16 +172,32 @@ evidence. One sample is judged as a whole: if any symbol's answer is refused, th
 * Not verified: the v3 field names for end-of-day quotes and Greeks. Fields are read by name and a response missing
   a required field is refused.
 
+## U.S. Treasury auction records and the 70/30 ruler
+
+* Source: Fiscal Data, Treasury Securities Auctions Data, 13-week bills only. Public; no credential; one request per run.
+* Stored as published (text): CUSIP, auction, issue and maturity dates, high discount rate, price per $100, plus the
+  known-at the frozen methodology prescribes (5:00 p.m. New York time on the auction date).
+* Refused whole: a price that is not the official formula at six decimals, a term outside 80–100 days, a missing price
+  for an auction that has been held, another security type or term in the answer, a duplicate.
+* `firm_lab.benchmarks.compute_fixed_70_30` then builds the accrual index and the monthly-rebalanced 70/30 ruler from
+  what is stored, refuses unless the methodology file on disk has the approved hash, stops at the first gap, and never
+  changes an observation that is already stored.
+* A ruler only. Nothing reads it to rank, select or trade. See `treasury_bill_total_return_methodology.md` (frozen),
+  its `.APPROVAL.md` record and `treasury_index_implementation_note.md`.
+
 ## Storage
 
 Raw tables in the Firm Lab database, each row with provider, source id, source timestamp, known-at, ingested-at,
 schema version, content hash and run id: `filing_observations`, `intraday_bar_observations`, `trade_observations`,
-`quote_observations`, `fundamental_observations`, `corporate_action_observations`, `option_chain_observations`.
+`quote_observations`, `fundamental_observations`, `corporate_action_observations`, `option_chain_observations`,
+`treasury_auction_observations`.
 `provider_runs` records every request (including refused and unavailable ones, with the reasons);
 `provider_connections` records what is known about reaching each provider, never a credential.
 
 Rows are only inserted. The unique key includes the content hash, so an identical record is ignored on a repeat run
-and a changed record is kept beside the old one. There is still no order, fill, position, cash or portfolio table.
+and a changed record is kept beside the old one. The hash leaves out the fields that only say when Firm Lab fetched
+the record, so the same record fetched twice is the same record. The page counts distinct observations and says when
+earlier versions are stored beside them. There is still no order, fill, position, cash or portfolio table.
 
 ## What was deliberately not built
 

@@ -161,7 +161,9 @@ A yield series is not a total-return series. What each candidate actually is:
 | Kenneth French library RF | One-month bill return | WEAK FIT | One month, not three; about a month behind; use requires permission |
 | CRSP Treasury files | Risk-free series | NOT SUITABLE (access) | Institutional subscription; the 3-month series is a yield |
 
-**Treasury source selected: NO.** Computation available: NO. The ruler stays `DATA_SOURCE_PENDING`.
+**Treasury source selected (2026-10-02): YES — path (b), official Treasury auction records under the frozen
+methodology.** Computation: built; available once a validated auction sample is stored. (Before that decision this
+line read: source selected NO, ruler `DATA_SOURCE_PENDING`.)
 **Paths for an operator decision:** (a) license a 3-month bill total-return index; (b) build a series from
 official Treasury data under a written methodology; (c) explicitly redefine the 30% leg as a named fund.
 Calendar for "first NYSE trading session of each month": the NYSE holidays and hours page is the authority;

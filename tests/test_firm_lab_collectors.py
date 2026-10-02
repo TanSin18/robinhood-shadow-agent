@@ -18,6 +18,7 @@ from firm_lab.errors import FirmLabError, NoFillInBuildObserve
 from firm_lab.providers import OK, REJECTED, UNAVAILABLE
 from firm_lab.store import FORBIDDEN_TABLE_WORDS, FirmLabStore
 from firm_lab_collectors import cli, config, edgar, massive, runner, sharadar, thetadata
+from firm_lab_collectors import treasury as treasury_source
 from firm_lab_collectors.transport import HttpTransport, Response, TransportRefused, redact
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +47,8 @@ def _codes(result):
 class Fake:
     """Stands in for the network. ``routes`` is a list of (text the URL must contain, status, body); the first match answers."""
 
-    def __init__(self, routes):
-        self.routes, self.calls, self.requests = list(routes), [], 0
+    def __init__(self, routes, at=None):
+        self.routes, self.calls, self.requests, self.at = list(routes), [], 0, at or NOW
 
     def get(self, url, headers=None):
         self.requests += 1
@@ -55,8 +56,8 @@ class Fake:
         for key, status, body in self.routes:
             if key in url:
                 raw = body if isinstance(body, bytes) else body.encode() if isinstance(body, str) else json.dumps(body).encode()
-                return Response(status, raw if status == 200 else b'', redact(url), NOW.isoformat(), '' if status == 200 else f'HTTP {status}', {})
-        return Response(404, b'', redact(url), NOW.isoformat(), 'HTTP 404', {})
+                return Response(status, raw if status == 200 else b'', redact(url), self.at.isoformat(), '' if status == 200 else f'HTTP {status}', {})
+        return Response(404, b'', redact(url), self.at.isoformat(), 'HTTP 404', {})
 
 
 # ====================================================================================================== transport
@@ -118,9 +119,9 @@ def test_configuration_reports_booleans_only_and_refuses_a_user_agent_without_a_
     assert config.sec_user_agent(env) is None and config.sec_user_agent({}) is None
     assert config.sec_user_agent(AGENT) == 'Example Research research@example.com'
     states = config.states(env)
-    assert states == {'SEC EDGAR': False, 'Massive': True, 'Sharadar': False, 'ThetaData': False}
+    assert states == {'SEC EDGAR': False, 'Massive': True, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True}
     assert SECRET not in json.dumps(states) and all(isinstance(v, bool) for v in states.values())
-    assert config.states({}) == {'SEC EDGAR': False, 'Massive': False, 'Sharadar': False, 'ThetaData': False}
+    assert config.states({}) == {'SEC EDGAR': False, 'Massive': False, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True}
 
 
 # ====================================================================================================== SEC EDGAR
@@ -169,23 +170,127 @@ def test_edgar_acceptance_time_is_the_filing_header_converted_to_utc_whichever_w
     assert not {'text', 'body', 'summary', 'sentiment', 'score', 'tone'} & set(q)
 
 
-def test_edgar_refuses_a_filing_whose_two_time_sources_disagree_or_whose_header_cannot_be_read():
-    conflict = (('0001045810-26-000101', '10-Q', '2026-08-27', '20260827162015', '2026-08-27T18:20:15.000Z'),)
+# The two filings refused on the first live run (2026-10-02): the JSON time is the header time + 4 hours, matching neither reading.
+LIVE_CONFLICTS = {'SOXX': (('0001193125-26-410688', '497K', '2026-10-01', '20261001161641', '2026-10-02T00:16:41.000Z'),),
+                  'AAPL': (('0001140361-26-038307', '4', '2026-10-01', '20261001183011', '2026-10-02T02:30:11.000Z'),)}
+
+
+def test_edgar_header_is_authoritative_when_the_json_disagrees_and_the_json_value_is_kept():
+    conflict = (('0001045810-26-000101', '10-Q', '2026-08-27', '20260827162015', '2026-08-27T18:20:15.000Z'),) + NVDA_FILINGS[1:]
     _, result = _filings(_edgar_routes(conflict))
-    assert result.status == REJECTED and _codes(result) == ['ACCEPTANCE_TIME_CONFLICT'] and result.provenance is not None
-    with pytest.raises(FirmLabError):
-        result.records()                                                                # nothing is kept from a refused response
+    assert result.status == OK and not result.issues                                    # the filing is not discarded because the JSON disagrees
+    flagged, eastern, winter = result.records()
+    assert flagged['acceptance_time_conflict'] is True and flagged['accepted_timestamp_basis'] == edgar.BASIS_CONFLICT
+    assert flagged['accepted_timestamp_header'] == '2026-08-27T20:20:15+00:00'          # 16:20:15 New York, from the filing header
+    assert flagged['accepted_timestamp'] == flagged['accepted_timestamp_header']        # the known-at Firm Lab uses is the header time
+    assert flagged['accepted_timestamp_json'] == '2026-08-27T18:20:15.000Z' == flagged['accepted_timestamp_raw']      # exactly as the SEC sent it
+    assert flagged['acceptance_time_json_offset_seconds'] == -7200 and flagged['header_acceptance_raw'] == '20260827162015'
+    # no silent repair: the JSON value is not moved to agree with the header, and the header value is not moved toward the JSON
+    assert '18:20:15' in flagged['accepted_timestamp_json'] and '18:20:15' not in flagged['accepted_timestamp']
+    assert flagged['accepted_timestamp_json'] not in (flagged['accepted_timestamp'], '2026-08-27T20:20:15.000Z', '2026-08-27T16:20:15.000Z')
+    for agreeing, offset in ((eastern, -14400), (winter, 0)):                           # filings whose JSON agrees are not flagged
+        assert agreeing['acceptance_time_conflict'] is False and agreeing['acceptance_time_json_offset_seconds'] == offset
+        assert agreeing['accepted_timestamp'] == agreeing['accepted_timestamp_header'] and agreeing['accepted_timestamp_json'].endswith('Z')
+    assert edgar.EdgarFilingsProvider.reconcile('x', '2026-08-27T20:20:15.000Z', '20260827162015',
+                                                datetime(2026, 8, 27, 20, 20, 15, tzinfo=timezone.utc)) == (edgar.BASIS_UTC, False, 0)
+
+
+def test_edgar_still_refuses_what_it_cannot_verify_and_a_record_that_was_tampered_with():
     provider, result = _filings(_edgar_routes(headers=False))                           # neither the header file nor the header page exists
     assert result.status == REJECTED and _codes(result) == ['ACCEPTANCE_TIME_UNVERIFIED']
+    with pytest.raises(FirmLabError):
+        result.records()                                                                # nothing is kept from a refused response
     asked = [u for u, _ in provider.transport.calls if '0001045810-26-000101' in u]
     assert [u.rsplit('/', 1)[1] for u in asked] == ['0001045810-26-000101.hdr.sgml', '0001045810-26-000101-index-headers.html']
     bad_clock = (('0001045810-26-000101', '10-Q', '2026-08-27', '20261345996100', '2026-08-27T20:20:15.000Z'),)
     assert _codes(_filings(_edgar_routes(bad_clock))[1]) == ['ACCEPTANCE_TIME_UNVERIFIED']
+    not_a_time = (('0001045810-26-000101', '10-Q', '2026-08-27', '20260827162015', '2026-13-45T99:61:00.000Z'),)
+    assert _codes(_filings(_edgar_routes(not_a_time))[1]) == ['MALFORMED_FILING']       # a JSON value that is no time at all is still refused
     # the same header served as the filing's header page (HTML-escaped) is accepted
     page = _edgar_routes(NVDA_FILINGS[:1], headers=False) + [('0001045810-26-000101-index-headers.html', 200,
                                                              '<pre>&lt;SEC-HEADER&gt;\n&lt;ACCEPTANCE-DATETIME&gt;20260827162015\n</pre>')]
     _, result = _filings(page)
     assert result.status == OK and result.records()[0]['accepted_timestamp'] == '2026-08-27T20:20:15+00:00'
+    # validation itself refuses a record whose known-at is not the header time, or whose JSON text was rewritten
+    good = dict(result.records()[0])
+    check = lambda record: quality.validate('filings', [record], now=NOW, provenance=result.provenance, expected_instrument='NVDA').codes()
+    assert check(good) == []
+    assert check(dict(good, accepted_timestamp='2026-08-27T18:20:15+00:00')) == ['KNOWN_AT_NOT_HEADER']       # timed by the JSON instead of the header
+    assert check(dict(good, accepted_timestamp_json='2026-08-27T20:20:15+00:00')) == ['JSON_TIME_REWRITTEN']  # "tidied" JSON text
+    assert 'MISSING_FIELD' in check({k: v for k, v in good.items() if k != 'acceptance_time_conflict'})
+    assert 'VALUE_NOT_ALLOWED' in check(dict(good, acceptance_time_conflict='maybe'))
+
+
+def test_the_live_soxx_and_aapl_conflicts_are_now_accepted_flagged_and_visible(tmp_path):
+    lab = _lab(tmp_path)
+    tickers = dict(TICKERS, **{'2': {'cik_str': 1100663, 'ticker': 'SOXX', 'title': 'iShares Trust'}})
+    routes = [('company_tickers.json', 200, tickers)]
+    for symbol, cik in (('SOXX', 1100663), ('AAPL', 320193)):
+        routes += [r for r in _edgar_routes(LIVE_CONFLICTS[symbol], cik=cik, json_cik=str(cik)) if 'company_tickers' not in r[0]]
+    routes += [r for r in _edgar_routes() if 'company_tickers' not in r[0]]
+    report = runner.run_edgar(lab, symbols=('NVDA', 'SOXX', 'AAPL'), environ=AGENT, transport=Fake(routes), clock=CLOCK)
+    assert [(r['status'], r['stored'], r['flags']) for r in report['runs']] == [(OK, 3, {}), (OK, 1, {'ACCEPTANCE_TIME_CONFLICT': 1}),
+                                                                             (OK, 1, {'ACCEPTANCE_TIME_CONFLICT': 1})]
+    assert lab.capability('sec_filings') == 'AVAILABLE'                                 # every symbol of the sample ingested
+    stored = {r['instrument']: r for r in _rows(lab, 'filing_observations') if r['instrument'] != 'NVDA'}
+    soxx, aapl = stored['SOXX'], stored['AAPL']
+    assert soxx['accepted_timestamp_header'] == soxx['accepted_timestamp'] == '2026-10-01T20:16:41+00:00'      # 16:16:41 New York
+    assert soxx['accepted_timestamp_json'] == '2026-10-02T00:16:41.000Z' and soxx['acceptance_time_conflict'] == 'true'
+    assert aapl['accepted_timestamp_header'] == '2026-10-01T22:30:11+00:00' and aapl['accepted_timestamp_json'] == '2026-10-02T02:30:11.000Z'
+    assert soxx['acceptance_time_json_offset_seconds'] == aapl['acceptance_time_json_offset_seconds'] == '14400'
+    assert {r['acceptance_time_conflict'] for r in _rows(lab, 'filing_observations') if r['instrument'] == 'NVDA'} == {'false'}
+    # the conflict is in the data-quality record of the run ...
+    runs = {r['instrument']: json.loads(r['diagnostics_json']) for r in _rows(lab, 'provider_runs')}
+    assert runs['SOXX']['acceptance_time_conflicts'] == [{'accession_number': '0001193125-26-410688', 'form_type': '497K', 'filing_date': '2026-10-01',
+                                                         'accepted_timestamp_json': '2026-10-02T00:16:41.000Z',
+                                                         'accepted_timestamp_header': '2026-10-01T20:16:41+00:00', 'json_minus_header_seconds': 14400}]
+    assert runs['NVDA']['acceptance_time_conflicts'] == []
+    # ... in the summary, and on the page
+    assert rawstore.summary(lab)['filing_observations']['flags'] == {'ACCEPTANCE_TIME_CONFLICT': 2}
+    sec = _cells(firm_lab_page.render({'firm_lab': view.load(path=lab.path)}), 'SEC filings')
+    assert sec['Capability'] == 'AVAILABLE' and sec['Validation'].startswith('PASS') and sec['Stored'].startswith('5 ')
+    assert sec['Quality failures and flags'].startswith('Kept and flagged: ACCEPTANCE_TIME_CONFLICT × 2') and 'header time is used and both are stored' in sec['Quality failures and flags']
+    # known-at for anything that reads filings is the header time
+    with lab.connect() as db:
+        known = dict(db.execute("SELECT instrument, accepted_timestamp FROM filing_observations WHERE acceptance_time_conflict='true'").fetchall())
+    assert known == {'SOXX': '2026-10-01T20:16:41+00:00', 'AAPL': '2026-10-01T22:30:11+00:00'}
+
+
+def test_a_filing_table_from_the_first_live_run_is_extended_without_rewriting_its_rows(tmp_path):
+    path = tmp_path / 'diag' / 'firm_lab' / 'firm_lab.db'
+    path.parent.mkdir(parents=True)
+    db = sqlite3.connect(path)                                                           # the table exactly as the 2026-10-02 10:23 run left it
+    db.execute("CREATE TABLE filing_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, accession_number TEXT NOT NULL, "
+               "form_type TEXT NOT NULL, filing_date TEXT NOT NULL, report_date TEXT, accepted_timestamp TEXT NOT NULL, accepted_timestamp_raw TEXT NOT NULL, "
+               "accepted_timestamp_basis TEXT NOT NULL, header_acceptance_raw TEXT, url TEXT NOT NULL, primary_document TEXT, items TEXT, entity_name TEXT, "
+               "series_id TEXT, class_id TEXT, provider TEXT NOT NULL, source_id TEXT NOT NULL, source_timestamp TEXT NOT NULL, known_at TEXT NOT NULL, "
+               "ingested_at TEXT NOT NULL, schema_version TEXT NOT NULL, content_hash TEXT NOT NULL, run_id INTEGER NOT NULL, "
+               "UNIQUE (accession_number, instrument, content_hash))")
+    old = ('NVDA', '0001045810', '0001045810-26-000101', '10-Q', '2026-08-27', '2026-07-26', '2026-08-27T20:20:15+00:00', '2026-08-27T20:20:15.000Z',
+           edgar.BASIS_UTC, '20260827162015', 'https://www.sec.gov/x', 'doc0.htm', None, 'NVIDIA CORP', None, None, 'SEC EDGAR', 's', NOW.isoformat(),
+           NOW.isoformat(), NOW.isoformat(), 'firm-lab-data-v1', 'oldhash', 1)
+    db.execute('INSERT INTO filing_observations VALUES (NULL,' + ','.join('?' * len(old)) + ')', old)
+    db.commit()
+    db.close()
+    lab = FirmLabStore(path)
+    capabilities.seed(lab, NOW)
+    before = _rows(lab, 'filing_observations')[0]
+    assert before['accepted_timestamp_header'] is None and before['acceptance_time_conflict'] is None and before['content_hash'] == 'oldhash'      # not back-filled
+    with lab.connect() as db:
+        change = [json.loads(r[0]) for r in db.execute("SELECT payload_json FROM events WHERE kind='SCHEMA_CHANGE'") if 'columns' in json.loads(r[0])]
+    assert change == [{'table': 'filing_observations', 'change': 'columns added; existing rows not rewritten', 'rows_before': 1,
+                       'columns': ['accepted_timestamp_header', 'accepted_timestamp_json', 'acceptance_time_conflict', 'acceptance_time_json_offset_seconds']}]
+    runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes()), clock=CLOCK)
+    rows = _rows(lab, 'filing_observations')
+    assert len(rows) == 4 and rows[0] == before                                          # the old row is untouched; the new version sits beside it
+    summary = rawstore.summary(lab)['filing_observations']
+    assert summary['rows'] == 4 and summary['distinct'] == 3                             # four stored rows, three filings
+    sec = _cells(firm_lab_page.render({'firm_lab': view.load(path=lab.path)}), 'SEC filings')
+    assert sec['Stored'].startswith('3 ') and '4 stored rows including earlier versions' in sec['Stored']
+    # fetched again later: the same filings are recognised as the same records, whatever the fetch time
+    again = runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(), at=NOW + timedelta(hours=3)),
+                             clock=lambda: NOW + timedelta(hours=3))
+    assert again['runs'][0]['stored'] == 0 and again['runs'][0]['duplicates'] == 3 and len(_rows(lab, 'filing_observations')) == 4
 
 
 def test_edgar_refuses_malformed_filings_and_duplicate_accessions():
@@ -256,16 +361,18 @@ def test_edgar_sample_is_stored_with_provenance_promoted_on_evidence_and_taken_b
     assert event['to'] == 'AVAILABLE' and event['evidence']['records'] == 3 and event['evidence']['validation_passed'] is True
     assert event['evidence']['runs'][0]['instruments'] == ['NVDA'] and 'example.com' not in json.dumps(event)
     # the same sample again: identical rows are ignored, nothing is rewritten
-    again = runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes()), clock=lambda: NOW + timedelta(minutes=5))
+    later = NOW + timedelta(minutes=5)
+    again = runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(), at=later), clock=lambda: later)
     assert again['runs'][0]['stored'] == 0 and again['runs'][0]['duplicates'] == 3 and len(_rows(lab, 'filing_observations')) == 3
     assert lab.capability('sec_filings') == 'AVAILABLE'
     # a later sample that fails validation takes the capability back; the rows already stored are not touched
-    conflict = (('0001045810-26-000200', '8-K', '2026-09-30', '20260930170000', '2026-09-30T11:00:00.000Z'),)
-    bad = runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(conflict)), clock=lambda: NOW + timedelta(minutes=9))
-    assert bad['runs'][0]['status'] == REJECTED and bad['runs'][0]['issues'] == ['ACCEPTANCE_TIME_CONFLICT'] and bad['runs'][0]['stored'] == 0
+    unverifiable = (('0001045810-26-000200', '8-K', '2026-09-30', '20260930170000', '2026-09-30T21:00:00.000Z'),)
+    bad = runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(unverifiable, headers=False)),
+                           clock=lambda: NOW + timedelta(minutes=9))
+    assert bad['runs'][0]['status'] == REJECTED and bad['runs'][0]['issues'] == ['ACCEPTANCE_TIME_UNVERIFIED'] and bad['runs'][0]['stored'] == 0
     assert lab.capability('sec_filings') == 'PARTIAL_EXISTING' and len(_rows(lab, 'filing_observations')) == 3
     summary = rawstore.summary(lab)['filing_observations']
-    assert summary['rows'] == 3 and summary['rejected_issue_counts'] == {'ACCEPTANCE_TIME_CONFLICT': 1} and summary['last_run']['status'] == REJECTED
+    assert summary['rows'] == 3 and summary['rejected_issue_counts'] == {'ACCEPTANCE_TIME_UNVERIFIED': 1} and summary['last_run']['status'] == REJECTED
     assert summary['oldest'] == '2026-01-15T13:30:00+00:00' and summary['newest'] == '2026-08-27T20:21:01+00:00'
 
 
@@ -749,12 +856,12 @@ def _imports(path):
 def test_collectors_import_only_the_standard_library_and_the_research_package():
     files = sorted((ROOT / 'firm_lab_collectors').glob('*.py'))
     assert {f.name for f in files} == {'__init__.py', 'cli.py', 'config.py', 'edgar.py', 'massive.py', 'runner.py', 'sharadar.py', 'thetadata.py',
-                                       'transport.py'}
+                                       'transport.py', 'treasury.py'}
     for path in files:
         for level, name in _imports(path):
             top = name.split('.')[0]
             if level:                                                                    # a sibling module of this package
-                assert level == 1 and top in ('', 'config', 'edgar', 'massive', 'runner', 'sharadar', 'thetadata', 'transport'), (path.name, name)
+                assert level == 1 and top in ('', 'config', 'edgar', 'massive', 'runner', 'sharadar', 'thetadata', 'transport', 'treasury'), (path.name, name)
                 continue
             assert top in STDLIB_ALLOWED | {'firm_lab'}, f'{path.name} imports {name}'
             assert top not in TRADING_MODULES, f'{path.name} imports {name}'
@@ -779,8 +886,9 @@ def test_collectors_import_only_the_standard_library_and_the_research_package():
 
 
 def test_collectors_name_only_research_hosts_and_post_nothing():
-    hosts = set(edgar.HOSTS) | {massive.HOST, sharadar.DIRECT_HOST, sharadar.NASDAQ_HOST, thetadata.HOST}
-    assert hosts == {'www.sec.gov', 'data.sec.gov', 'api.massive.com', 'api.sharadar.com', 'data.nasdaq.com', '127.0.0.1:25503'}
+    hosts = set(edgar.HOSTS) | {massive.HOST, sharadar.DIRECT_HOST, sharadar.NASDAQ_HOST, thetadata.HOST, treasury_source.HOST}
+    assert hosts == {'www.sec.gov', 'data.sec.gov', 'api.massive.com', 'api.sharadar.com', 'data.nasdaq.com', '127.0.0.1:25503',
+                     'api.fiscaldata.treasury.gov'}
     for path in sorted((ROOT / 'firm_lab_collectors').glob('*.py')):
         source = path.read_text()
         for found in re.findall(r'https?://([A-Za-z0-9.\-:]+)', source):
@@ -814,9 +922,8 @@ def test_after_every_collector_ran_firm_lab_still_cannot_fill_and_holds_no_portf
     state = view.load(path=lab.path)
     assert state['fills'] == 0 and state['firm_trading_trial'] == 'NOT REGISTERED' and state['has_execution_tables'] is False
     assert state['october_research_stop_superseded'] == 'NO' and state['real_execution'] == 'DISABLED' and state['official_lane_b'] == 'PAUSED'
-    assert state['treasury_methodology'] == {'document': 'docs/firm_lab/treasury_bill_total_return_methodology.md',
-                                             'status': 'DRAFT_FOR_OPERATOR_REVIEW', 'computation': 'NOT_COMPUTED'}
-    assert lab.capability('treasury_total_return') == 'UNAVAILABLE'                      # the methodology is a draft: nothing is computed
+    assert state['treasury_methodology']['status'] == 'APPROVED_AND_FROZEN' and state['treasury_index'] is None
+    assert lab.capability('treasury_total_return') == 'UNAVAILABLE'                      # no auction record was ingested: nothing is computed
 
 
 def test_the_collector_command_never_opens_the_registered_database(tmp_path, capsys):
@@ -857,7 +964,7 @@ def test_data_readiness_shows_provider_connection_validation_and_what_is_stored(
     before = _cells(html, 'SEC filings')
     assert before['Provider'] == 'SEC EDGAR' and before['Capability'] == 'PARTIAL_EXISTING' and before['Connection'].startswith('NOT CONFIGURED')
     assert 'Credentials or provider activation required' in before['Connection'] and before['Validation'] == 'NOT RUN'
-    assert before['Stored'] == '0 nothing stored' and before['Last successful ingest'] == 'never' and before['Quality failures'] == 'none recorded'
+    assert before['Stored'] == '0 nothing stored' and before['Last successful ingest'] == 'never' and before['Quality failures and flags'] == 'none recorded'
     runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes()), clock=CLOCK)
     runner.run_massive(lab, environ={}, clock=CLOCK, session_date=DAY)                   # Massive has no key on this machine
     html = firm_lab_page.render({'firm_lab': view.load(path=lab.path)})
@@ -870,11 +977,16 @@ def test_data_readiness_shows_provider_connection_validation_and_what_is_stored(
     conflict = (('0001045810-26-000200', '8-K', '2026-09-30', '20260930170000', '2026-09-30T11:00:00.000Z'),)
     runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(conflict)), clock=lambda: NOW + timedelta(minutes=3))
     sec = _cells(firm_lab_page.render({'firm_lab': view.load(path=lab.path)}), 'SEC filings')
-    assert sec['Capability'] == 'PARTIAL_EXISTING' and sec['Validation'].startswith('FAIL') and 'ACCEPTANCE_TIME_CONFLICT' in sec['Validation']
-    assert sec['Quality failures'] == 'ACCEPTANCE_TIME_CONFLICT × 1' and sec['Stored'].startswith('3 ')
+    assert sec['Capability'] == 'AVAILABLE' and sec['Validation'].startswith('PASS') and sec['Stored'].startswith('4 ')      # kept, timed by its header
+    assert sec['Quality failures and flags'].startswith('Kept and flagged: ACCEPTANCE_TIME_CONFLICT × 1')
+    runner.run_edgar(lab, symbols=('NVDA',), environ=AGENT, transport=Fake(_edgar_routes(headers=False)), clock=lambda: NOW + timedelta(minutes=6))
+    sec = _cells(firm_lab_page.render({'firm_lab': view.load(path=lab.path)}), 'SEC filings')
+    assert sec['Capability'] == 'PARTIAL_EXISTING' and sec['Validation'].startswith('FAIL') and 'ACCEPTANCE_TIME_UNVERIFIED' in sec['Validation']
+    assert 'Kept and flagged: ACCEPTANCE_TIME_CONFLICT × 1' in sec['Quality failures and flags']
+    assert 'Refused: ACCEPTANCE_TIME_UNVERIFIED × 1' in sec['Quality failures and flags'] and sec['Stored'].startswith('4 ')
     treasury = _cells(html, 'T-bill total return')
-    assert treasury['Capability'] == 'UNAVAILABLE' and treasury['Provider'] == 'none selected' and treasury['Stored'] == '0 nothing stored'
-    assert 'methodology' in html[html.index('<b>T-bill total return</b>'):].split('</tr>')[1].lower()
+    assert treasury['Capability'] == 'UNAVAILABLE' and treasury['Provider'] == 'U.S. Treasury Fiscal Data' and treasury['Stored'] == '0 nothing stored'
+    assert treasury['Connection'].startswith('CONFIGURED') and 'frozen methodology' in html[html.index('<b>T-bill total return</b>'):].split('</tr>')[1].lower()
     for word in ('<form', '<svg', 'Trial 18', 'Trial 20', 'buy ', 'sell ', 'recommended'):
         assert word not in html, word
 
@@ -901,10 +1013,10 @@ def test_a_checkpoint_2_database_is_upgraded_in_place_without_losing_or_inventin
     capabilities.seed(lab, NOW)
     after = {c['capability']: c for c in lab.capabilities()}
     assert {k: after[k]['status'] for k in before} == before                             # the upgrade changes descriptions, never a status
-    assert 'Sharadar is chosen' in after['fundamentals']['detail'] and 'methodology is a draft' in after['treasury_total_return']['detail']
+    assert 'Sharadar is chosen' in after['fundamentals']['detail'] and 'approved and frozen' in after['treasury_total_return']['detail']
     assert after['options_chain']['provider'] is None and 'ThetaData is chosen and not connected' in after['options_chain']['detail']
     assert after['corporate_actions']['detail'] == 'Edited by the operator on purpose.'  # a deliberate edit is left alone
-    assert after['tick_trades_quotes']['status'] == 'UNAVAILABLE' and lab.meta('capability_registry_version') == '3'
+    assert after['tick_trades_quotes']['status'] == 'UNAVAILABLE' and lab.meta('capability_registry_version') == '4'
     assert not [c for c in after.values() if c['status'] == 'AVAILABLE']                 # nothing became available by upgrading
     capabilities.seed(lab, NOW)
     assert {c['capability']: (c['status'], c['detail']) for c in lab.capabilities()} == {k: (v['status'], v['detail']) for k, v in after.items()}

@@ -206,9 +206,10 @@ considerations, and the current status. Field names are those in `firm_lab/schem
 - **Historical depth:** back to the start of any comparison window.
 - **Live requirements:** none.
 - **Licensing and API:** the true index series are proprietary and restrict storage and redistribution.
-- **Current status:** `UNAVAILABLE`; the ruler's implementation status is `DATA_SOURCE_PENDING`. A construction
-  methodology from official Treasury auction data is drafted (`treasury_bill_total_return_methodology.md`) and
-  awaits operator approval. Nothing is computed.
+- **Current status:** `UNAVAILABLE` until a validated auction sample is stored and the index computes without a gap.
+  The construction methodology from official Treasury auction data (`treasury_bill_total_return_methodology.md`) was
+  approved and frozen by the operator on 2026-10-02; the index is an accrual between auction and maturity, not a
+  market value. See `research_data_stack.md`.
   Interface: `RiskFreeBenchmarkProvider`.
 
 ### 12. Corporate actions and dividends

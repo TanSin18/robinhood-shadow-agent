@@ -51,7 +51,8 @@ RAW_SCHEMA = (
     "CREATE TABLE IF NOT EXISTS filing_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, accession_number TEXT NOT NULL, "
     "form_type TEXT NOT NULL, filing_date TEXT NOT NULL, report_date TEXT, accepted_timestamp TEXT NOT NULL, accepted_timestamp_raw TEXT NOT NULL, "
     "accepted_timestamp_basis TEXT NOT NULL, header_acceptance_raw TEXT, url TEXT NOT NULL, primary_document TEXT, items TEXT, entity_name TEXT, "
-    "series_id TEXT, class_id TEXT, " + _PROV + ", UNIQUE (accession_number, instrument, content_hash))",
+    "series_id TEXT, class_id TEXT, accepted_timestamp_header TEXT, accepted_timestamp_json TEXT, acceptance_time_conflict TEXT, "
+    "acceptance_time_json_offset_seconds TEXT, " + _PROV + ", UNIQUE (accession_number, instrument, content_hash))",
     "CREATE TABLE IF NOT EXISTS intraday_bar_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, bar_start TEXT NOT NULL, "
     "bar_start_raw TEXT NOT NULL, interval TEXT NOT NULL, open TEXT NOT NULL, high TEXT NOT NULL, low TEXT NOT NULL, close TEXT NOT NULL, "
     "volume TEXT NOT NULL, vwap TEXT, trade_count TEXT, session TEXT NOT NULL, exchange_session_date TEXT NOT NULL, adjusted TEXT NOT NULL, "
@@ -80,9 +81,17 @@ RAW_SCHEMA = (
     "provider_implied_volatility TEXT, provider_delta TEXT, provider_gamma TEXT, provider_theta TEXT, provider_vega TEXT, provider_rho TEXT, "
     "greeks_provider TEXT, greeks_model TEXT, greeks_model_version TEXT, greeks_timestamp TEXT, underlying_price TEXT, underlying_timestamp TEXT, "
     + _PROV + ", UNIQUE (provider, contract_id, quote_timestamp, content_hash))",
+    # Treasury bill auction results exactly as published (text), for the 70/30 ruler's bill leg. A republished record with
+    # different values is a second row; the index then stops instead of choosing between them.
+    "CREATE TABLE IF NOT EXISTS treasury_auction_observations (id INTEGER PRIMARY KEY, cusip TEXT NOT NULL, security_type TEXT NOT NULL, "
+    "security_term TEXT NOT NULL, auction_date TEXT NOT NULL, issue_date TEXT NOT NULL, maturity_date TEXT NOT NULL, high_discount_rate TEXT NOT NULL, "
+    "price_per100 TEXT NOT NULL, closing_time_comp TEXT, reopening TEXT, original_security_term TEXT, record_date TEXT, result_known_at TEXT NOT NULL, "
+    "feed TEXT, " + _PROV + ", UNIQUE (provider, cusip, auction_date, content_hash))",
 )
+ADDED_COLUMNS = {'filing_observations': ('accepted_timestamp_header', 'accepted_timestamp_json', 'acceptance_time_conflict',
+                                         'acceptance_time_json_offset_seconds')}
 RAW_TABLES = ('filing_observations', 'intraday_bar_observations', 'trade_observations', 'quote_observations', 'fundamental_observations',
-              'corporate_action_observations', 'option_chain_observations')
+              'corporate_action_observations', 'option_chain_observations', 'treasury_auction_observations')
 # Names that must never appear as Firm Lab tables while the mode is BUILD_OBSERVE (checked by a test).
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'paper_account', 'cash', 'portfolio')
 
@@ -125,6 +134,17 @@ class FirmLabStore:
                                                              'provenance and model columns', 'rows_before': 0})))
             for stmt in RAW_SCHEMA:
                 db.execute(stmt)
+            # Columns added after a table was first created. Existing rows are left exactly as they were stored (the new
+            # columns stay empty on them); nothing is back-filled.
+            for table, columns in ADDED_COLUMNS.items():
+                have = {r[1] for r in db.execute(f'PRAGMA table_info({table})')}
+                missing = [c for c in columns if c not in have]
+                for column in missing:
+                    db.execute(f'ALTER TABLE {table} ADD COLUMN {column} TEXT')
+                if missing:
+                    db.execute('INSERT INTO events(at, kind, payload_json) VALUES (?,?,?)',
+                               (now, 'SCHEMA_CHANGE', canonical({'table': table, 'change': 'columns added; existing rows not rewritten',
+                                                                 'columns': missing, 'rows_before': db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]})))
             # The mode is set once, at creation. Nothing in this package can move it away from BUILD_OBSERVE.
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('mode', MODE_BUILD_OBSERVE, now))
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('schema_version', str(SCHEMA_VERSION), now))

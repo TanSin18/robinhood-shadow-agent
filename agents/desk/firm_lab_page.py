@@ -92,6 +92,7 @@ def _registry(fl):
             '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>')
 
 
+FLAG_NOTE = {'ACCEPTANCE_TIME_CONFLICT': ' (the SEC JSON time disagrees with the filing header; the header time is used and both are stored)'}
 CONNECTION_TONE = {'ACTIVE': 'good', 'CONFIGURED': 'warn', 'NOT CONFIGURED': 'stop', 'ERROR': 'stop', 'NOT SELECTED': 'neutral'}
 VALIDATION_TONE = {'PASS': 'good', 'FAIL': 'stop', 'INCOMPLETE': 'warn', 'NOT RUN': 'neutral'}
 
@@ -120,9 +121,16 @@ def _readiness(fl):
         validation = str(r.get('validation') or 'NOT RUN')
         count = int(r.get('observations') or 0)
         span = ' to '.join(x for x in (_stamp(r.get('oldest')), _stamp(r.get('newest'))) if x)
-        failures = r.get('failures') or {}
+        failures, flags = r.get('failures') or {}, r.get('flags') or {}
         issues = ', '.join(r.get('validation_issues') or [])
         sample = ' · '.join(f'{s.get("instrument")} {s.get("status")}' for s in (r.get('sample') or [])[:12])
+        rows = int(r.get('rows') or 0)
+        versions = f' · {rows:,} stored rows including earlier versions' if rows > count else ''
+        quality = []
+        if flags:                                             # rows that were kept, with what was flagged on them
+            quality.append('Kept and flagged: ' + '; '.join(f'{code} × {n}' for code, n in sorted(flags.items())) + FLAG_NOTE.get(next(iter(flags)), ''))
+        if failures:                                          # responses that were refused whole, over all runs
+            quality.append('Refused: ' + '; '.join(f'{code} × {n}' for code, n in sorted(failures.items())))
         body += (
             f'<tr><td data-label="Data"><b>{esc(r["domain"])}</b></td><td data-label="Capability">{_chip(r["status"])}</td>'
             f'<td data-label="Provider">{esc(provider) if provider else "none selected"}</td>'
@@ -130,10 +138,9 @@ def _readiness(fl):
             f'<span class="small fl-sub">{esc(r.get("connection_detail") or "")}</span></td>'
             f'<td data-label="Validation">{_tag(validation, VALIDATION_TONE, "neutral")}'
             f'<span class="small fl-sub">{esc(issues or sample)}</span></td>'
-            f'<td data-label="Stored"><b>{count:,}</b><span class="small fl-sub">{esc(span) if count else "nothing stored"}</span></td>'
+            f'<td data-label="Stored"><b>{count:,}</b><span class="small fl-sub">{esc(span + versions) if count else "nothing stored"}</span></td>'
             f'<td data-label="Last successful ingest">{esc(_stamp(r.get("last_successful_ingest")) or "never")}</td>'
-            f'<td data-label="Quality failures" class="small">'
-            f'{esc("; ".join(f"{code} × {n}" for code, n in sorted(failures.items()))) if failures else "none recorded"}</td></tr>'
+            f'<td data-label="Quality failures and flags" class="small">{esc(". ".join(quality)) if quality else "none recorded"}</td></tr>'
             f'<tr class="fl-ready-note"><td colspan="8" class="small"><b>Limitation.</b> <span class="fl-limit">{esc(r.get("limitation") or "")}</span> '
             f'<b>Required next.</b> <span class="fl-next">{esc(r.get("required_next") or "")}</span></td></tr>')
     cross = fl.get('sec_cross_check')
@@ -149,12 +156,13 @@ def _readiness(fl):
             '<div class="table-wrap"><table class="mini fl-ready"><colgroup><col class="fl-r1"><col class="fl-r2"><col class="fl-r3"><col class="fl-r4">'
             '<col class="fl-r5"><col class="fl-r6"><col class="fl-r7"><col></colgroup>'
             '<thead><tr><th>Data</th><th>Capability</th><th>Provider</th><th>Connection</th><th>Validation</th><th>Stored</th>'
-            '<th>Last successful ingest</th><th>Quality failures</th></tr></thead>'
+            '<th>Last successful ingest</th><th>Quality failures and flags</th></tr></thead>'
             f'<tbody>{body}</tbody></table></div>' + cross_note +
             '<p class="v10-note">Capability — AVAILABLE: stored data that passed validation. PARTIAL_EXISTING: a source exists elsewhere in the system but is '
             'not sufficient for, or not connected to, Firm Lab. BUILD_ONLY: storage exists and nothing reads it. UNAVAILABLE: no value is stored, estimated '
             'or filled in. Connection — NOT CONFIGURED: credentials or provider activation by the operator are required. Validation — PASS: every run of the '
-            'latest sample was accepted; FAIL: a response was refused whole and nothing from it was kept. Details: docs/firm_lab/data_sources.md and '
+            'latest sample was accepted; FAIL: a response was refused whole and nothing from it was kept. A flag marks rows that were kept with a '
+            'known disagreement between two sources; the value used and the value set aside are both stored. Details: docs/firm_lab/data_sources.md and '
             'docs/firm_lab/provider_matrix.md.</p>')
 
 
@@ -212,6 +220,7 @@ def _benchmarks(fl):
     if not rows:                                          # database not created yet: show the definitions it starts with
         rows = _view().defaults()['benchmarks']
     method = fl.get('treasury_methodology') or _view().defaults().get('treasury_methodology') or {}
+    index = fl.get('treasury_index')
     out = ''
     for b in rows:
         if b['benchmark_id'] == 'VTI_100':
@@ -226,23 +235,47 @@ def _benchmarks(fl):
             definition = b.get('definition') or {}
             rules = '; '.join(definition.get('rules') or [])
             rebalancing = definition.get('rebalancing')
+            series = b.get('series') or {}
+            bill, ruler = series.get('tbill_13w_accrual_index'), series.get('index_70_30_vti_price_return_basis')
+            frozen = method.get('status') == 'APPROVED_AND_FROZEN'
+            if not index:
+                computed = '<span class="cat cat-neutral">NOT COMPUTED</span> No auction record has been ingested yet.'
+            elif index.get('status') == 'OK':
+                computed = (f'<span class="cat cat-good">OK</span> through the {esc(index.get("last_session"))} session; '
+                            f'{esc(index.get("bills_stored", 0))} auction records stored, {esc(len(index.get("bills_used") or []))} bills held in turn, '
+                            f'{esc(len(index.get("rebalances") or []))} monthly rebalances.')
+            else:
+                computed = (f'<span class="cat cat-stop">{esc(index.get("status") or "DATA_GAP")}</span> stopped'
+                            + (f' from {esc(index.get("gap_date"))}' if index.get('gap_date') else '') + f': {esc(index.get("gap_reason") or "no reason recorded")}. '
+                              'Nothing is filled in.')
+            level = lambda s: esc(f'{_num(s["latest"][1], 6)} on the {s["latest"][0]} session (base {s["first"]} = 100; {s["observations"]:,} sessions)') if s else 'none'
             body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
                            ('Definition', f'<b>{esc(b.get("name"))}</b>'),
-                           ('Implementation status', f'<span class="cat cat-warn">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
-                           ('Treasury-bill data', 'Official U.S. Treasury auction and bill-rate data are the chosen inputs. A yield series is not a '
-                                                  'total return, and no fund or other asset stands in for the bill.'),
-                           ('Methodology', f'<span class="cat cat-warn">{esc(method.get("status", "DRAFT_FOR_OPERATOR_REVIEW"))}</span> '
-                                           f'{esc(method.get("document", ""))}. Not approved and not frozen.'),
-                           ('Computation', f'<span class="cat cat-neutral">{esc(method.get("computation", "NOT_COMPUTED"))}</span> '
-                                           'Nothing is calculated until the methodology is approved and frozen.'),
+                           ('Implementation status', f'<span class="cat cat-{"neutral" if frozen else "warn"}">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
+                           ('Treasury-bill data', 'Official U.S. Treasury 13-week bill auction records. Each bill enters at its auction price, is held to '
+                                                  'maturity and is rolled into the next. Between auction and maturity the value is an accrual, not a market price. No fund, '
+                                                  'yield series or other asset stands in for the bill.'),
+                           ('Methodology', f'<span class="cat cat-{"good" if frozen else "warn"}">{esc(method.get("status", "NOT_APPROVED"))}</span> '
+                                           f'{esc(method.get("document", ""))}'
+                                           + (f', version {esc(method.get("version"))}, approved {esc(_when(method.get("approved_at")))}. '
+                                              f'SHA-256 {esc(str(method.get("sha256"))[:16])}…. The frozen file is never edited; a change is a new version.'
+                                              if frozen else '. Not approved and not frozen.')),
+                           ('Computation', computed),
+                           ('13-week bill accrual index', level(bill)),
+                           ('70/30 level', level(ruler)),
+                           ('VTI leg', 'Price return. Dividends are not included until a validated dividend source exists, so this is not yet a total '
+                                       'return on the VTI side.'),
+                           ('Days uninvested', esc(len((index or {}).get('uninvested_days') or [])) + ' (a day with no 13-week bill to roll into earns nothing)'),
+                           ('Development base', 'The base date is the first stored VTI session. The ruler is rebased when a Firm trading trial is '
+                                                'registered; none is.'),
                            ('Rules', esc(rules[:1].upper() + rules[1:] + '.') if rules else 'not recorded'),
-                           ('Rebalancing', esc(f'{rebalancing.get("frequency")}, on {rebalancing.get("on")}') if isinstance(rebalancing, dict)
-                            and rebalancing.get('frequency') else 'not specified by the operator yet'),
+                           ('Rebalancing', esc(f'{rebalancing.get("frequency")}, on {rebalancing.get("on")}; no settlement lag, no transaction cost')
+                            if isinstance(rebalancing, dict) and rebalancing.get('frequency') else 'not specified by the operator yet'),
                            ('Defined by', esc(b.get('defined_by') or 'not recorded')),
-                           ('Observations stored', esc(b.get('observations') or 0))))
+                           ('Observations stored', esc(f'{sum(s["observations"] for s in series.values()):,}' if series else (b.get('observations') or 0)))))
             out += f'<article class="fl-bench"><h3>70/30</h3>{body}</article>'
     return (f'<div class="fl-benches">{out}</div><p class="v10-note">The Firm cannot trade a ruler, change it, or choose it after seeing results. '
-            'No outperformance figure is reported while Firm Lab is in BUILD / OBSERVE.</p>')
+            'These are rulers only: nothing reads them to rank, select or trade. No outperformance figure is reported while Firm Lab is in BUILD / OBSERVE.</p>')
 
 
 def render(state):

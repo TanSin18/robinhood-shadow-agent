@@ -4,16 +4,21 @@ Separate from Control A's advisory EDGAR reader, which is not touched.
 
 Acceptance time. The submissions API writes ``acceptanceDateTime`` as ``2024-11-01T10:01:36.000Z``, but that text is
 not reliably UTC: some responses carry the New York clock time with a ``Z`` on the end, sometimes mixed within one
-file. So the JSON value is never trusted on its own. For every filing kept, the filing's own SGML header is read
+file, and some recent filings carry a third value that matches neither reading (seen live on 2026-10-02: exactly
+four hours later than the header time). So the JSON value is never trusted. For every filing kept, the filing's own SGML header is read
 (``<ACCEPTANCE-DATETIME>YYYYMMDDHHMMSS``, the New York clock time EDGAR stamped; taken from the ``.hdr.sgml`` file, or
 from the filing's ``-index-headers.html`` page when that file is absent), and
 
-  * ``accepted_timestamp`` is that header time converted to UTC,
-  * ``accepted_timestamp_raw`` is the JSON text exactly as sent,
-  * ``accepted_timestamp_basis`` says which of the two readings the JSON text matched.
+  * ``accepted_timestamp_header`` is that header time converted to UTC. It is authoritative (operator rule, 2026-10-02);
+  * ``accepted_timestamp`` is the same value: the time Firm Lab treats the filing as known;
+  * ``accepted_timestamp_json`` (and ``accepted_timestamp_raw``) is the JSON text exactly as sent. It is never rewritten;
+  * ``acceptance_time_conflict`` is true when the JSON text agrees with the header under neither reading;
+  * ``acceptance_time_json_offset_seconds`` is the JSON text read as UTC minus the header time, for the record;
+  * ``accepted_timestamp_basis`` says in words which case applied.
 
-If the two disagree under both readings, or the header cannot be read, the response is refused: no acceptance
-time is guessed.
+A filing is not refused because the JSON disagrees: it is kept, flagged, and timed by its header. A filing whose
+header cannot be read is still refused, and so is a JSON value that is not a timestamp at all: no acceptance time is
+guessed.
 """
 from __future__ import annotations
 
@@ -38,6 +43,7 @@ JSON_TIME = re.compile(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d
 REQUIRED_ARRAYS = ('accessionNumber', 'filingDate', 'acceptanceDateTime', 'form', 'primaryDocument')
 BASIS_UTC = 'SGML header (New York clock) converted to UTC; the JSON text matched it read as UTC'
 BASIS_EASTERN = 'SGML header (New York clock) converted to UTC; the JSON text matched the New York clock with a Z on it'
+BASIS_CONFLICT = 'SGML header (New York clock) converted to UTC; the JSON text matched neither reading and is kept as sent'
 
 
 def _fail(response, what):
@@ -120,16 +126,22 @@ class EdgarFilingsProvider(FilingsProvider):
 
     @staticmethod
     def reconcile(accession, json_text, header_raw, header_utc):
-        """Which reading of the JSON text agrees with the header. Raises when neither does."""
+        """(basis, conflict, offset in seconds). The header is authoritative; the JSON text is only compared with it.
+        A JSON value that is not a timestamp at all is still refused."""
         match = JSON_TIME.match(str(json_text or ''))
         if not match:
             raise ProviderRejected([('MALFORMED_FILING', f'{accession}: acceptanceDateTime {json_text!r} is not in the expected form')])
         clock = ''.join(match.groups())
+        try:
+            as_utc = datetime.strptime(clock, '%Y%m%d%H%M%S').replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise ProviderRejected([('MALFORMED_FILING', f'{accession}: acceptanceDateTime {json_text!r} is not a real time')]) from None
+        offset = int((as_utc - header_utc).total_seconds())
         if clock == header_utc.strftime('%Y%m%d%H%M%S'):
-            return BASIS_UTC
+            return BASIS_UTC, False, offset
         if clock == header_raw:
-            return BASIS_EASTERN
-        raise ProviderRejected([('ACCEPTANCE_TIME_CONFLICT', f'{accession}: JSON says {json_text!r}, the filing header says {header_raw} New York time')])
+            return BASIS_EASTERN, False, offset
+        return BASIS_CONFLICT, True, offset
 
     # ---------------------------------------------------------------- the interface method
     def _fetch(self, method, *, instrument, start=None, end=None, limit=None, **_):
@@ -165,7 +177,7 @@ class EdgarFilingsProvider(FilingsProvider):
                 raise ProviderRejected([('MALFORMED_FILING', f'accession number {accession!r} is not in the expected form')], provenance)
             try:
                 header_raw, header_utc = self.header_time(cik, accession)
-                basis = self.reconcile(accession, recent['acceptanceDateTime'][i], header_raw, header_utc)
+                basis, conflict, offset = self.reconcile(accession, recent['acceptanceDateTime'][i], header_raw, header_utc)
             except ProviderRejected as error:
                 raise ProviderRejected(error.issues, provenance) from None
             document = str(recent['primaryDocument'][i] or '')
@@ -173,6 +185,8 @@ class EdgarFilingsProvider(FilingsProvider):
             records.append({
                 'instrument': str(instrument).upper(), 'cik': f'{cik:010d}', 'accession_number': accession, 'form_type': str(recent['form'][i]),
                 'filing_date': filed, 'report_date': optional('reportDate', i), 'accepted_timestamp': header_utc.isoformat(),
+                'accepted_timestamp_header': header_utc.isoformat(), 'accepted_timestamp_json': str(recent['acceptanceDateTime'][i]),
+                'acceptance_time_conflict': conflict, 'acceptance_time_json_offset_seconds': offset,
                 'accepted_timestamp_raw': str(recent['acceptanceDateTime'][i]), 'accepted_timestamp_basis': basis,
                 'header_acceptance_raw': header_raw, 'url': folder + document if document else folder + accession + '-index.htm',
                 'primary_document': document or None, 'items': optional('items', i), 'entity_name': data.get('name') or who.get('entity_name'),

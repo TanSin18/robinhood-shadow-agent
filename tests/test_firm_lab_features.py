@@ -286,11 +286,11 @@ def test_vti_ruler_is_defined_and_the_70_30_ruler_is_defined_but_waits_for_treas
     assert set(defs) == {'VTI_100', 'FIXED_70_30'}
     assert defs['VTI_100']['status'] == 'DEFINED' and json.loads(defs['VTI_100']['definition_json'])['weights'] == {'VTI': '1.00'}
     pending = defs['FIXED_70_30']
-    assert pending['status'] == 'DEFINED' and pending['implementation_status'] == 'DATA_SOURCE_PENDING'
+    assert pending['status'] == 'DEFINED' and pending['implementation_status'] == 'AUCTION_ACCRUAL_INDEX_V1'
     assert pending['name'] == '70% VTI + 30% 3-month U.S. Treasury-bill total return'
     definition = json.loads(pending['definition_json'])
     assert definition['weights'] == {'VTI': '0.70', 'US_TREASURY_BILL_3M_TOTAL_RETURN': '0.30'} and definition['allocation'] == 'fixed'
-    assert definition['treasury_bill_series'] is None                                                   # nothing chosen silently
+    assert definition['treasury_bill_series']['construction'].startswith('A:')                         # the operator-approved construction, by name
     assert definition['rebalancing'] == {'frequency': 'monthly', 'on': 'the first NYSE trading session of each calendar month', 'calendar': 'XNYS'}
     assert len(definition['rules']) == 5 and defs['VTI_100']['implementation_status'] == 'PRICE_RETURN_ONLY'
     features.ingest_provider_daily_bars(lab, 'VTI', _bars([D(300) + D(i) for i in range(5)]), known_at=KNOWN)
@@ -384,7 +384,7 @@ def test_view_reads_without_writing_and_reports_the_fixed_statuses(tmp_path, cap
     assert state['baseline']['selected_instrument'] == 'BBB' and state['baseline']['title'] == 'DEVELOPMENT COUNTERFACTUAL — NOT A PAPER TRADE'
     assert state['latest_session'] == '2026-09-30' and state['experiments'] == [] and state['database'].endswith('firm_lab/firm_lab.db')
     assert {b['benchmark_id']: b['status'] for b in state['benchmarks']} == {'VTI_100': 'DEFINED', 'FIXED_70_30': 'DEFINED'}
-    assert {b['benchmark_id']: b['implementation_status'] for b in state['benchmarks']} == {'VTI_100': 'PRICE_RETURN_ONLY', 'FIXED_70_30': 'DATA_SOURCE_PENDING'}
+    assert {b['benchmark_id']: b['implementation_status'] for b in state['benchmarks']} == {'VTI_100': 'PRICE_RETURN_ONLY', 'FIXED_70_30': 'AUCTION_ACCRUAL_INDEX_V1'}
     path.write_bytes(b'not a database')
     broken = view.load(path=path)
     assert broken['error'] and broken['mode'] is None and broken['fills'] == 0         # a broken file is never read as permission

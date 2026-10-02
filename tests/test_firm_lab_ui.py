@@ -118,7 +118,7 @@ def test_firm_lab_page_says_no_fills_before_the_database_exists():              
     assert '<b>Development data only. No Firm trading track record exists.</b>' in html
     assert '<dt>Firm fills</dt><dd><b>0</b>' in html and '<dt>Firm trading trial</dt><dd><b>NOT REGISTERED</b>' in html and 'Trial 18' not in html
     assert 'not created on this machine yet' in html and 'No baseline evaluation is recorded yet.' in html
-    assert '70% VTI + 30% 3-month U.S. Treasury-bill total return' in html and '>DATA_SOURCE_PENDING</span>' in html
+    assert '70% VTI + 30% 3-month U.S. Treasury-bill total return' in html and '>AUCTION_ACCRUAL_INDEX_V1</span>' in html
     assert 'DEFINITION PENDING' not in html and firm_lab_page.WARNING in html and 'any registered Firm trading trial' in firm_lab_page.WARNING
     assert '<form' not in html and '<button' not in html and '<input' not in html and 'style=' not in html
     assert html == firm_lab_page.render({})                                             # no state at all: same honest page
@@ -148,10 +148,11 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
         assert rows[name] == 'UNAVAILABLE', name
     assert rows['Options strategy'] == 'NOT_STARTED' and rows['ML ranker'] == 'NOT_STARTED' and rows['Options chains'] == 'BUILD_ONLY'
     assert rows['Live quotes and trades'] == rows['General news'] == rows['SEC filings'] == 'PARTIAL_EXISTING'
-    assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>DATA_SOURCE_PENDING</span>' in html
-    assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'no fund or other asset stands in for the bill' in html
-    assert '>DRAFT_FOR_OPERATOR_REVIEW</span>' in html and '>NOT_COMPUTED</span>' in html and 'Not approved and not frozen' in html
-    assert '<dt>Rebalancing</dt><dd>monthly, on the first NYSE trading session of each calendar month</dd>' in html
+    assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>AUCTION_ACCRUAL_INDEX_V1</span>' in html
+    assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'No fund, yield series or other asset stands in for the bill' in html
+    assert '>APPROVED_AND_FROZEN</span>' in html and '>NOT COMPUTED</span>' in html and 'SHA-256 c954c81b330aa3d4' in html
+    assert 'The frozen file is never edited' in html and 'nothing reads them to rank, select or trade' in html
+    assert '<dt>Rebalancing</dt><dd>monthly, on the first NYSE trading session of each calendar month; no settlement lag, no transaction cost</dd>' in html
     assert '<dt>Observations stored</dt><dd>0</dd>' in html and 'Trial 18' not in html
     lowered = html.lower()
     for word in ('alpha', 'outperform', 'beat the market', 'bought ', 'paper trade placed', 'profit'):

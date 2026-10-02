@@ -17,11 +17,25 @@ from .store import RAW_TABLES, canonical, now_utc
 
 DOMAIN_TABLE = {'filings': 'filing_observations', 'intraday_bars': 'intraday_bar_observations', 'trades': 'trade_observations',
                 'quotes': 'quote_observations', 'fundamentals': 'fundamental_observations', 'corporate_actions': 'corporate_action_observations',
-                'options_chain': 'option_chain_observations'}
+                'options_chain': 'option_chain_observations', 'treasury_auctions': 'treasury_auction_observations'}
 # The column that says when the observation is about, used for "oldest" and "newest".
 TIME_COLUMN = {'filing_observations': 'accepted_timestamp', 'intraday_bar_observations': 'bar_start', 'trade_observations': 'trade_timestamp',
                'quote_observations': 'quote_timestamp', 'fundamental_observations': 'period_end', 'corporate_action_observations': 'effective_date',
-               'option_chain_observations': 'quote_timestamp'}
+               'option_chain_observations': 'quote_timestamp', 'treasury_auction_observations': 'auction_date'}
+# What makes two rows "the same observation". A changed record is stored as a further row with the same key.
+NATURAL_KEY = {'filing_observations': ('instrument', 'accession_number'),
+               'intraday_bar_observations': ('provider', 'instrument', 'bar_start', 'interval', 'adjusted'),
+               'trade_observations': ('provider', 'instrument', 'exchange', 'trade_id', 'trade_timestamp_raw'),
+               'quote_observations': ('provider', 'instrument', 'quote_timestamp_raw', 'sequence_number'),
+               'fundamental_observations': ('provider', 'instrument', 'dimension', 'period_end', 'filing_date', 'metric'),
+               'corporate_action_observations': ('provider', 'instrument', 'provider_action', 'effective_date', 'contra_instrument'),
+               'option_chain_observations': ('provider', 'contract_id', 'quote_timestamp'),
+               'treasury_auction_observations': ('cusip', 'auction_date')}
+# Fields that say when Firm Lab fetched a record, not what the record is. Left out of the content hash, so the same
+# record fetched twice is recognised as the same record.
+VOLATILE_FIELDS = ('ingestion_timestamp', 'known_at')
+# Data-quality flags on rows that were kept: (table, flag, column, value meaning "flagged").
+ROW_FLAGS = (('filing_observations', 'ACCEPTANCE_TIME_CONFLICT', 'acceptance_time_conflict', 'true'),)
 PROVENANCE_COLUMNS = ('provider', 'source_id', 'source_timestamp', 'known_at', 'ingested_at', 'schema_version', 'content_hash', 'run_id')
 CONNECTION_STATES = ('NOT_SELECTED', 'NOT_CONFIGURED', 'CONFIGURED', 'ACTIVE', 'ERROR')
 _VENDOR_GREEK = re.compile(r'^([a-z][a-z0-9]*)_provider_(' + '|'.join(GREEKS) + ')$')
@@ -102,7 +116,7 @@ def store_result(store, provider, result, *, started_at, batch=None, instrument=
             sql = f'INSERT OR IGNORE INTO {table} ({", ".join(names)}) VALUES ({", ".join("?" * len(names))})'
             for record in records:
                 values = _row(record, columns, provider) + [provider, prov.source_id, prov.source_timestamp, prov.known_at, at, prov.schema_version,
-                                                           content_hash(record), run_id]
+                                                           content_hash({k: v for k, v in record.items() if k not in VOLATILE_FIELDS}), run_id]
                 inserted = db.execute(sql, values).rowcount
                 stored += inserted
                 duplicates += 1 - inserted
@@ -150,13 +164,22 @@ def summary_db(db) -> dict:
             for (text,) in db.execute(f"SELECT issues_json FROM provider_runs WHERE domain IN ({marks}) AND status='REJECTED'", domains):
                 for issue in json.loads(text or '[]'):
                     failures[issue['code']] = failures.get(issue['code'], 0) + 1
-            instruments = db.execute(f'SELECT COUNT(DISTINCT {"contract_id" if table == "option_chain_observations" else "instrument"}) '
-                                     f'FROM {table}').fetchone()[0]
+            subject = {'option_chain_observations': 'contract_id', 'treasury_auction_observations': 'cusip'}.get(table, 'instrument')
+            instruments = db.execute(f'SELECT COUNT(DISTINCT {subject}) FROM {table}').fetchone()[0]
+            distinct = db.execute(f'SELECT COUNT(*) FROM (SELECT DISTINCT {", ".join(NATURAL_KEY[table])} FROM {table})').fetchone()[0]
+            flags = {}
+            for flagged_table, flag, column, value in ROW_FLAGS:
+                if flagged_table == table:
+                    key = ' || char(31) || '.join(f"COALESCE({c}, '')" for c in NATURAL_KEY[table])
+                    n = db.execute(f'SELECT COUNT(DISTINCT {key}) FROM {table} WHERE {column}=?', (value,)).fetchone()[0]
+                    if n:
+                        flags[flag] = n
             batch = []
             if last:
                 for domain in domains:
                     batch += [{k: v for k, v in run.items() if k != 'provenance'} | {'domain': domain} for run in latest_batch(db, last[4], domain)]
-            out[table] = {'rows': rows, 'instruments': instruments, 'oldest': oldest, 'newest': newest, 'last_batch': batch,
+            out[table] = {'rows': rows, 'distinct': distinct, 'flags': flags, 'instruments': instruments, 'oldest': oldest, 'newest': newest,
+                          'last_batch': batch,
                           'last_successful_ingest': last_ok[0] if last_ok else None,
                           'last_run': None if not last else {'status': last[0], 'reason': last[1], 'finished_at': last[3], 'provider': last[4],
                                                              'issues': sorted({i['code'] for i in json.loads(last[2] or '[]')})},

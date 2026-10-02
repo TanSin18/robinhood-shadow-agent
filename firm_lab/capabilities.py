@@ -16,8 +16,9 @@ PARTIAL_EXISTING, BLOCKED = 'PARTIAL_EXISTING', 'BLOCKED'
 # PARTIAL_EXISTING: a source exists somewhere in the system but is not sufficient for, or not connected to, Firm Lab.
 # BLOCKED: no candidate provider can supply it cleanly.
 STATUSES = (AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY, PARTIAL_EXISTING, BLOCKED)
-REGISTRY_VERSION = 3
+REGISTRY_VERSION = 4
 CONTROL_A_CLOSES = 'Robinhood read gateway, as recorded by Control A'
+TREASURY_PROVIDER = 'U.S. Treasury Fiscal Data'
 
 # (capability, status, provider, detail). Edited only by a deliberate change here, never inferred at run time.
 # daily_closes and daily_baseline_features start UNAVAILABLE and are promoted only when stored data passes validation.
@@ -51,8 +52,8 @@ INITIAL = (
      'Control A reads bid/ask snapshots during its own runs. There is no streaming feed and no trade data, and Firm Lab ingests none.'),
     ('options_greeks', UNAVAILABLE, None, 'ThetaData is chosen and not connected. No provider-supplied Greeks or implied volatility are stored; none is estimated.'),
     ('treasury_total_return', UNAVAILABLE, None,
-     'Official U.S. Treasury auction and bill-rate data are the chosen inputs. The construction methodology is a draft awaiting operator '
-     'approval, so nothing is computed. A yield series is not a total return.'),
+     'Official U.S. Treasury 13-week bill auction records are the input. The construction methodology is approved and frozen; the index is '
+     'an accrual between auction and maturity, not a market value. A yield series is not a total return. No auction record is stored yet.'),
     ('corporate_actions', UNAVAILABLE, None,
      'Sharadar is chosen; it is not connected and nothing is stored. Stored closes are split-adjusted by their provider; dividends, spin-offs, '
      'symbol changes, mergers and delistings are not recorded, so nothing here is a total return.'),
@@ -68,7 +69,10 @@ PROVIDER_PLAN = {
     'corporate_actions': ('Sharadar', ('corporate_actions',), 'an operator-purchased subscription and API key'),
     'options_chain': ('ThetaData', ('options_chain',), 'an operator-purchased subscription and a running Theta Terminal'),
     'options_greeks': ('ThetaData', ('options_chain',), 'a ThetaData tier that includes implied volatility and Greeks'),
+    'treasury_total_return': (TREASURY_PROVIDER, ('treasury_auctions',), 'nothing: public data, no credential'),
 }
+# Providers that need no credential: before their first run they are ready, not "not configured".
+NO_CREDENTIAL_PROVIDERS = (TREASURY_PROVIDER,)
 NOT_SELECTED = {
     'analyst_revisions': 'No provider selected: no inferior substitute is connected.',
     'earnings_transcripts': 'Deferred until storage and licensing terms are settled. EDGAR event times arrive with SEC filings.',
@@ -76,7 +80,6 @@ NOT_SELECTED = {
     'trade_flow': 'Needs validated trades and quotes first.',
     'order_book': 'Depth provider (Databento) deliberately not connected yet.',
     'live_quotes': 'No streaming feed selected; Control A’s run-time snapshots only.',
-    'treasury_total_return': 'Official U.S. Treasury data; construction methodology drafted, not yet approved.',
     'daily_closes': '',
 }
 # Registry version 3 (research data stack chosen, 2026-10-01): the description of these rows changes, their status does not.
@@ -95,6 +98,11 @@ V2_TEXT = {
     'corporate_actions': (None, 'Stored closes are split-adjusted by the provider. Dividends, spin-offs, symbol changes, mergers and delistings are not '
                                 'recorded, so nothing here is a total return.'),
 }
+# Registry version 4 (Treasury methodology approved and frozen, 2026-10-02): one description changes, no status does.
+V3_TEXT = {
+    'treasury_total_return': (None, 'Official U.S. Treasury auction and bill-rate data are the chosen inputs. The construction methodology is a draft '
+                                    'awaiting operator approval, so nothing is computed. A yield series is not a total return.'),
+}
 # Registry versions: (capability, status it must currently have, new status). Each is applied once to an existing database.
 CHANGES_V2 = (('news_catalysts', NOT_STARTED, PARTIAL_EXISTING), ('sec_filings', NOT_STARTED, PARTIAL_EXISTING))
 
@@ -112,7 +120,7 @@ DATA_READINESS = (
     ('Order flow and microstructure', 'trade_flow', 'Tick trades and quotes (to sign trades) and, for book imbalance, depth data.'),
     ('Options chains', 'options_chain', 'Operator access to ThetaData (subscription and a running Theta Terminal), then a small validated sample.'),
     ('Options Greeks', 'options_greeks', 'A ThetaData tier with implied volatility and Greeks. Stored under the vendor’s name with its model; never as a bare Greek.'),
-    ('T-bill total return', 'treasury_total_return', 'Operator review and approval of the construction methodology. Nothing is computed before it is frozen; a yield series does not qualify.'),
+    ('T-bill total return', 'treasury_total_return', 'A hand-started auction sample, then the accrual index under the frozen methodology. A ruler only; a yield series does not qualify.'),
     ('Corporate actions and dividends', 'corporate_actions', 'Operator access to Sharadar, then a small validated sample of raw events. This source gives no announcement time.'),
 )
 READINESS_KEYS = tuple(c for _, c, _ in DATA_READINESS)
@@ -202,6 +210,14 @@ def seed(store, now=None):
             status, provider, detail = initial[capability]
             if row and row['status'] == status and (row['provider'], row['detail']) == before:
                 set_status(store, capability, status, provider, detail, now, reason='registry version 3: research data stack chosen')
+    if version < 4:
+        rows = {c['capability']: c for c in store.capabilities()}
+        initial = {c: (s, p, d) for c, s, p, d in INITIAL}
+        for capability, before in V3_TEXT.items():
+            row = rows.get(capability)
+            status, provider, detail = initial[capability]
+            if row and row['status'] == status and (row['provider'], row['detail']) == before:
+                set_status(store, capability, status, provider, detail, now, reason='registry version 4: Treasury methodology approved and frozen')
     if version < REGISTRY_VERSION:
         store.set_meta('capability_registry_version', REGISTRY_VERSION, now)
     confirm_daily_data(store, now)
@@ -248,6 +264,15 @@ def confirm_provider_data(store, now=None):
                                     'AND greeks_provider IS NOT NULL AND greeks_model IS NOT NULL', (provider,)).fetchone()[0]
                 problem = '' if greeks else 'no provider Greeks stored with their model named'
                 rows = greeks
+            if capability == 'treasury_total_return' and not problem:
+                # Auction records alone are not a total return: the index must have been computed, without a gap, under the frozen methodology.
+                state = db.execute("SELECT value FROM firm_meta WHERE key='treasury_index_status'").fetchone()
+                state = json.loads(state[0]) if state else {}
+                observations = db.execute("SELECT COUNT(*) FROM benchmark_observations WHERE kind='tbill_13w_accrual_index'").fetchone()[0]
+                if state.get('status') != 'OK':
+                    problem = 'the bill index is not computed' if not state else f'the bill index stopped: {state.get("gap_reason") or state.get("status")}'
+                elif not observations:
+                    problem = 'no bill-index observation is stored'
             evidence[capability] = (provider, rows, proof, problem)
     for capability, (provider, rows, proof, problem) in evidence.items():
         status_now = current.get(capability, {}).get('status')

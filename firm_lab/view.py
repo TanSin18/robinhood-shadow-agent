@@ -16,7 +16,7 @@ def readiness(capability_rows, raw=None, daily=None) -> list:
     """The Data Readiness rows: one per data domain, in a fixed order. For each: the registry status, the chosen
     provider, what is known about the connection, the validation record and what is actually stored.
     ``raw`` is ``rawstore.summary_db``'s result; ``daily`` describes the stored daily closes."""
-    from .capabilities import DATA_READINESS, NOT_SELECTED, PROVIDER_PLAN
+    from .capabilities import DATA_READINESS, NO_CREDENTIAL_PROVIDERS, NOT_SELECTED, PROVIDER_PLAN
     from .rawstore import DOMAIN_TABLE
     by = {c['capability']: c for c in capability_rows}
     raw = raw or {}
@@ -27,7 +27,8 @@ def readiness(capability_rows, raw=None, daily=None) -> list:
         item = {'domain': label, 'capability': capability, 'status': row.get('status') or 'UNAVAILABLE', 'source': row.get('provider'),
                 'limitation': row.get('detail') or 'Not in the registry: treated as unavailable.', 'required_next': required_next,
                 'provider': None, 'connection': 'NOT SELECTED', 'connection_detail': NOT_SELECTED.get(capability, ''), 'validation': 'NOT RUN',
-                'validation_issues': [], 'sample': [], 'last_successful_ingest': None, 'observations': 0, 'oldest': None, 'newest': None, 'failures': {}}
+                'validation_issues': [], 'sample': [], 'last_successful_ingest': None, 'observations': 0, 'rows': 0, 'oldest': None, 'newest': None,
+                'failures': {}, 'flags': {}}
         if capability == 'daily_closes':
             daily = daily or {}
             item.update(provider='Control A’s recorded closes (read-only)', connection='ACTIVE' if daily.get('rows') else 'NOT CONFIGURED',
@@ -56,12 +57,19 @@ def readiness(capability_rows, raw=None, daily=None) -> list:
             else:
                 validation = 'NOT RUN'                        # the provider did not answer, so nothing was validated
             stamps = [x for t in tables for x in (t.get('oldest'), t.get('newest')) if x]
-            item.update(provider=provider, connection=(link.get('state') or 'NOT_CONFIGURED').replace('_', ' '),
-                        connection_detail=link.get('detail') or f'Credentials or provider activation required: {needs}.', validation=validation,
+            flags = {}
+            for t in tables:
+                for code, n in (t.get('flags') or {}).items():
+                    flags[code] = flags.get(code, 0) + n
+            open_source = provider in NO_CREDENTIAL_PROVIDERS
+            item.update(provider=provider, connection=(link.get('state') or ('CONFIGURED' if open_source else 'NOT_CONFIGURED')).replace('_', ' '),
+                        connection_detail=link.get('detail') or ('Public data, no credential. Not run yet.' if open_source else
+                                                                 f'Credentials or provider activation required: {needs}.'),
+                        flags=flags, rows=sum(t.get('rows', 0) for t in tables), validation=validation,
                         validation_issues=sorted({c for r in runs for c in r.get('issues') or [] if r['status'] == 'REJECTED'}),
                         sample=[{'instrument': r['instrument'], 'domain': r['domain'], 'status': r['status'], 'reason': r['reason']} for r in runs],
                         last_successful_ingest=max((t.get('last_successful_ingest') for t in tables if t.get('last_successful_ingest')), default=None),
-                        observations=sum(t.get('rows', 0) for t in tables), oldest=min(stamps) if stamps else None,
+                        observations=sum(t.get('distinct', t.get('rows', 0)) for t in tables), oldest=min(stamps) if stamps else None,
                         newest=max(stamps) if stamps else None, failures=failures)
         out.append(item)
     return out
@@ -90,7 +98,12 @@ def load(official_db=None, path=None) -> dict:
         cf = one('SELECT timestamp, exchange_session_date, candidates_json, selected_instrument, provenance_json, label, record_hash FROM '
                  'counterfactual_decisions WHERE strategy_id=? ORDER BY id DESC LIMIT 1', (STRATEGY_ID,))
         ingest = one('SELECT finished_at, status, detail_json FROM ingest_runs ORDER BY id DESC LIMIT 1')
-        benchmarks = [{'benchmark_id': b, 'name': n, 'status': s, 'note': note, 'implementation_status': impl,
+        series = lambda b: {kind: {'observations': n, 'first': first, 'latest': [last, one('SELECT value FROM benchmark_observations WHERE benchmark_id=? '
+                                                                                      'AND kind=? AND exchange_session_date=? ORDER BY id DESC LIMIT 1',
+                                                                                      (b, kind, last))[0]]}
+                            for kind, n, first, last in db.execute('SELECT kind, COUNT(*), MIN(exchange_session_date), MAX(exchange_session_date) FROM '
+                                                                   'benchmark_observations WHERE benchmark_id=? GROUP BY kind', (b,)).fetchall()}
+        benchmarks = [{'benchmark_id': b, 'name': n, 'status': s, 'note': note, 'implementation_status': impl, 'series': series(b),
                        'definition': json.loads(d) if d else None, 'defined_by': by,
                        'observations': one('SELECT COUNT(*) FROM benchmark_observations WHERE benchmark_id=?', (b,))[0],
                        'latest': one('SELECT exchange_session_date, value FROM benchmark_observations WHERE benchmark_id=? '
@@ -118,7 +131,7 @@ def load(official_db=None, path=None) -> dict:
                                              'selected_instrument': cf[3], 'provenance': json.loads(cf[4]), 'label': cf[5], 'record_hash': cf[6]},
             'counterfactuals': one('SELECT COUNT(*) FROM counterfactual_decisions')[0],
             'capabilities': capability_rows, 'data_readiness': readiness(capability_rows, raw, daily), 'raw': raw, 'sec_cross_check': cross,
-            'treasury_methodology': dict(TREASURY_METHODOLOGY),
+            'treasury_methodology': dict(TREASURY_METHODOLOGY), 'treasury_index': json.loads(meta['treasury_index_status']) if meta.get('treasury_index_status') else None,
             'capability_registry_version': meta.get('capability_registry_version', '1'),
             'benchmarks': benchmarks,
             'experiments': [{'experiment_id': e, 'name': n, 'status': s} for e, n, s in db.execute('SELECT experiment_id, name, status FROM experiment_registry')],

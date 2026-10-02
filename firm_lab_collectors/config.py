@@ -40,4 +40,5 @@ def states(environ=None) -> dict:
     """Which providers are configured. Booleans only: no value, length or fragment of any setting is returned."""
     return {'SEC EDGAR': bool(sec_user_agent(environ)), 'Massive': bool(value(MASSIVE_API_KEY, environ)),
             'Sharadar': bool(value(SHARADAR_API_KEY, environ)) and bool(sharadar_channel(environ)),
-            'ThetaData': value(THETADATA_TERMINAL, environ) == '1'}
+            'ThetaData': value(THETADATA_TERMINAL, environ) == '1',
+            'U.S. Treasury Fiscal Data': True}                    # public data: nothing to configure
