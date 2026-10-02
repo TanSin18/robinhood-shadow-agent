@@ -45,3 +45,15 @@ Date: 2026-10-01, evening ET. Author: Claude. Order: "CLAUDE: EXECUTE THE FIRM L
 5. Capability registry; VTI ruler; 70/30 ruler slot left DEFINITION PENDING.
 6. Dashboard wording fixes and the read-only `/firm-lab` page, delivered by the dashboard-only overlay path.
 7. Report in the required format and stop. No strategy work, no schedule, no trial.
+
+## Addendum, 2026-10-01 21:45 ET (operator deployment order)
+
+- Trial numbering: the future Firm experiment is **not** "Trial 18". Trial 18 is the withdrawn AI-trader experiment and
+  stays in the trial history unchanged; trial 19 is pre-registered for November. The Firm trading experiment receives
+  the next unused experiment ID when it is eventually registered. Until then the UI shows
+  `Firm trading trial: NOT REGISTERED`. No number is allocated.
+- 70/30 ruler: defined by the operator as 70% VTI + 30% 3-month U.S. Treasury-bill total return, fixed allocation.
+  `implementation_status = DATA_SOURCE_PENDING` (no clean Treasury-bill total-return series is connected; nothing is
+  substituted). The rebalancing convention is not specified yet.
+- The failed 18:14 Ask Bubbles calls and the 19:30 team-note re-run are recorded as an advisory-service follow-up only.
+  They are not trading incidents and were not investigated as part of this deployment.

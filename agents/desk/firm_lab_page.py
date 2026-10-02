@@ -21,7 +21,7 @@ LABELS = {
     'portfolio_optimizer': 'Portfolio optimizer',
 }
 WARNING = ('Counterfactual results generated during Firm Lab development are development data. They are not an untouched forward test '
-           'and do not count as Trial 18 results.')
+           'and do not count as results of any registered Firm trading trial.')
 
 
 def load(official_db):
@@ -57,8 +57,8 @@ def _capabilities(fl):
     rows = fl.get('capabilities')
     note = ''
     if not rows:
-        from firm_lab.capabilities import INITIAL
-        rows = [{'capability': c, 'status': s, 'provider': p, 'detail': d} for c, s, p, d in INITIAL]
+        from firm_lab import view
+        rows = view.defaults()['capabilities']
         note = '<p class="v10-note">The Firm Lab database is not created on this machine yet; this is the registry it starts with.</p>'
     body = ''.join(f'<tr><td><b>{esc(LABELS.get(r["capability"], r["capability"]))}</b></td><td>{_chip(r["status"])}</td>'
                    f'<td>{esc(r.get("provider") or "no provider connected")}</td><td class="small">{esc(r.get("detail") or "")}</td></tr>' for r in rows)
@@ -100,39 +100,50 @@ def _baseline(fl):
             '126-session momentum, the single strongest) to closes held in Firm Lab’s own point-in-time store. It checks that the new data path reproduces '
             'what Control A recorded. It is not a Firm strategy, it created no order, and nothing was bought.</p>'
             + _facts(facts)
-            + '<div class="table-wrap"><table class="mini fl-base"><thead><tr><th>Candidate</th><th class="num">Rank</th><th class="num">126-session momentum</th>'
-              '<th class="num">Close</th><th class="num">200-session average</th><th>Above average</th><th class="num">Completed closes</th><th>Eligibility</th></tr></thead>'
+            + '<div class="table-wrap"><table class="mini fl-base"><thead><tr><th>Candidate</th><th class="num">Rank</th><th class="num">Momentum, 126 sessions</th>'
+              '<th class="num">Close</th><th class="num">Average, 200 sessions</th><th>Above average</th><th class="num">Closes</th><th>Eligibility</th></tr></thead>'
               f'<tbody>{rows}</tbody></table></div>')
 
 
 def _benchmarks(fl):
+    rows = fl.get('benchmarks')
+    if not rows:                                          # database not created yet: show the definitions it starts with
+        from firm_lab import view
+        rows = view.defaults()['benchmarks']
     out = ''
-    for b in fl.get('benchmarks') or []:
+    for b in rows:
         if b['benchmark_id'] == 'VTI_100':
             latest = b.get('latest')
             body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
-                           ('Definition', '100% VTI, never rebalanced, never traded by the Firm'),
+                           ('Definition', '100% VTI, the 100% equity benchmark. Never rebalanced, never traded by the Firm.'),
                            ('Basis', 'price return (dividends are not included yet)'),
                            ('Completed-session closes stored', esc(b.get('observations'))),
                            ('Latest stored close', esc(f'{_num(latest[1])} for the {latest[0]} session') if latest else 'none')))
             out += f'<article class="fl-bench"><h3>VTI</h3>{body}</article>'
         else:
-            out += ('<article class="fl-bench"><h3>70/30</h3>'
-                    + _facts((('Status', '<span class="cat cat-warn">DEFINITION PENDING</span>'),
-                              ('Definition', 'The 30% sleeve has not been chosen by the operator. Nothing is assumed and nothing is computed.')))
-                    + '</article>')
-    if not out:
-        out = ('<article class="fl-bench"><h3>VTI</h3><p class="v10-empty">Fixed benchmark. No observations stored yet.</p></article>'
-               '<article class="fl-bench"><h3>70/30</h3><p><span class="cat cat-warn">DEFINITION PENDING</span></p></article>')
+            definition = b.get('definition') or {}
+            rules = '; '.join(definition.get('rules') or [])
+            rebalancing = definition.get('rebalancing')
+            body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
+                           ('Definition', f'<b>{esc(b.get("name"))}</b>'),
+                           ('Implementation status', f'<span class="cat cat-warn">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
+                           ('Treasury-bill data', 'No clean 3-month Treasury-bill total-return series is connected. Nothing is computed and no other '
+                                                  'asset stands in for it.'),
+                           ('Rules', esc(rules[:1].upper() + rules[1:] + '.') if rules else 'not recorded'),
+                           ('Rebalancing convention', 'not specified by the operator yet' if rebalancing == 'NOT_SPECIFIED_BY_OPERATOR'
+                            else esc(rebalancing or 'not recorded')),
+                           ('Defined by', esc(b.get('defined_by') or 'not recorded')),
+                           ('Observations stored', esc(b.get('observations') or 0))))
+            out += f'<article class="fl-bench"><h3>70/30</h3>{body}</article>'
     return (f'<div class="fl-benches">{out}</div><p class="v10-note">The Firm cannot trade a ruler, change it, or choose it after seeing results. '
             'No outperformance figure is reported while Firm Lab is in BUILD / OBSERVE.</p>')
 
 
 def render(state):
-    fl = state.get('firm_lab') or {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'trial_18': 'NOT STARTED'}
+    fl = state.get('firm_lab') or {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'firm_trading_trial': 'NOT REGISTERED'}
     head = ('<div class="room-head fl-head"><div><h1>Firm Lab</h1>'
             '<p class="fl-flags"><span class="fl-flag">BUILD / OBSERVE</span><span class="fl-flag">NO FILLS</span></p>'
-            '<p><b>No Firm trading track record exists.</b> Firm Lab is the foundation of the next system, built beside the registered paper run '
+            '<p><b>Development data only. No Firm trading track record exists.</b> Firm Lab is the foundation of the next system, built beside the registered paper run '
             '(Control A) and kept separate from it. It stores data and checks its own plumbing. It cannot place a paper trade or a real one.</p></div></div>')
     if fl.get('error'):
         return head + ('<section class="v10-panel"><h2>System status</h2><p class="v10-empty">The Firm Lab database could not be read '
@@ -151,7 +162,7 @@ def render(state):
               ('Latest baseline evaluation', esc(_when(base.get('timestamp'))) if base else 'none'),
               ('Feature rows', esc(f'{fl.get("feature_rows", 0):,} across {fl.get("instruments", 0)} instruments') if fl.get('exists') else '0'),
               ('Firm fills', f'<b>{fills}</b> (Firm Lab has no order, fill, position or cash table)'),
-              ('Trial 18', f'<b>{esc(fl.get("trial_18", "NOT STARTED"))}</b>'),
+              ('Firm trading trial', f'<b>{esc(fl.get("firm_trading_trial", "NOT REGISTERED"))}</b> (it takes the next unused experiment ID when it is registered)'),
               ('Active Firm experiments', esc(sum(1 for e in fl.get('experiments') or [] if e.get('status') == 'ACTIVE'))),
               ('October research stop superseded', esc(fl.get('october_research_stop_superseded', 'NO'))),
               ('Real execution', esc(fl.get('real_execution', 'DISABLED')))]

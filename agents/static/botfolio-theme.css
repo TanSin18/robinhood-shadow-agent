@@ -511,7 +511,9 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 .agent-desk table.fl-cap{table-layout:fixed;width:100%}
 .agent-desk table.fl-cap .fl-c1{width:210px}.agent-desk table.fl-cap .fl-c2{width:120px}.agent-desk table.fl-cap .fl-c3{width:230px}
 .agent-desk table.fl-cap td,.agent-desk table.fl-base td:last-child{vertical-align:top;white-space:normal;overflow-wrap:anywhere}
-.agent-desk table.fl-base td:last-child{min-width:220px}
+.agent-desk table.fl-base{width:100%;table-layout:fixed}.agent-desk table.fl-base th:last-child{width:26%}
+.agent-desk table.fl-base th{white-space:normal;vertical-align:bottom}.agent-desk table.fl-base th:first-child{width:11%}.agent-desk table.fl-base th:nth-child(2){width:7%}
+@media (max-width:900px){.agent-desk table.fl-base{table-layout:auto;min-width:760px}}
 .agent-desk table.fl-base{margin-top:16px}
 .agent-desk table.fl-base tr.fl-pick td{background:rgba(255,255,255,.035)}
 .agent-desk .fl-benches{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--pad)}

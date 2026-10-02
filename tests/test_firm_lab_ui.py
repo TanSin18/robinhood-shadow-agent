@@ -115,10 +115,11 @@ def test_truth_bar_and_truthful_names_reach_the_operational_page(tmp_path, monke
 def test_firm_lab_page_says_no_fills_before_the_database_exists():                                  # 35
     html = firm_lab_page.render({'firm_lab': view.load(path='/nonexistent/firm_lab.db')})
     assert '<h1>Firm Lab</h1>' in html and '>BUILD / OBSERVE</span>' in html and '>NO FILLS</span>' in html
-    assert 'No Firm trading track record exists.' in html
-    assert '<dt>Firm fills</dt><dd><b>0</b>' in html and '<dt>Trial 18</dt><dd><b>NOT STARTED</b></dd>' in html
+    assert '<b>Development data only. No Firm trading track record exists.</b>' in html
+    assert '<dt>Firm fills</dt><dd><b>0</b>' in html and '<dt>Firm trading trial</dt><dd><b>NOT REGISTERED</b>' in html and 'Trial 18' not in html
     assert 'not created on this machine yet' in html and 'No baseline evaluation is recorded yet.' in html
-    assert 'DEFINITION PENDING' in html and firm_lab_page.WARNING in html
+    assert '70% VTI + 30% 3-month U.S. Treasury-bill total return' in html and '>DATA_SOURCE_PENDING</span>' in html
+    assert 'DEFINITION PENDING' not in html and firm_lab_page.WARNING in html and 'any registered Firm trading trial' in firm_lab_page.WARNING
     assert '<form' not in html and '<button' not in html and '<input' not in html and 'style=' not in html
     assert html == firm_lab_page.render({})                                             # no state at all: same honest page
 
@@ -144,7 +145,9 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     for name in ('Fundamentals', 'Analyst revisions', 'Intraday bars', 'VWAP', 'Time-of-day RVOL', 'Aggressive order flow'):
         assert rows[name] == 'Unavailable', name
     assert rows['Options strategy'] == 'Not started' and rows['ML ranker'] == 'Not started' and rows['Option chain data'] == 'Build only'
-    assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>DEFINITION PENDING</span>' in html
+    assert '<h3>VTI</h3>' in html and 'Fixed benchmark' in html and '<h3>70/30</h3>' in html and '>DATA_SOURCE_PENDING</span>' in html
+    assert '<b>70% VTI + 30% 3-month U.S. Treasury-bill total return</b>' in html and 'no other asset stands in for it' in html
+    assert '<dt>Observations stored</dt><dd>0</dd>' in html and 'Trial 18' not in html
     lowered = html.lower()
     for word in ('alpha', 'outperform', 'beat the market', 'bought ', 'paper trade placed', 'profit'):
         assert word not in lowered.replace('no outperformance figure is reported', ''), word
@@ -184,6 +187,6 @@ def test_dashboard_code_reaches_firm_lab_only_through_its_read_only_view():
         text = source.read_text()
         for line in text.splitlines():
             if 'firm_lab' in line and ('import' in line) and 'firm_lab_page' not in line:
-                assert re.search(r'from firm_lab(\.capabilities)? import (view|INITIAL)$', line.strip()), (source.name, line)
+                assert re.search(r'from firm_lab import view$', line.strip()), (source.name, line)
     page = (DESK / 'firm_lab_page.py').read_text()
     assert 'ExecutionBoundary' not in page and 'FirmLabStore' not in page and 'firm_lab.ingest' not in page and 'boundary' not in page

@@ -28,7 +28,7 @@ SCHEMA = (
     "strategy_id TEXT NOT NULL, candidates_json TEXT NOT NULL, selected_instrument TEXT, features_used_json TEXT NOT NULL, "
     "provenance_json TEXT NOT NULL, label TEXT NOT NULL CHECK (label = 'DEVELOPMENT_ONLY'), record_hash TEXT NOT NULL UNIQUE)",
     "CREATE TABLE IF NOT EXISTS benchmark_definitions (benchmark_id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL, "
-    "definition_json TEXT, defined_at TEXT, defined_by TEXT, note TEXT)",
+    "definition_json TEXT, defined_at TEXT, defined_by TEXT, note TEXT, implementation_status TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS benchmark_observations (id INTEGER PRIMARY KEY, benchmark_id TEXT NOT NULL, exchange_session_date TEXT NOT NULL, "
     "value TEXT NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL, known_at TEXT NOT NULL, ingested_at TEXT NOT NULL, "
     "UNIQUE (benchmark_id, exchange_session_date, kind, value, source))",

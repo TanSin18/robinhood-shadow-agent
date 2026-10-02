@@ -9,7 +9,16 @@ from . import MODE_BUILD_OBSERVE
 from .baseline import STRATEGY_ID, TITLE
 from .store import FORBIDDEN_TABLE_WORDS, default_path
 
-FIXED = {'fills': 0, 'trial_18': 'NOT STARTED', 'october_research_stop_superseded': 'NO', 'official_lane_b': 'PAUSED', 'real_execution': 'DISABLED'}
+FIXED = {'fills': 0, 'firm_trading_trial': 'NOT REGISTERED', 'october_research_stop_superseded': 'NO', 'official_lane_b': 'PAUSED', 'real_execution': 'DISABLED'}
+
+
+def defaults() -> dict:
+    """What a new Firm Lab database starts with, for a machine where it has not been created yet. Reads no file."""
+    from .benchmarks import DEFINITIONS
+    from .capabilities import INITIAL
+    return {'capabilities': [{'capability': c, 'status': s, 'provider': p, 'detail': d} for c, s, p, d in INITIAL],
+            'benchmarks': [{'benchmark_id': i, 'name': n, 'status': s, 'definition': d, 'defined_by': by, 'note': note,
+                            'implementation_status': impl, 'observations': 0, 'latest': None} for i, n, s, d, by, note, impl in DEFINITIONS]}
 
 
 def load(official_db=None, path=None) -> dict:
@@ -24,11 +33,13 @@ def load(official_db=None, path=None) -> dict:
         cf = one('SELECT timestamp, exchange_session_date, candidates_json, selected_instrument, provenance_json, label, record_hash FROM '
                  'counterfactual_decisions WHERE strategy_id=? ORDER BY id DESC LIMIT 1', (STRATEGY_ID,))
         ingest = one('SELECT finished_at, status, detail_json FROM ingest_runs ORDER BY id DESC LIMIT 1')
-        benchmarks = [{'benchmark_id': b, 'name': n, 'status': s, 'note': note,
+        benchmarks = [{'benchmark_id': b, 'name': n, 'status': s, 'note': note, 'implementation_status': impl,
+                       'definition': json.loads(d) if d else None, 'defined_by': by,
                        'observations': one('SELECT COUNT(*) FROM benchmark_observations WHERE benchmark_id=?', (b,))[0],
                        'latest': one('SELECT exchange_session_date, value FROM benchmark_observations WHERE benchmark_id=? '
                                      'ORDER BY exchange_session_date DESC LIMIT 1', (b,))}
-                      for b, n, s, note in db.execute('SELECT benchmark_id, name, status, note FROM benchmark_definitions ORDER BY rowid').fetchall()]
+                      for b, n, s, note, impl, d, by in db.execute('SELECT benchmark_id, name, status, note, implementation_status, definition_json, '
+                                                              'defined_by FROM benchmark_definitions ORDER BY rowid').fetchall()]
         return {
             'exists': True, 'mode': meta.get('mode'), 'database': '/'.join(path.parts[-3:]), 'created_at': meta.get('created_at'),
             'tables': tables, 'has_execution_tables': any(w in t for t in tables for w in FORBIDDEN_TABLE_WORDS),

@@ -14,7 +14,7 @@ Session dates         BUILT          exchange_session_date stored beside the raw
 Baseline check        BUILT          control_a_baseline_counterfactual, DEVELOPMENT_ONLY
 Capability registry   BUILT
 VTI ruler             DEFINED        price return; dividends not included yet
-70/30 ruler           DEFINITION PENDING — operator has not chosen the 30% sleeve
+70/30 ruler           DEFINED — 70% VTI + 30% 3-month U.S. Treasury-bill total return; DATA_SOURCE_PENDING
 Fundamentals          BLOCKED — NO PROVIDER
 Analyst revisions     BLOCKED — NO PROVIDER
 Earnings calls        PLANNED — NO SOURCE CONNECTED
@@ -27,7 +27,7 @@ Options analytics     DATA ONLY — storage schema; nothing is ingested; no reco
 Portfolio optimizer   PLANNED
 Scheduler             NOT BUILT — ingestion is a manual research-only command
 Experiment registry   EMPTY — no active Firm Lab experiment
-Trial 18              NOT REGISTERED
+Firm trading trial    NOT REGISTERED — takes the next unused experiment ID when it is registered
 Fill engine           DOES NOT EXIST
 Real execution        DISABLED
 ```
@@ -95,7 +95,10 @@ pricing model would write separate `model_estimated_*` fields; the two are never
 
 ## Benchmarks
 
-Ruler 1: 100% VTI. Ruler 2: a fixed 70/30 allocation whose 30% sleeve the operator has not chosen. The Firm
+Ruler 1: 100% VTI (the 100% equity benchmark). Ruler 2, defined by the operator on 2026-10-01: 70% VTI + 30%
+3-month U.S. Treasury-bill total return, a fixed allocation with no tactical reallocation. No clean Treasury-bill
+total-return series is connected, so its `implementation_status` is `DATA_SOURCE_PENDING`: nothing is computed and
+no other asset stands in for it. Its rebalancing convention has not been specified yet. The Firm
 cannot trade a ruler, change it, or choose it after seeing performance. No outperformance figure is computed or
 shown in `BUILD_OBSERVE`.
 
@@ -121,6 +124,7 @@ Three layers, kept apart:
 
 ## What comes next (not started; each needs an operator decision)
 
-Which external datasets to introduce deliberately (fundamentals, revisions, intraday), the definition of the 70/30
+Which external datasets to introduce deliberately (fundamentals, revisions, intraday), the Treasury-bill series and
+rebalancing convention of the 70/30
 ruler, how the October research stop is treated, the trial number and the exact recipe that becomes the Firm's
 registered trial.

@@ -271,7 +271,7 @@ def test_missing_provider_never_returns_a_made_up_value(tmp_path):              
 
 
 # ---------------------------------------------------------------- benchmarks (section O)
-def test_vti_ruler_is_defined_and_the_70_30_ruler_waits_for_the_operator(tmp_path):
+def test_vti_ruler_is_defined_and_the_70_30_ruler_is_defined_but_waits_for_treasury_data(tmp_path):
     lab = _lab(tmp_path)
     benchmarks.seed(lab)
     benchmarks.seed(lab)
@@ -279,7 +279,12 @@ def test_vti_ruler_is_defined_and_the_70_30_ruler_waits_for_the_operator(tmp_pat
     assert set(defs) == {'VTI_100', 'FIXED_70_30'}
     assert defs['VTI_100']['status'] == 'DEFINED' and json.loads(defs['VTI_100']['definition_json'])['weights'] == {'VTI': '1.00'}
     pending = defs['FIXED_70_30']
-    assert pending['status'] == 'DEFINITION_PENDING' and pending['definition_json'] is None and pending['defined_at'] is None
+    assert pending['status'] == 'DEFINED' and pending['implementation_status'] == 'DATA_SOURCE_PENDING'
+    assert pending['name'] == '70% VTI + 30% 3-month U.S. Treasury-bill total return'
+    definition = json.loads(pending['definition_json'])
+    assert definition['weights'] == {'VTI': '0.70', 'US_TREASURY_BILL_3M_TOTAL_RETURN': '0.30'} and definition['allocation'] == 'fixed'
+    assert definition['treasury_bill_series'] is None and definition['rebalancing'] == 'NOT_SPECIFIED_BY_OPERATOR'   # nothing chosen silently
+    assert len(definition['rules']) == 4 and defs['VTI_100']['implementation_status'] == 'PRICE_RETURN_ONLY'
     features.ingest_provider_daily_bars(lab, 'VTI', _bars([D(300) + D(i) for i in range(5)]), known_at=KNOWN)
     assert benchmarks.record_vti(lab, known_at=KNOWN) == 5 and benchmarks.record_vti(lab, known_at=KNOWN) == 0
     defs = {d['benchmark_id']: d for d in benchmarks.definitions(lab)}
@@ -366,11 +371,12 @@ def test_view_reads_without_writing_and_reports_the_fixed_statuses(tmp_path, cap
     state = view.load(path=path)
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
     assert state['mode'] == 'BUILD_OBSERVE' and state['has_execution_tables'] is False and state['refused_fill_attempts'] == 0
-    assert (state['fills'], state['trial_18'], state['october_research_stop_superseded'], state['official_lane_b'], state['real_execution']) == (
-        0, 'NOT STARTED', 'NO', 'PAUSED', 'DISABLED')
+    assert (state['fills'], state['firm_trading_trial'], state['october_research_stop_superseded'], state['official_lane_b'], state['real_execution']) == (
+        0, 'NOT REGISTERED', 'NO', 'PAUSED', 'DISABLED')
     assert state['baseline']['selected_instrument'] == 'BBB' and state['baseline']['title'] == 'DEVELOPMENT COUNTERFACTUAL — NOT A PAPER TRADE'
     assert state['latest_session'] == '2026-09-30' and state['experiments'] == [] and state['database'].endswith('firm_lab/firm_lab.db')
-    assert {b['benchmark_id']: b['status'] for b in state['benchmarks']} == {'VTI_100': 'DEFINED', 'FIXED_70_30': 'DEFINITION_PENDING'}
+    assert {b['benchmark_id']: b['status'] for b in state['benchmarks']} == {'VTI_100': 'DEFINED', 'FIXED_70_30': 'DEFINED'}
+    assert {b['benchmark_id']: b['implementation_status'] for b in state['benchmarks']} == {'VTI_100': 'PRICE_RETURN_ONLY', 'FIXED_70_30': 'DATA_SOURCE_PENDING'}
     path.write_bytes(b'not a database')
     broken = view.load(path=path)
     assert broken['error'] and broken['mode'] is None and broken['fills'] == 0         # a broken file is never read as permission
