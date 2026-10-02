@@ -232,3 +232,17 @@ print(json.dumps({{'found_directly': found_directly, 'path_unchanged': sys.path 
     assert result['error'] is None and result['mode'] == 'BUILD_OBSERVE' and result['selected'] == 'BBB' and result['no_fills']
     assert result['path_unchanged'] and result['trading_modules'] == []
     assert not {'firm_lab.boundary', 'firm_lab.ingest', 'firm_lab.cli'} & set(result['firm_lab_modules'])   # only the read-only view
+
+
+def test_every_lane_b_heading_says_paused():
+    """Found live on the Mac: the collapsed lane map on Portfolio still headed Lane B 'Defined-risk options'."""
+    pages = _pages()
+    for path, html in pages.items():
+        text = re.sub(r'<[^>]+>', ' ', html)
+        assert 'Defined-risk options' not in text.replace('Defined-risk options only', ''), path       # the rule of that name stays in the Rule book
+        for heading in re.findall(r'<h[1-4][^>]*>([^<]*Lane B[^<]*)</h[1-4]>', html):
+            assert 'PAUSED' in heading.upper(), (path, heading)
+    assert '<h3>Options (PAUSED)</h3>' in pages['/portfolio']
+    from agents.desk import portfolio
+    assert portfolio.LANES['B'] == 'Lane B · Options (PAUSED)' and "('B', 'Options (PAUSED)')" in (DESK / 'lanes.py').read_text()
+    assert 'Options screen (Lane B · PAUSED)' in (DESK / 'checks.py').read_text()

@@ -16,7 +16,7 @@ def render(state):
     html += step('Build and challenge the case', 'Research supports a selection; the Critic looks for reasons to reject it.', ['Evidence and sources', 'What would prove the idea wrong?', 'Deterministic strategy rules; AI only where permitted'])
     html += step('Size it safely', 'Code decides how much the paper account can afford.', ['Settled cash and actual holdings', 'Volatility-scaled size and position limits', 'Costs, breakers and an exit plan'])
     html += '''<div class="lane-destination"><strong>Paper proposal, no trade, or blocked</strong><span>No trade is not the same as a technical failure.</span></div></article>
-<article class="lane-track lane-b"><header><span class="lane-letter">B</span><div><h3>Defined-risk options</h3><p>A contract with an expiry date and a bounded potential loss.</p></div></header><p class="lane-example">Think: a time-limited contract linked to a stock or ETF. Defined risk ≠ low risk.</p>'''
+<article class="lane-track lane-b"><header><span class="lane-letter">B</span><div><h3>Options (PAUSED)</h3><p>New option buys are paused under the signed v1.6 rules. Below is how the lane is designed, not current activity: a contract with an expiry date and a bounded potential loss.</p></div></header><p class="lane-example">Think: a time-limited contract linked to a stock or ETF. Defined risk ≠ low risk.</p>'''
     html += step('Check the exact contract', 'The underlying ticker alone is not enough.', ['Underlying, call or put, strike and expiry', 'Contract multiplier and exercise / settlement terms', 'Fresh bid and ask, liquidity and earnings timing'])
     html += step('Understand the downside', 'Show maximum loss before considering a proposal.', ['Premium, spread, fees and modeled slippage', 'Time decay and volatility exposure', 'Exit, expiry and assignment handling where applicable'])
     html += step('Pass the options safety gate', 'Missing required contract evidence must stop this lane.', ['Defined maximum loss within limits', 'Cash, concentration and breaker checks', 'A blocked option never becomes a Lane A trade'])
@@ -38,7 +38,7 @@ def render(state):
                 if isinstance(value, list): value = ' · '.join(str(v) for v in value)
                 html += '<h4>'+esc(field.title())+'</h4><p>'+esc(value or 'Not recorded')+'</p>'
             html += '</div></details>'
-        for lane, title in [('A', 'Shares & ETFs'), ('B', 'Defined-risk options')]:
+        for lane, title in [('A', 'Shares & ETFs'), ('B', 'Options (PAUSED)')]:
             html += '<h4>Lane '+lane+' · '+esc(title)+'</h4>'
             rows = review.get('lanes', {}).get(lane, []) if review.get('selection_recorded') else []
             if not rows: html += '<p>Individual selection details not recorded here. No outcome inferred.</p>'

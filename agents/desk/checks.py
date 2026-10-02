@@ -225,7 +225,7 @@ def run_section(review, index):
 <section class="room-card"><div class="card-head"><h3>System checks</h3><span class="muted small">Connection, registration, data, AI and outcome</span></div>{operational(c.get("operational", []))}</section>
 <section class="room-card"><div class="card-head"><h3>AI steps · model, tools and tokens</h3></div>{usage_table(review)}</section>
 <section class="room-card"><div class="card-head"><h3>Charts</h3><span class="muted small">From this run’s recorded features</span></div>{charts(c)}</section>
-<section class="room-card"><div class="card-head"><h3>Options screen (Lane B)</h3><span class="muted small">Why contracts were or weren’t considered</span></div>{options_section(c.get("options"))}</section>
+<section class="room-card"><div class="card-head"><h3>Options screen (Lane B · PAUSED)</h3><span class="muted small">New option buys are paused. This only records why contracts were or weren’t considered.</span></div>{options_section(c.get("options"))}</section>
 <section class="room-card"><div class="card-head"><h3>Scanners · strategy conditions</h3><span class="muted small">Every ticker × every condition</span></div>{strategy_tables(c.get("strategies", []))}</section>
 <section class="room-card"><div class="card-head"><h3>Missing information recorded</h3><span class="muted small">Blossom’s notes when AI ran; otherwise the system’s note</span></div>{missing_html}</section>
 <section class="room-card"><div class="card-head"><h3>Prof. X · safety-rule results</h3></div>{risk_table(c.get("risk", []))}</section>

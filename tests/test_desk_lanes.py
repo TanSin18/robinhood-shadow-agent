@@ -4,7 +4,7 @@ from agents.desk.router import render
 def test_lane_guide_never_claims_unrecorded_checks_passed():
     html = render('/portfolio', {'preview': True}, None, '')
     assert 'Shares &amp; ETFs' in html
-    assert 'Defined-risk options' in html
+    assert 'Options (PAUSED)' in html and 'Defined-risk options' not in html
     assert 'Not recorded' in html
     assert 'No result loaded' in html
     assert 'data-lane-view="guide"' in html

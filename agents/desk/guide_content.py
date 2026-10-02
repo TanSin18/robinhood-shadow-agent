@@ -266,5 +266,5 @@ GLOSSARY = [
     ('Call / put option', 'The right to buy (call) or sell (put) 100 shares at a set price before a date.'),
     ('Intrinsic value', 'What an option is worth if exercised now.'),
     ('Card', 'An approval request on the dashboard: YES fills the trade, NO skips it.'),
-    ('Lane', 'A paper account: Lane A stocks/ETFs, Lane B options.'),
+    ('Lane', 'A paper account: Lane A stocks/ETFs, Lane B options (new option buys are paused).'),
 ]
