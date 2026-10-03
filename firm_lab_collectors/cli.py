@@ -7,6 +7,7 @@ Firm Lab research package and this package, and it writes only the Firm Lab data
     python -m firm_lab_collectors.cli sharadar   [--symbols AAPL,NVDA] [--years 3]
     python -m firm_lab_collectors.cli thetadata  [--symbols SPY,QQQ,NVDA] [--session-date YYYY-MM-DD] [--expiration YYYY-MM-DD]
     python -m firm_lab_collectors.cli treasury   [--start YYYY-MM-DD]      # 13-week bill auctions, then the 70/30 ruler
+    python -m firm_lab_collectors.cli capture    --out DIRECTORY           # raw public samples saved as received; no database
 
 ``--path`` names the Firm Lab database (default: ~/LocalProjects/robinhood-diagnostics/firm_lab/firm_lab.db). It must exist
 already (``python -m firm_lab.cli init``). The registered database is never opened, and its location is never given here.
@@ -40,7 +41,8 @@ def _status(path, environ=None) -> dict:
 
 def main(argv=None, environ=None, transport=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('command', choices=['status', *runner.RUNS])
+    p.add_argument('command', choices=['status', 'capture', *runner.RUNS])
+    p.add_argument('--out')
     p.add_argument('--path')
     p.add_argument('--symbols')
     p.add_argument('--session-date')
@@ -54,6 +56,17 @@ def main(argv=None, environ=None, transport=None) -> int:
     a = p.parse_args(argv)
     path = Path(a.path) if a.path else DEFAULT_PATH
     out = {'command': a.command}
+    if a.command == 'capture':                               # no database is opened for a raw capture
+        if not a.out:
+            p.error('capture needs --out DIRECTORY')
+        from . import capture
+        try:
+            out['capture'] = capture.run(a.out, environ=environ)
+            code = 0
+        except Exception as error:
+            out['error'], code = type(error).__name__, 1
+        print(json.dumps(out, indent=1, default=str))
+        return code
     try:
         if a.command != 'status':
             store = FirmLabStore(path, create=False)

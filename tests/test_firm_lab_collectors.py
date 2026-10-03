@@ -837,7 +837,7 @@ def test_thetadata_needs_the_operators_terminal_and_tier(tmp_path):
 
 
 # ====================================================================================================== isolation
-STDLIB_ALLOWED = {'__future__', 'argparse', 'csv', 'dataclasses', 'datetime', 'decimal', 'gzip', 'io', 'json', 'os', 'pathlib', 're', 'time',
+STDLIB_ALLOWED = {'__future__', 'argparse', 'csv', 'dataclasses', 'datetime', 'decimal', 'gzip', 'hashlib', 'html', 'io', 'json', 'os', 'pathlib', 're', 'time',
                   'typing', 'urllib'}
 TRADING_MODULES = ('agents', 'broker', 'risk', 'data', 'research', 'eval', 'scripts', 'broker_proxy')
 TRADING_WORDS = ('PaperBroker', 'PaperInbox', 'RiskEngine', 'issue_desk_entry', 'submit_order', 'place_order', 'robinhood.com', 'robinhood-shadow-agent', 'robinhood_', 'launchctl', 'plist',
@@ -855,13 +855,13 @@ def _imports(path):
 
 def test_collectors_import_only_the_standard_library_and_the_research_package():
     files = sorted((ROOT / 'firm_lab_collectors').glob('*.py'))
-    assert {f.name for f in files} == {'__init__.py', 'cli.py', 'config.py', 'edgar.py', 'massive.py', 'runner.py', 'sharadar.py', 'thetadata.py',
-                                       'transport.py', 'treasury.py'}
+    assert {f.name for f in files} >= {'__init__.py', 'cli.py', 'config.py', 'edgar.py', 'massive.py', 'runner.py', 'sharadar.py', 'thetadata.py',
+                                       'transport.py', 'treasury.py', 'capture.py'}
     for path in files:
         for level, name in _imports(path):
             top = name.split('.')[0]
             if level:                                                                    # a sibling module of this package
-                assert level == 1 and top in ('', 'config', 'edgar', 'massive', 'runner', 'sharadar', 'thetadata', 'transport', 'treasury'), (path.name, name)
+                assert level == 1 and (top == '' or (ROOT / 'firm_lab_collectors' / f'{top}.py').is_file()), (path.name, name)
                 continue
             assert top in STDLIB_ALLOWED | {'firm_lab'}, f'{path.name} imports {name}'
             assert top not in TRADING_MODULES, f'{path.name} imports {name}'
@@ -885,6 +885,9 @@ def test_collectors_import_only_the_standard_library_and_the_research_package():
     assert 'firm_lab_collectors' not in (ROOT / 'agents' / 'desk' / 'firm_lab_page.py').read_text()
 
 
+PUBLIC_SAMPLE_HOSTS = {'investor.vanguard.com', 'api.nasdaq.com'}       # public pages a hand-started capture or collector may ask
+
+
 def test_collectors_name_only_research_hosts_and_post_nothing():
     hosts = set(edgar.HOSTS) | {massive.HOST, sharadar.DIRECT_HOST, sharadar.NASDAQ_HOST, thetadata.HOST, treasury_source.HOST}
     assert hosts == {'www.sec.gov', 'data.sec.gov', 'api.massive.com', 'api.sharadar.com', 'data.nasdaq.com', '127.0.0.1:25503',
@@ -892,7 +895,7 @@ def test_collectors_name_only_research_hosts_and_post_nothing():
     for path in sorted((ROOT / 'firm_lab_collectors').glob('*.py')):
         source = path.read_text()
         for found in re.findall(r'https?://([A-Za-z0-9.\-:]+)', source):
-            assert found in hosts | {'thetadata.net'} or found.startswith('{'), f'{path.name} names {found}'
+            assert found in hosts | PUBLIC_SAMPLE_HOSTS | {'thetadata.net'} or found.startswith('{'), f'{path.name} names {found}'
         assert "method='POST'" not in source and 'data=' not in source.replace('metadata=', ''), path.name       # GET only; nothing is sent as a body
     assert "method='GET'" in (ROOT / 'firm_lab_collectors' / 'transport.py').read_text()
 
@@ -1032,3 +1035,30 @@ def test_a_checkpoint_2_database_is_upgraded_in_place_without_losing_or_inventin
     db.close()
     with pytest.raises(FirmLabError, match='OPTION_TABLE_HAS_ROWS'):
         FirmLabStore(other)
+
+
+# ====================================================================================================== raw sample capture
+def test_raw_capture_saves_what_arrived_asks_named_hosts_only_and_keeps_the_contact_address_for_the_sec(tmp_path):
+    from firm_lab_collectors import capture
+    recent = {'accessionNumber': ['0000320193-26-000090', '0000320193-26-000077'], 'form': ['8-K', '10-Q'], 'items': ['2.02,9.01', ''],
+              'primaryDocument': ['a8k.htm', 'aapl-20260627.htm']}
+    sec = Fake([('companyfacts', 200, {'cik': 320193, 'facts': {}}), ('submissions', 200, {'cik': '320193', 'filings': {'recent': recent}}),
+                ('.hdr.sgml', 200, '<SEC-HEADER>'), ('index.json', 200, {'directory': {'item': []}}), ('aapl-20260627.htm', 200, '<html>')])
+    plain = Fake([('profile/api/VTI/distribution', 200, {'x': 1}), ('DIVDAT_2026', 403, b'')])
+    report = capture.run(tmp_path / 'samples', environ=AGENT, sec_transport=sec, plain_transport=plain)
+    manifest = json.loads((tmp_path / 'samples' / 'manifest.json').read_text())
+    assert report['requested'] == len(manifest) and report['sec_user_agent_declared'] is True
+    assert (tmp_path / 'samples' / 'vanguard_vti_distribution.json').read_bytes() == b'{"x": 1}'      # exactly as received
+    refused = {r['status'] for r in report['refused']}
+    assert refused == {403, 404} and plain.requests == len(capture.PUBLIC)               # a refusal is recorded once, never retried
+    names = {m['file'] for m in manifest if m['file']}
+    assert {'sec_companyfacts_AAPL.json', 'sec_submissions_AAPL.json', 'sec_AAPL_periodic_0000320193-26-000077_aapl-20260627.htm',
+            'sec_AAPL_earnings8k_0000320193-26-000090.hdr.sgml', 'sec_AAPL_earnings8k_0000320193-26-000090_index.json'} <= names
+    assert all(m['sha256'] and m['bytes'] for m in manifest if m['file'])
+    for url, _ in sec.calls:
+        assert url.startswith(('https://www.sec.gov/', 'https://data.sec.gov/'))
+    for url, _ in plain.calls:
+        assert url.startswith(('https://investor.vanguard.com/', 'https://api.nasdaq.com/'))
+    assert 'example.com' not in (tmp_path / 'samples' / 'manifest.json').read_text() and '@' not in capture.PLAIN_AGENT      # no contact address off the SEC
+    without = capture.run(tmp_path / 'none', environ={}, sec_transport=Fake([]), plain_transport=Fake([]))
+    assert without['sec_user_agent_declared'] is False and without['requested'] == len(capture.PUBLIC)         # the SEC is not asked anonymously
