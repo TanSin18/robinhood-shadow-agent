@@ -20,4 +20,5 @@ def definitions():
     from .sector import sector_definitions
     from .fundamental import fundamental_definitions
     from .events import event_definitions
-    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()+sector_definitions()+fundamental_definitions()+event_definitions()
+    from .macro import macro_definitions, intraday_definitions
+    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()+sector_definitions()+fundamental_definitions()+event_definitions()+macro_definitions()+intraday_definitions()
