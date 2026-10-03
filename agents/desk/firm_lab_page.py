@@ -9,6 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .components import esc
+from .feature_explorer import render_features
 
 ET = ZoneInfo('America/New_York')
 STATUS_TONE = {'AVAILABLE': 'good', 'UNAVAILABLE': 'stop', 'NOT_STARTED': 'neutral', 'BUILD_ONLY': 'warn', 'PARTIAL_EXISTING': 'warn',
@@ -65,8 +66,8 @@ def _view():
     return view
 
 
-def load(official_db):
-    return _view().load(official_db=official_db)
+def load(official_db,feature_filters=None):
+    return _view().load(official_db=official_db,feature_filters=feature_filters)
 
 
 def _when(value):
@@ -524,6 +525,7 @@ def render(state):
             + f'<section class="v10-panel" id="fl-status"><h2>System status</h2>{_facts(status)}</section>'
             + f'<section class="v10-panel" id="fl-readiness"><h2>Data Readiness</h2>{_readiness(fl)}</section>'
             + f'<section class="v10-panel" id="fl-macro"><h2>Macro / Regime Readiness</h2>{_macro(fl)}</section>'
+            + render_features(fl.get('research_features') or {'missing_reason':'NO_STORED_FEATURE_RUN'})
             + f'<section class="v10-panel" id="fl-capabilities"><h2>Derived measures and strategy components</h2>{_capabilities(fl)}</section>'
             + f'<section class="v10-panel" id="fl-fundamentals"><h2>Fundamentals readiness</h2>{_fundamentals(fl)}</section>'
             + f'<section class="v10-panel" id="fl-earnings"><h2>Earnings events</h2>{_earnings(fl)}</section>'

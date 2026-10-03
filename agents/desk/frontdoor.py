@@ -177,7 +177,9 @@ def make_server(inbox, port=8765, **options):
                 self.desk_forms = True      # every desk page carries the Ask Bubbles form (same-origin only)
                 try:
                     try:
-                        state = snapshot(inbox.path)
+                        from urllib.parse import parse_qs
+                        feature_filters = {k:v[0] for k,v in parse_qs(parsed.query,max_num_fields=8).items()} if path=='/firm-lab' else None
+                        state = snapshot(inbox.path,feature_filters=feature_filters)
                     except Exception:
                         if path != '/guide':
                             raise

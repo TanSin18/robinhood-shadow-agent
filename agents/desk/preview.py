@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import sqlite3
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit,parse_qs
 
 from .room_projection import project_decision_room
 from .components import ROUTES
@@ -95,7 +95,7 @@ def _capsule_view(row):
         'closes':{t:closes[t] for t in sorted(held|{'VTI'}) if isinstance(closes.get(t),dict)}})
 
 
-def snapshot(path,*,now=None):
+def snapshot(path,*,now=None,feature_filters=None):
     now=now or datetime.now(timezone.utc)
     if now.tzinfo is None: raise ValueError('Aware clock required')
     # Fetch and close before JSON projection, HTML rendering or socket writes.
@@ -211,7 +211,7 @@ def snapshot(path,*,now=None):
         analyst={'exists':False,'error':type(error).__name__}
     try:
         from .firm_lab_page import load as load_firm_lab
-        firm_lab=load_firm_lab(path)
+        firm_lab=load_firm_lab(path,feature_filters=feature_filters)
     except Exception as error:
         firm_lab={'exists':False,'error':type(error).__name__,'mode':None}
     return {'preview':True,'card_inbox':card_inbox,'firm':firm,'firm_lab':firm_lab,'analyst':analyst,'updated_at':now.isoformat(),'cards':projected,'history':history,'portfolio':portfolio,'research':research,
@@ -230,7 +230,7 @@ def make_server(database,port=8766,*,clock=None):
             self.send_response(status)
             for key,value in {'Content-Type':kind,'Content-Length':str(len(body)),
                 'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
-                'Content-Security-Policy':"default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"}.items(): self.send_header(key,value)
+                'Content-Security-Policy':"default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}.items(): self.send_header(key,value)
             self.end_headers();self.wfile.write(body)
         def do_POST(self): self.send(405,'Preview — view only. All actions are disabled.')
         do_PUT=do_PATCH=do_DELETE=do_POST
@@ -246,7 +246,8 @@ def make_server(database,port=8766,*,clock=None):
             if path not in dict(ROUTES): return self.send(404,'Not found')
             try:
                 with read_lock:
-                    state=snapshot(database,now=clock())
+                    filters={k:v[0] for k,v in parse_qs(urlsplit(self.path).query,max_num_fields=8).items()} if path=='/firm-lab' else None
+                    state=snapshot(database,now=clock(),feature_filters=filters)
                 body=render(path,state,None,'')
             except Exception: return self.send(503,'Preview — view only. Records temporarily unavailable; no healthy status is assumed.')
             self.send(200,body)

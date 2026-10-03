@@ -1,7 +1,8 @@
 # Checkpoint 6 — deterministic research feature layer
 
-Status: detailed design for review. Architecture approved by the operator on
-2026-10-03 in chat; detailed conventions below are proposed, not implemented.
+Status: approved for native task-by-task implementation by the current owner
+on 2026-10-03. Fresh independent review before expansion or deployment.
+Implementation status is recorded in CODEX_STATUS; approval is not deployment.
 Starting point: `85f6597eb47adb9a795f7304d99ac22ccea8c3e7`, Checkpoint 5 closed.
 Development branch: `codex/checkpoint6-features`. No runtime activation implied.
 

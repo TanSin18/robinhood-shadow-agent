@@ -1,5 +1,32 @@
 # Codex status and questions
 
+## 2026-10-03 18:04 ET — Checkpoint 6 native implementation; no deployment
+
+Operator approved native task-by-task implementation and fresh independent
+review before expansion/deployment. Current owner: Codex. Branch:
+`codex/checkpoint6-features`; completed generator checkpoint `91ce660` pushed
+and remote SHA verified. Tasks 1–9 implemented; read-only explorer in validation.
+
+- New isolated, append-only feature store, point-in-time adapters, 218 registered
+  descriptive outputs, close-fractal/Fibonacci v1, OHLCV fixture calculations,
+  sector/SEC/event/macro descriptors, dry-run-default CLI and complete catalog.
+- Names explicitly include `close_`; no future OHLC structure replaces this
+  version. No strategies, models, scores, orders, fills, scheduler or feed activation.
+- Fresh tests at generator checkpoint: 77 focused; full native 1045 passed,
+  1 existing installed-Codex `configWarning` isolation failure, 27 warnings.
+  Guard unchanged. Explorer tests are still being completed, not declared done.
+- Live read-only VTI dry-run: 122 available/96 unavailable outputs, retrospective
+  session 2026-09-30 with 2026-10-03 cutoff. No results written live. OHLCV and
+  intraday unavailable; current sector mapping is not backdated into history.
+- Control A Release N fingerprint rechecked:
+  `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`.
+  Daily loaded/idle, last exit 0, 60-second timer; no stop file; Lane B paused.
+- Next: isolated initial sample validation, fresh independent review, regressions
+  and full test gates. No sample expansion or deployment before review passes.
+  Cloud suite requires an available executor or explicit operator exception;
+  native tests are not cloud evidence. No Checkpoint 7 work.
+
+
 ## 2026-10-03 17:32 ET — Checkpoint 6 architecture approved; detailed plan for review
 
 Operator approved the isolated feature architecture and explicitly close-based,

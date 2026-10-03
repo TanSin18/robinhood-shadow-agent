@@ -197,7 +197,7 @@ def defaults() -> dict:
                             'implementation_status': impl, 'observations': 0, 'latest': None} for i, n, s, d, by, note, impl in DEFINITIONS]}
 
 
-def load(official_db=None, path=None) -> dict:
+def load(official_db=None, path=None, feature_filters=None) -> dict:
     path = Path(path) if path else default_path(official_db)
     if not path.is_file():
         return {'exists': False, 'mode': MODE_BUILD_OBSERVE, **FIXED}
@@ -237,6 +237,7 @@ def load(official_db=None, path=None) -> dict:
         treasury_index = json.loads(meta['treasury_index_status']) if meta.get('treasury_index_status') else None
         total_return = json.loads(meta['vti_total_return_status']) if meta.get('vti_total_return_status') else None
         from .macro_view import summary_db as macro_summary
+        from .research_features.view import feature_view
         return {
             'exists': True, 'mode': meta.get('mode'), 'database': '/'.join(path.parts[-3:]), 'created_at': meta.get('created_at'),
             'tables': tables, 'has_execution_tables': any(w in t for t in tables for w in FORBIDDEN_TABLE_WORDS),
@@ -255,6 +256,7 @@ def load(official_db=None, path=None) -> dict:
             'capability_registry_version': meta.get('capability_registry_version', '1'),
             'benchmarks': benchmarks,
             'macro': macro_summary(db, set(tables)),
+            'research_features': feature_view(db,feature_filters),
             'experiments': [{'experiment_id': e, 'name': n, 'status': s} for e, n, s in db.execute('SELECT experiment_id, name, status FROM experiment_registry')],
             'refused_fill_attempts': one("SELECT COUNT(*) FROM events WHERE kind IN ('FILL_REFUSED','REAL_ORDER_REFUSED')")[0],
             **FIXED}

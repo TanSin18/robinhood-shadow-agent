@@ -68,3 +68,18 @@
 .day-clock-svg .now-label{fill:var(--amber,#f5b64a);font-size:11px;font-weight:700}
 @media (max-width:640px){.day-clock-svg .t-label{display:none}}
 .day-clock-svg .stem{stroke:#2d2d2b;stroke-width:1}
+/* Research explorer: neutral measurements, keyboard disclosures, no sentiment. */
+.feature-explorer{color:var(--text);overflow-wrap:anywhere}
+.feature-warning{border-left:3px solid var(--text-3);padding-left:16px}
+.feature-filters{display:flex;flex-wrap:wrap;gap:16px;align-items:end;margin:24px 0}
+.feature-filters label{display:grid;gap:8px;flex:1 1 180px;min-width:0}
+.feature-filters input{width:100%;box-sizing:border-box;margin:0!important;font:inherit}
+.feature-filters button{min-height:44px;padding:12px 18px;font:inherit;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+.feature-family{border-top:1px solid var(--border);margin-top:8px;padding:8px 0}
+.feature-family>summary{font-weight:600}
+.feature-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,2fr);gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+.feature-row dt{font-weight:500}.feature-row dd{margin:0;min-width:0}.feature-row pre{font-size:13px;max-height:28rem;overflow:auto}
+.feature-explorer summary{min-height:44px;cursor:pointer;align-content:center}
+.feature-explorer table{width:100%;border-collapse:collapse;text-align:left}.feature-explorer th,.feature-explorer td{padding:12px;overflow-wrap:anywhere}
+.feature-levels{width:100%;height:auto;display:block;margin:20px 0}.feature-levels line{stroke:var(--text-3);stroke-width:1}.feature-levels text{fill:var(--text);font:13px Geist,system-ui,sans-serif}
+@media(max-width:640px){.feature-row{grid-template-columns:1fr;gap:8px}.feature-filters{display:grid;grid-template-columns:1fr}.feature-levels{display:none}.feature-explorer table{font-size:14px}}
