@@ -8,6 +8,32 @@ from .components import esc
 WARNING='RESEARCH FEATURES ONLY — NOT A TRADE SIGNAL'
 
 
+def _nearest_retracement(rows):
+    """Sort recorded fractional distances; never calculate a feature on GET."""
+    by_name={r['name']:r for r in rows if r['family']=='fibonacci'}
+    missing='<p>Nearest retracement: unavailable — incomplete recorded distances</p>'
+    candidates=[]
+    for ratio in ('0.236','0.382','0.5','0.618','0.786'):
+        name='close_fib_retracement_'+ratio
+        level=by_name.get(name,{})
+        distance=by_name.get(name+'_distance',{})
+        if level.get('unit')!='price' or distance.get('unit')!='fraction':
+            return missing
+        if level.get('value') is None or distance.get('value') is None:
+            return missing
+        try:
+            value=Decimal(level['value']); delta=Decimal(distance['value'])
+            if not value.is_finite() or value<=0 or not delta.is_finite():
+                return missing
+        except (KeyError,TypeError,ValueError,InvalidOperation):
+            return missing
+        candidates.append((abs(delta),Decimal(ratio),name,level['value']))
+    if not candidates:
+        return missing
+    _,_,name,value=min(candidates)
+    return f'<p>Nearest retracement (stored distance): {esc(name)} · {esc(value)}</p>'
+
+
 def _levels(rows):
     levels=[r for r in rows if r['family']=='fibonacci' and r['unit']=='price' and r['value'] is not None]
     if not levels:
@@ -36,7 +62,7 @@ def _levels(rows):
             anchors+=f'<div><dt>{label}</dt><dd>Close {esc(point.get("value","Not recorded"))} on {esc(point.get("session","Not recorded"))}<br>Confirmed session: {esc(point.get("confirmed_session","Not recorded"))}<br>Known at: {esc(point.get("known_at","Not recorded"))}</dd></div>'
         anchors+='</dl>'
         table='<table><caption>Stored level values — accessible chart alternative</caption><thead><tr><th scope="col">Projection</th><th scope="col">Price</th></tr></thead><tbody>'+''.join(f'<tr><th scope="row">{esc(r["name"])}</th><td>{esc(r["value"])}</td></tr>' for r in levels)+'</tbody></table>'
-        return anchors+graph+'<details><summary>Anchors, confirmation times and exact levels</summary>'+table+f'<pre>{esc(json.dumps(anchor,sort_keys=True,indent=2))}</pre></details>'
+        return anchors+_nearest_retracement(rows)+graph+'<details><summary>Anchors, confirmation times and exact levels</summary>'+table+f'<pre>{esc(json.dumps(anchor,sort_keys=True,indent=2))}</pre></details>'
     except (ValueError,TypeError,InvalidOperation):
         return '<p>Stored level geometry could not be validated; no chart drawn.</p>'
 

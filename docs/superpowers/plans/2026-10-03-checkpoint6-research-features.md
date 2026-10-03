@@ -409,3 +409,11 @@ No live schema migration, UI installation or service restart is authorized by
 this implementation checkpoint. No Checkpoint7 work. Finish and record the
 native validation/review evidence, synchronize the sanitized branch, and hand off
 the exact unresolved gates without claiming Checkpoint6 closed.
+
+Later operator ruling, 2026-10-03: Task12 only is now authorized. The historical
+stop above is superseded by the explicit Checkpoint6 cloud-test exception.
+Cloud suite: NOT RUN — executor unavailable
+Checkpoint 6 cloud-test exception: APPROVED BY OPERATOR
+See CHECKPOINT6_DEPLOYMENT.md for backup/rollback and the narrowly reviewed
+nearest-retracement UI disclosure repair. Accepted feature implementation,
+222-definition inventory and calculation hash are unchanged. No Checkpoint7.

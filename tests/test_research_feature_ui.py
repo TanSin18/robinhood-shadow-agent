@@ -24,6 +24,33 @@ def test_warning_and_missing_data_visible():
     assert 'NO_VALIDATED_OHLC' in html
 
 
+def test_nearest_retracement_display_uses_recorded_distances_not_nearest_extension():
+    from agents.desk.feature_explorer import _levels
+    rows=[]
+    for ratio,level,distance in [('0.236','80','0.5'),('0.382','90','0.3'),
+            ('0.5','100','0.2'),('0.618','110','0.1'),('0.786','115','0.04')]:
+        name='close_fib_retracement_'+ratio
+        rows.extend([dict(family='fibonacci',name=name,unit='price',value=level,audit={'current_close':'120'}),
+                     dict(family='fibonacci',name=name+'_distance',unit='fraction',value=distance)])
+    rows.append(dict(family='fibonacci',name='close_fib_extension_1.272',unit='price',value='120',audit={}))
+    html=_levels(rows)
+    assert 'Nearest retracement (stored distance): close_fib_retracement_0.786 · 115' in html
+    # A missing stored operand must not be recomputed from current close on GET.
+    rows.pop(1)
+    assert 'Nearest retracement: unavailable — incomplete recorded distances' in _levels(rows)
+
+
+def test_unknown_retracement_pair_cannot_be_silently_excluded():
+    from agents.desk.feature_explorer import _nearest_retracement
+    rows=[]
+    for ratio in ('0.236','0.382','0.5','0.618','0.786'):
+        name='close_fib_retracement_'+ratio
+        rows.extend([dict(family='fibonacci',name=name,unit='price',value='100'),
+                     dict(family='fibonacci',name=name+'_distance',unit='fraction',value='0.2')])
+    rows[-1]['value']=rows[-2]['value']=None
+    assert 'unavailable' in _nearest_retracement(rows)
+
+
 def test_close_anchor_visual_audit_has_prices_dates_and_confirmations():
     from dataclasses import asdict
     from agents.desk.feature_explorer import render_features
