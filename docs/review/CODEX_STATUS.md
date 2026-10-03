@@ -1,5 +1,33 @@
 # Codex status and questions
 
+## 2026-10-03 17:32 ET — Checkpoint 6 architecture approved; detailed plan for review
+
+Operator approved the isolated feature architecture and explicitly close-based,
+three-session-confirmed swing/Fibonacci approach on 2026-10-03. Detailed formulas
+and execution plan are now proposed for review, not activated.
+Branch: `codex/checkpoint6-features`, based on Checkpoint 5 closeout `85f6597`.
+
+- Design: `docs/superpowers/specs/2026-10-03-checkpoint6-research-features-design.md`.
+- Plan: `docs/superpowers/plans/2026-10-03-checkpoint6-research-features.md`.
+- 12 tasks: immutable store/PIT inputs → technical/structure/OHLCV → sector/SEC/
+  macro → manual generation/catalog → read-only explorer → independent review/
+  validation → bounded research deployment and closure.
+- No code, model, budget, config, preregistration, DB or service changes this turn.
+  No runner restart or maintenance installation. Existing live state is not
+  modified by this planning checkpoint.
+- Existing data limitation: closes only; OHLCV calculations may pass fixtures
+  while live coverage remains unavailable. No provider activation proposed.
+- Verification this turn: documentation scope/whitespace and 51-section coverage
+  review; no product tests run because source is unchanged. Previous test counts
+  remain historical, not fresh Checkpoint 6 evidence.
+- Next permitted step: operator reviews detailed conventions/plan and selects
+  execution approach. Recommend native implementation with mandatory fresh
+  independent review before sample expansion/deployment. Do not start Task 1 yet.
+- Sanitized planning files will be committed and pushed; verify remote SHA.
+  No merge or automatic deployment.
+
+
+
 ## 2026-10-03 17:20 ET — Checkpoint 5 closed; research-only deployment verified
 
 Accepted code `9750665` unchanged; closeout on `codex/checkpoint5-macro`.
