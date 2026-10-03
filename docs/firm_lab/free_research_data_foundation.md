@@ -36,8 +36,9 @@ Since this checkpoint no paid provider is the chosen source for `fundamentals` o
 ## Capabilities after this checkpoint
 
 `fundamentals`, `earnings_events`, `vti_total_return` and `total_return_ruler` become `AVAILABLE` only from stored,
-validated rows, by the rules in the three documents above. `corporate_actions` can reach `PARTIAL_EXISTING` at most
-(VTI cash distributions only). `earnings_transcripts` stays `UNAVAILABLE`. `ml_ranker` and `options_strategy` stay
+validated rows, by the rules in the three documents above. `fundamentals` needs all eight required fields for every
+company (operator rule, 2026-10-03) and is `PARTIAL_EXISTING` today. `corporate_actions` can reach `PARTIAL_EXISTING`
+at most (VTI cash distributions only, benchmark-only). `macro_regime` and `sector_engine` are `NOT_STARTED`. `earnings_transcripts` stays `UNAVAILABLE`. `ml_ranker` and `options_strategy` stay
 `NOT_STARTED`. No new scheduled job, no order, fill, position or cash table, no trial.
 
 ## Live results, 2026-10-03
@@ -49,10 +50,30 @@ validated rows, by the rules in the three documents above. `corporate_actions` c
   On the 2026-09-30 session, base 2025-03-31 = 100: VTI price return 136.166497, VTI total return 138.526274, legacy
   70/30 126.616677, total-return 70/30 128.149523. An independent recomputation from the stored inputs matched all
   three new series on every session (largest difference below 0.000001).
-* **SEC company facts and earnings events.** Not yet run live: both hand-started runs on 2026-10-03 reported
-  `NOT_CONFIGURED` (no `FIRM_LAB_SEC_USER_AGENT` in the shell) and made no request. The collectors were checked
-  against the operator's captured SEC samples instead (see `sec_xbrl_normalization.md`). `fundamentals` and
-  `earnings_events` stay `UNAVAILABLE` until the two runs succeed.
-* **Tests.** Cloud 895 passed, 1 skipped. Mac native (overlay) 840 passed, 4 failed: the same four as before this
+* **SEC company facts (run 14:55 ET, rules version 2).** 51 requests, all answered. Five companies, the four latest
+  periodic reports each (20 filings). 906 watched raw facts read; **531 normalized facts stored**; no company answer
+  refused; no value differing from a filing document; 530 confirmed in the filing documents and 1 not found.
+  A second run two minutes later stored nothing new (531 duplicates recognised).
+  Unresolved, with the exact reasons:
+  * MSFT, total debt, all four filings: `SHORT_TERM_DEBT_NOT_REPORTED` (only long-term debt is tagged; absence is not
+    taken as zero). Required field: blocks.
+  * GOOGL, total debt, 10-Q for 2026-03-31: `SHORT_TERM_DEBT_NOT_REPORTED` (no commercial paper figure tagged for that
+    date). Required field: blocks.
+  * GOOGL, total debt, 10-Q for 2026-06-30: resolved (100,164 million) but `NOT_FOUND` in the filing document, because
+    the filing nests the zero commercial-paper tag inside another tag and the document reader does not read the inner
+    one. Kept and flagged; not counted as confirmed. Required field: blocks. The reader was not changed.
+  * NVDA and AMZN, capital expenditure, all filings: `BROADER_CONCEPT_NOT_MAPPED` (optional; does not block).
+  * AMZN and GOOGL, gross profit, all filings: `NOT_REPORTED_UNDER_A_MAPPED_CONCEPT` (optional; does not block).
+  Total debt resolved and confirmed for AAPL, NVDA and AMZN in all four filings each. All 112 AAPL facts carry the
+  acceptance-time flag (the SEC JSON time is the header time plus four hours; the header time is used).
+  **`fundamentals = PARTIAL_EXISTING`**: reliable debt is not available across the sample (MSFT, GOOGL).
+* **Earnings events (run 14:55 ET).** 46 requests, all answered. **20 events stored** (four per company), none
+  refused. Every one was accepted at or after 4:00 PM New York time. The fiscal period was linked for all 20. The
+  release document was resolved for all 20 from the filing's `-index-headers.html` page (each an EX-99.1 exhibit),
+  so the live lookup works. Four AAPL events carry the acceptance-time flag. No sentiment, score, label or model
+  exists. **`earnings_events = AVAILABLE`**; `earnings_transcripts` stays `UNAVAILABLE`.
+* **Benchmark-only marking.** The six stored VTI distribution rows are marked `benchmark_only = true`; the stored
+  series did not change (1,134 observations unchanged on recomputation).
+* **Tests.** Cloud 899 passed, 1 skipped. Mac native (overlay) 844 passed, 4 failed: the same four as before this
   checkpoint (three older dashboard tests, and the installed-Codex isolation test that needs the Control A
   maintenance release).
