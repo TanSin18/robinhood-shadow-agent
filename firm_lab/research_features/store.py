@@ -7,6 +7,7 @@ import uuid
 
 from .types import canonical, content_hash, from_payload
 from .registry import validate_definition
+from .stored_payload import read_result
 
 CANONICAL_OFFICIAL = Path('/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/data/agent.db')
 TABLES = ('research_feature_definitions', 'research_feature_runs',
@@ -63,11 +64,12 @@ class FeatureStore:
         if any(r.table == 'corporate_action_observations' for r in result.refs):
             raise ValueError('BENCHMARK_SOURCE_FORBIDDEN')
         identity = content_hash(result)
+        inputs={'refs':[asdict(ref) for ref in result.refs]}
+        input_set_id=content_hash(inputs)
+        payload={**asdict(result),'refs':None,'input_set_id':input_set_id}
         with self.db:
-            added = self._insert('research_feature_results', identity, result)
-            for ref in result.refs:
-                payload = {'result_id': identity, 'source': asdict(ref)}
-                self._insert('research_feature_inputs', content_hash(payload), payload)
+            self._insert('research_feature_inputs',input_set_id,inputs)
+            added = self._insert('research_feature_results', identity, payload)
         return added
 
     def register(self, definition):
@@ -82,7 +84,7 @@ class FeatureStore:
     def read(self, request):
         selected = {}
         for (payload,) in self.db.execute('SELECT payload FROM research_feature_results ORDER BY id'):
-            r = from_payload(payload)
+            r = read_result(self.db,payload)
             if r.instrument != request.instrument or r.as_of_session != request.as_of_session:
                 continue
             # Unavailable rows need the requested cutoff in audit to avoid leaking later diagnostics.

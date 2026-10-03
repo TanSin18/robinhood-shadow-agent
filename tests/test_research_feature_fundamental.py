@@ -43,3 +43,11 @@ def test_yoy_and_qoq_not_synthesized_from_ytd():
     rows={r.name:r for r in fundamental_features({'facts':facts},Request('AAPL','2026-09-30','2026-10-03T20:00:00Z'))}
     assert D(rows['revenue_yoy'].value)==D('.2')
     assert rows['revenue_qoq'].value is None
+
+
+def test_revision_ten_is_newer_than_revision_two_at_same_capture():
+    from firm_lab.research_features.fundamental import fundamental_features
+    from firm_lab.research_features.types import Request
+    facts=[fact('revenue','100'),dict(fact('operating_income','20'),version=2),dict(fact('operating_income','30'),version=10)]
+    rows=fundamental_features({'facts':facts},Request('AAPL','2026-09-30','2026-10-03T20:00:00Z'))
+    assert next(r for r in rows if r.name=='operating_margin').value=='0.3'

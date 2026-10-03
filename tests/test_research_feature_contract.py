@@ -26,6 +26,18 @@ def research_db(tmp_path):
     return db, official
 
 
+def test_shared_provenance_stored_once_and_round_trips(tmp_path):
+    from firm_lab.research_features.store import FeatureStore
+    from firm_lab.research_features.types import Request
+    db,official=research_db(tmp_path)
+    with FeatureStore(db,official) as store:
+        for i in range(20):
+            store.append(result(name=f'measure{i}'))
+        assert store.db.execute('SELECT count(*) FROM research_feature_inputs').fetchone()[0]==1
+        rows=store.read(Request('VTI','2026-09-30','2026-10-03T20:00:00Z'))
+        assert len(rows)==20 and all(r.refs==result().refs for r in rows)
+
+
 @pytest.mark.parametrize('alias_kind', ['same', 'symlink', 'hardlink'])
 def test_official_alias_rejected(tmp_path, alias_kind):
     from firm_lab.research_features.store import FeatureStore

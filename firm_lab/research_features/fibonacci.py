@@ -2,6 +2,7 @@
 from decimal import Decimal as D
 from .technical import precision, sma
 from .structure import confirmed_pivots, completed_legs, cluster_levels, result_builder, definition
+from .ohlcv import ohlcv_features
 
 RETRACEMENTS=('0.236','0.382','0.5','0.618','0.786')
 EXTENSIONS=('1.272','1.618')
@@ -36,6 +37,15 @@ def fibonacci_features(snapshot,request):
     levels=directed_levels(D(legs[-1]['start']['value']),D(legs[-1]['end']['value'])) if legs else {}
     audit={k:({x:y for x,y in v.items() if x!='refs'} if isinstance(v,dict) else v) for k,v in legs[-1].items()} if legs else {}
     current=D(bars[-1]['value']) if bars else None
+    ohlc=snapshot.get('ohlcv',[])
+    atr_value=None
+    # Close-anchor identity is unchanged. ATR is a separate optional input and
+    # must describe the same completed sessions and price basis.
+    if bars and ohlc and [b['session'] for b in ohlc]==[b['session'] for b in bars] and all(
+            D(a['close'])==D(b['value']) and a.get('price_basis')==b.get('price_basis') for a,b in zip(ohlc,bars)):
+        atr_row=next(r for r in ohlcv_features({**snapshot,'ohlcv':ohlc},request) if r.name=='atr14')
+        atr_value=D(atr_row.value) if atr_row.value is not None and D(atr_row.value)>0 else None
+    make_atr=result_builder({**snapshot,'closes':bars+ohlc},request,__file__)
     out=[]
     for key in ['retracement_'+r for r in RETRACEMENTS]+['extension_'+r for r in EXTENSIONS]:
         value=levels.get(key)
@@ -48,8 +58,9 @@ def fibonacci_features(snapshot,request):
         out.append(make('close_fib_'+key,'fibonacci',value,audit=detail,reason=reason))
         distance=(current-value)/value if value is not None and value>0 else None
         out.append(make('close_fib_'+key+'_distance','fibonacci',distance,'fraction',detail))
-        # ATR is intentionally absent until the OHLCV adapter validates it.
-        out.append(make('close_fib_'+key+'_atr_distance','fibonacci',None,'ATR',detail,'NO_VALIDATED_ATR'))
+        out.append(make_atr('close_fib_'+key+'_atr_distance','fibonacci',
+            (current-value)/atr_value if value is not None and atr_value is not None else None,
+            'ATR',detail,'NO_VALIDATED_ATR' if atr_value is None else reason))
         relation={'relation':'ABOVE' if current>value else 'BELOW' if current<value else 'EQUAL'} if value is not None else None
         out.append(make('close_fib_'+key+'_relation','fibonacci',relation,'relation',detail))
         touching=False

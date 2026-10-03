@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 from .types import from_payload,timestamp,valid_hash
+from .stored_payload import read_result
 
 
 def feature_view(db,filters=None):
@@ -47,7 +48,7 @@ def feature_view(db,filters=None):
         rows=[]; invalid=0
         for payload,created in db.execute(query,(selected['instrument'],selected['session'],selected['calculation_hash'],selected['knowledge_cutoff'])):
             try:
-                r=from_payload(payload)
+                r=read_result(db,payload)
                 if r.known_at and r.known_at>selected['knowledge_cutoff']:
                     raise ValueError('FUTURE_RESULT')
                 rows.append({**asdict(r),'computed_at':created})

@@ -2,6 +2,7 @@
 from datetime import date
 from decimal import Decimal as D
 from .technical import precision
+from .types import timestamp
 from .inputs import eligible_rows
 from .structure import result_builder, definition
 
@@ -33,6 +34,8 @@ def _facts(snapshot,request):
     rows=[r for r in eligible_rows(snapshot['facts'],request.knowledge_cutoff)
           if r.get('confirmed_in_filing')=='CONFIRMED' and r['period_end']<=request.as_of_session]
     selected={}
+    def order(r):
+        return (timestamp(r['known_at']),timestamp(r['accepted_timestamp']),int(r.get('version',0)))
     for row in rows:
         field=row['normalized_field']
         required='USD/shares' if field=='eps_diluted' else 'shares' if field=='diluted_shares_weighted_average' else 'USD'
@@ -43,10 +46,10 @@ def _facts(snapshot,request):
             continue
         key=(field,row.get('period_start'),row['period_end'],row['period_type'])
         prior=selected.get(key)
-        ordering=(row['known_at'],row['accepted_timestamp'],str(row.get('version',0)))
-        if prior is None or ordering>(prior['known_at'],prior['accepted_timestamp'],str(prior.get('version',0))):
+        ordering=order(row)
+        if prior is None or ordering>order(prior):
             selected[key]=row
-        elif ordering==(prior['known_at'],prior['accepted_timestamp'],str(prior.get('version',0))) and prior['value']!=row['value']:
+        elif ordering==order(prior) and prior['value']!=row['value']:
             raise ValueError('CONFLICTING_FACT_REVISION')
     return list(selected.values())
 
