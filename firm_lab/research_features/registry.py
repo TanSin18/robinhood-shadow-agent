@@ -14,4 +14,6 @@ def validate_definition(definition):
 
 def definitions():
     from .technical import technical_definitions
-    return technical_definitions()
+    from .structure import structure_definitions
+    from .fibonacci import fibonacci_definitions
+    return technical_definitions()+structure_definitions()+fibonacci_definitions()
