@@ -39,3 +39,20 @@ Since this checkpoint no paid provider is the chosen source for `fundamentals` o
 validated rows, by the rules in the three documents above. `corporate_actions` can reach `PARTIAL_EXISTING` at most
 (VTI cash distributions only). `earnings_transcripts` stays `UNAVAILABLE`. `ml_ranker` and `options_strategy` stay
 `NOT_STARTED`. No new scheduled job, no order, fill, position or cash table, no trial.
+
+## Live results, 2026-10-03
+
+* **Issuer distributions and total return (run 13:50 ET).** Vanguard answered a plain research request. Six
+  distributions stored (ex-dates 2025-06-30 to 2026-09-28), every validation check passed, each issuer reinvestment
+  price within 0.25% of the stored close on its ex-date. Stored: 378 sessions each of the VTI price-return index, the
+  VTI total-return index and the 70/30 total-return ruler (1,134 new observations; the 1,134 earlier ones untouched).
+  On the 2026-09-30 session, base 2025-03-31 = 100: VTI price return 136.166497, VTI total return 138.526274, legacy
+  70/30 126.616677, total-return 70/30 128.149523. An independent recomputation from the stored inputs matched all
+  three new series on every session (largest difference below 0.000001).
+* **SEC company facts and earnings events.** Not yet run live: both hand-started runs on 2026-10-03 reported
+  `NOT_CONFIGURED` (no `FIRM_LAB_SEC_USER_AGENT` in the shell) and made no request. The collectors were checked
+  against the operator's captured SEC samples instead (see `sec_xbrl_normalization.md`). `fundamentals` and
+  `earnings_events` stay `UNAVAILABLE` until the two runs succeed.
+* **Tests.** Cloud 895 passed, 1 skipped. Mac native (overlay) 840 passed, 4 failed: the same four as before this
+  checkpoint (three older dashboard tests, and the installed-Codex isolation test that needs the Control A
+  maintenance release).
