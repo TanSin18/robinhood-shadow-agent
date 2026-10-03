@@ -397,9 +397,15 @@ implies live availability. New formulas are detailed proposals awaiting review.
 
 ## Handoff state
 
-Planning only. No code, data, service, model, budget or trading behavior changed.
-Recommended execution: native implementation task-by-task, then fresh independent
-review before expansion/deployment. Shared temporal interfaces favor one owner;
-the required independent review remains a hard gate. Alternative: fresh
-implementer/reviewer per task, with additional context cost. Await operator
-review and execution-method selection before Task1.
+Operator approved native task-by-task implementation on 2026-10-03. Tasks1–10
+are implemented on `codex/checkpoint6-features`; Task11 native isolated validation
+and fresh independent review/repair pass are finished. Cloud testing is NOT RUN.
+This supersedes the planning-only
+handoff above; historical planning entries in CODEX_STATUS remain historical.
+
+Operator decision on 2026-10-03: **STOP BEFORE DEPLOYMENT**. There is no cloud
+executor and no cloud-test exception. Task12 is withheld, not completed.
+No live schema migration, UI installation or service restart is authorized by
+this implementation checkpoint. No Checkpoint7 work. Finish and record the
+native validation/review evidence, synchronize the sanitized branch, and hand off
+the exact unresolved gates without claiming Checkpoint6 closed.

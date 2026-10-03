@@ -1,5 +1,50 @@
 # Codex status and questions
 
+## 2026-10-03 19:24 ET — Checkpoint 6 native review/validation finished; STOP before deployment
+
+Operator explicitly chose **STOP BEFORE DEPLOYMENT**; no cloud-test exception.
+Owner: Codex. Development branch `codex/checkpoint6-features`; repaired source
+`34531dfbfe9567ee65a749af416c73a5eb42f104` pushed and remote verified.
+Worktree: `/Users/tanmaysinnarkar/.codex/worktrees/robinhood-live-rehearsal`.
+
+- Tasks1–10 implemented; Task11 native portion finished. Fresh independent
+  whole-branch review found7Important issues, all reproduced and repaired with
+  RED→GREEN regressions in one owner fix pass. Review was not a deployment pass.
+- Current inventory222descriptive outputs. Explicit close-only swing/Fibonacci
+  names remain; future OHLC structure must be separately versioned.
+- Tests:98focused;348FirmLab;full native1066passed/1knownfailure/27warnings.
+  Exact command: `/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q`
+  from the development worktree,54.15seconds. Failure:
+  `tests/test_installed_isolation.py::test_installed_child_filters_tools_and_denies_unexpected_server`
+  (existing installed Codex configWarning rejection). Guard not weakened.
+- Isolated validation:23symbols x30sessions=690snapshots;153180results,
+  85204available/67976unavailable. 9270source versions;222definition versions.
+  All156old-table comparisons unchanged; no official tables/writes. Historical
+  Sep30cutoff excludes all222outputs; identical rerun0inserts/222duplicates.
+- Data is explicitly retrospective with Oct3knowledge cutoff, not proof of
+  historical availability. No model/API calls from feature generation.
+- Two remaining limitations: no authoritative complete FOMC meeting-coverage
+  adapter; grouped nontechnical missing reasons lack every operand-level detail.
+  Missing live OHLCV/intraday/constituents remain unavailable, not fabricated.
+- Control A ReleaseN fingerprint at19:23ET:
+  `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`.
+  Daily loaded/idle, last exit0, interval60s; no stopfile; LaneB paused.
+  No runner restart, strategy/broker/config/model/budget change. Codex maintenance
+  stays `PREPARED_AND_PROVEN_NOT_INSTALLED`.
+- No live feature migration or UI deployment. Live research DB hash unchanged:
+  `b06cca62dcd3775c30cc08197408c1f2db99b1a9cef01d9aa0ee0aae8cf44164`.
+  Temporary8786preview and all research-validation workers stopped.
+- Reports on branch: `docs/firm_lab/CHECKPOINT6_VALIDATION.md` and
+  `docs/firm_lab/CHECKPOINT6_REVIEW.md`. Full design/catalog/mapping evidence
+  retained. Local receipts only:
+  `/Users/tanmaysinnarkar/LocalProjects/robinhood-diagnostics/checkpoint6-validation-20261003/`.
+- Next permitted step: resolve deferred diagnostics/coverage limitations and
+  obtain actual cloud test evidence; any deployment requires operator approval.
+  Task12 withheld. **CHECKPOINT6 NOT CLOSED. Do not begin Checkpoint7.**
+  Branch/worktree retained; no merge. Final sanitized handoff docs are being
+  committed/pushed; source SHA above is the tested implementation.
+
+
 ## 2026-10-03 18:04 ET — Checkpoint 6 native implementation; no deployment
 
 Operator approved native task-by-task implementation and fresh independent
