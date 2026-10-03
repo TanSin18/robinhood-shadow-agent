@@ -889,6 +889,9 @@ def test_collectors_import_only_the_standard_library_and_the_research_package():
 
 
 PUBLIC_SAMPLE_HOSTS = {'investor.vanguard.com', 'api.nasdaq.com'}       # public pages a hand-started capture or collector may ask
+# Checkpoint 5: official public macro sources (central bank, Treasury, statistical agencies, FRED). Research data only.
+MACRO_OFFICIAL_HOSTS = {'markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'fred.stlouisfed.org', 'alfred.stlouisfed.org',
+                        'api.stlouisfed.org', 'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov'}
 
 
 def test_collectors_name_only_research_hosts_and_post_nothing():
@@ -898,8 +901,9 @@ def test_collectors_name_only_research_hosts_and_post_nothing():
     for path in sorted((ROOT / 'firm_lab_collectors').glob('*.py')):
         source = path.read_text()
         for found in re.findall(r'https?://([A-Za-z0-9.\-:]+)', source):
-            assert found in hosts | PUBLIC_SAMPLE_HOSTS | {'thetadata.net'} or found.startswith('{'), f'{path.name} names {found}'
-        assert "method='POST'" not in source and 'data=' not in source.replace('metadata=', ''), path.name       # GET only; nothing is sent as a body
+            assert found in hosts | PUBLIC_SAMPLE_HOSTS | MACRO_OFFICIAL_HOSTS | {'thetadata.net'} or found.startswith('{'), f'{path.name} names {found}'
+        code = re.sub(r"https?://[^'\"\s]+", '', source)                               # a query string inside an address is not a request body
+        assert "method='POST'" not in source and 'data=' not in code.replace('metadata=', ''), path.name       # GET only; nothing is sent as a body
     assert "method='GET'" in (ROOT / 'firm_lab_collectors' / 'transport.py').read_text()
 
 

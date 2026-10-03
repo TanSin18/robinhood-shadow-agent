@@ -78,3 +78,69 @@ def run(out_dir, *, environ=None, sec_transport=None, plain_transport=None) -> d
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=1))
     return {'directory': str(out), 'sec_user_agent_declared': bool(agent), 'requested': len(manifest), 'saved': sum(1 for m in manifest if m['file']),
             'refused': [{'url': m['url'], 'status': m['status'], 'error': m['error']} for m in manifest if not m['file']]}
+
+
+# ---------------------------------------------------------------------------- macro samples (Checkpoint 5)
+FRED_API_KEY = 'FIRM_LAB_FRED_API_KEY'               # optional; a free research key the operator keeps locally. Never printed or stored.
+MACRO_HOSTS = ('markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'fred.stlouisfed.org', 'alfred.stlouisfed.org',
+               'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov')
+FRED_API_HOST = 'api.stlouisfed.org'
+FRED_SERIES = ('DFEDTARU', 'DFEDTARL', 'DFF', 'DGS2', 'DGS10', 'DGS3MO', 'CPIAUCSL', 'CPILFESL', 'PCEPI', 'PCEPILFE', 'UNRATE', 'PAYEMS', 'GDPC1')
+BLS_SERIES = ('CUSR0000SA0', 'CUSR0000SA0L1E', 'CUUR0000SA0', 'LNS14000000', 'CES0000000001')
+FED_STATEMENT = re.compile(re.escape('https://www.federalreserve.gov/newsevents/pressreleases/monetary') + r'\d{8}a\.htm')
+MACRO_PUBLIC = (
+    ('nyfed_effr_search.json', 'https://markets.newyorkfed.org/api/rates/unsecured/effr/search.json?startDate=2025-03-01&endDate=2026-12-31'),
+    ('nyfed_effr_last.json', 'https://markets.newyorkfed.org/api/rates/unsecured/effr/last/5.json'),
+    ('treasury_yield_2026.csv', 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all'
+                                '?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv'),
+    ('treasury_yield_2026.xml',
+     'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=2026'),
+    ('fed_press_monetary.xml', 'https://www.federalreserve.gov/feeds/press_monetary.xml'),
+    ('fed_fomc_calendar.htm', 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm'),
+    ('fed_openmarket.htm', 'https://www.federalreserve.gov/monetarypolicy/openmarket.htm'),
+    ('bls_cpi_schedule.htm', 'https://www.bls.gov/schedule/news_release/cpi.htm'),
+    ('bls_empsit_schedule.htm', 'https://www.bls.gov/schedule/news_release/empsit.htm'),
+    ('bls_cpi.rss', 'https://www.bls.gov/feed/cpi.rss'),
+    ('bls_empsit.rss', 'https://www.bls.gov/feed/empsit.rss'),
+    ('bea_schedule.htm', 'https://www.bea.gov/news/schedule'),
+    ('bea_rss.xml', 'https://apps.bea.gov/rss/rss.xml'),
+    ('alfred_CPIAUCSL.csv', 'https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=CPIAUCSL&cosd=2025-01-01'),
+)
+
+
+def run_macro(out_dir, *, environ=None, transport=None, keyed_transport=None) -> dict:
+    """Raw macro samples from official public sources, saved as received, with a manifest. Nothing is parsed or stored in the
+    database. The optional FRED key is used only for the FRED API host and never appears in a saved file or the manifest."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = []
+    net = transport or HttpTransport(MACRO_HOSTS, user_agent=PLAIN_AGENT, min_interval=1.0, timeout=30)
+    accept = {'Accept': 'application/json, text/csv, application/xml, text/html;q=0.8, */*;q=0.5'}
+    for name, url in MACRO_PUBLIC:
+        reply = _save(out, name, net.get(url, accept), manifest)
+        if name == 'fed_press_monetary.xml' and reply.ok:          # the newest FOMC statement page, to see how the decision is worded
+            text = reply.body.decode('utf-8', 'replace')
+            for item in re.findall(r'<item>(.*?)</item>', text, re.S):
+                link = FED_STATEMENT.search(item)
+                if link and 'FOMC statement' in item:
+                    _save(out, 'fed_fomc_statement_latest.htm', net.get(link.group(0), accept), manifest)
+                    break
+    for series in BLS_SERIES:
+        _save(out, f'bls_{series}.json', net.get(f'https://api.bls.gov/publicAPI/v1/timeseries/data/{series}', accept), manifest)
+    for series in FRED_SERIES:
+        _save(out, f'fred_{series}.csv', net.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd=2025-01-01', accept), manifest)
+    key = config.value(FRED_API_KEY, environ)
+    if key and re.fullmatch(r'[0-9a-z]{32}', key):
+        keyed = keyed_transport or HttpTransport([FRED_API_HOST], user_agent=PLAIN_AGENT, min_interval=1.0, timeout=30)
+        for series in ('CPIAUCSL', 'PAYEMS', 'PCEPI', 'DGS10', 'DFEDTARU'):
+            _save(out, f'fredapi_{series}_vintages.json', keyed.get(
+                f'https://{FRED_API_HOST}/fred/series/observations?series_id={series}&api_key={key}&file_type=json&observation_start=2025-01-01'
+                '&realtime_start=2025-01-01&realtime_end=9999-12-31'), manifest)
+        _save(out, 'fredapi_CPIAUCSL_release.json', keyed.get(f'https://{FRED_API_HOST}/fred/series/release?series_id=CPIAUCSL&api_key={key}&file_type=json'),
+              manifest)
+        _save(out, 'fredapi_release10_dates.json', keyed.get(
+            f'https://{FRED_API_HOST}/fred/release/dates?release_id=10&api_key={key}&file_type=json&realtime_start=2025-01-01&include_release_dates_with_no_data=true'),
+            manifest)
+    (out / 'manifest.json').write_text(json.dumps(manifest, indent=1))
+    return {'directory': str(out), 'fred_api_key_present': bool(key), 'requested': len(manifest), 'saved': sum(1 for m in manifest if m['file']),
+            'refused': [{'url': m['url'], 'status': m['status'], 'error': m['error']} for m in manifest if not m['file']]}
