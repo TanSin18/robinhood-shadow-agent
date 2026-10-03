@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from . import sessions
+from . import sessions, usage
 from .store import canonical, now_utc
 
 D = Decimal
@@ -28,6 +28,8 @@ def _price(value):
 def _insert_closes(store, rows, now=None):
     """rows: dicts for add_feature. One transaction; append-only; unchanged values are not repeated."""
     out = {'INSERTED': 0, 'REVISED': 0, 'UNCHANGED': 0}
+    for r in rows:                                          # benchmark-only material never becomes a feature
+        usage.require_feature_source_allowed(source=r.get('source'), provider=r.get('provider'), metadata=r.get('metadata'), feature_name='close')
     at = (now or now_utc()).isoformat()
     with store.connect() as db:
         latest = {}

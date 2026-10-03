@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 
+from . import usage
 from .errors import FirmLabError
 from .provenance import content_hash
 from .providers import OK
@@ -87,6 +88,11 @@ def _row(record, columns, vendor):
     for name in ('conditions', 'indicators'):
         if name in flat:
             flat[name + '_json'] = flat.pop(name)
+    if 'benchmark_only' in columns:
+        # Set here, at storage, from the record itself and never taken from a provider: a corporate action with no validated
+        # announcement time is benchmark-only (firm_lab.usage). It is not part of the content hash.
+        restricted = usage.is_benchmark_only(flat)
+        flat['benchmark_only'], flat['use_restriction'] = restricted, (usage.RESTRICTION if restricted else None)
     return [_text(flat.get(c)) for c in columns]
 
 

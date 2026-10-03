@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from . import capabilities, features, sessions, total_return, treasury
+from . import capabilities, features, sessions, total_return, treasury, usage
 from .errors import FirmLabError
 from .store import canonical, now_utc
 
@@ -212,29 +212,33 @@ def total_return_status(store) -> dict:
     return json.loads(text) if text else {}
 
 
-def _stored_distributions(store, instrument):
-    """Stored cash distributions of the instrument, by source. Returns (issuer records, independent records, conflicts)."""
+def _stored_distributions(store, instrument, as_of):
+    """Stored cash distributions of the instrument, by source, read for BENCHMARK use only (firm_lab.usage): an after-the-fact
+    ruler may use a distribution Firm Lab learned later; a feature may not. Returns (issuer records, independent records,
+    conflicts, details by ex-date, split rows)."""
+    held = usage.distribution_rows(store, instrument, purpose=usage.BENCHMARK, as_of=as_of)
+    rows = [(r['provider'], r['effective_date'], r['value'], r['currency'], r['known_at'], r['provider_action'], r.get('source_record'),
+             r.get('record_date'), r.get('pay_date'), usage.is_benchmark_only(r)) for r in held]
     with store.connect() as db:
-        rows = db.execute("SELECT provider, effective_date, value, currency, known_at, provider_action, source_record, record_date, pay_date, id "
-                          "FROM corporate_action_observations WHERE instrument=? AND action_type='cash_dividend' ORDER BY id", (instrument,)).fetchall()
         splits = db.execute("SELECT provider, effective_date, value FROM corporate_action_observations WHERE instrument=? AND action_type='split' "
                             'ORDER BY id', (instrument,)).fetchall()
     seen, conflicts, issuer, independent, detail = {}, [], [], [], {}
-    for provider, ex_date, value, currency, known, kind, source_record, record_date, pay_date, _ in rows:
+    for provider, ex_date, value, currency, known, kind, source_record, record_date, pay_date, restricted in rows:
         key = (provider, ex_date, kind)
         if key in seen:
             if seen[key] != (Decimal(value), currency):     # the same source published two different amounts for one distribution
                 conflicts.append(f'{provider} {ex_date}: {seen[key][0]} and {value}')
             elif provider == DISTRIBUTION_ISSUER:            # same amount: the first record's known-at stands; the newest details are the ones checked
                 detail[date.fromisoformat(ex_date)] = {'source_record': json.loads(source_record) if source_record else {},
-                                                       'record_date': record_date, 'pay_date': pay_date}
+                                                       'record_date': record_date, 'pay_date': pay_date, 'benchmark_only': restricted}
             continue
         seen[key] = (Decimal(value), currency)
         item = total_return.Distribution(date.fromisoformat(ex_date), Decimal(value), str(currency or ''),
                                          datetime.fromisoformat(known.replace('Z', '+00:00')), 'cash_dividend')
         (issuer if provider == DISTRIBUTION_ISSUER else independent).append(item)
         if provider == DISTRIBUTION_ISSUER:
-            detail[item.ex_date] = {'source_record': json.loads(source_record) if source_record else {}, 'record_date': record_date, 'pay_date': pay_date}
+            detail[item.ex_date] = {'source_record': json.loads(source_record) if source_record else {}, 'record_date': record_date,
+                                    'pay_date': pay_date, 'benchmark_only': restricted}
     return issuer, independent, conflicts, detail, splits
 
 
@@ -252,6 +256,7 @@ def compute_total_return(store, now=None, *, root=None) -> dict:
     closes = [(date.fromisoformat(h['exchange_session_date']), Decimal(h['value'])) for h in history]
     close_known = {date.fromisoformat(h['exchange_session_date']): datetime.fromisoformat(h['known_at'].replace('Z', '+00:00')) for h in history}
     report = {'computed_at': at.isoformat(), 'implementation': TR_IMPLEMENTATION, 'methodology': TR_METHODOLOGY['document'], 'sessions': len(closes),
+              'distribution_use': usage.BENCHMARK_ONLY, 'use_rule': usage.RESTRICTION,
               'status': VALIDATION_FAILED, 'issues': [], 'notes': [], 'stored': 0, 'unchanged': 0, 'gap_date': None, 'gap_reason': ''}
 
     def finish():
@@ -265,7 +270,7 @@ def compute_total_return(store, now=None, *, root=None) -> dict:
         report['issues'].append({'code': 'NO_SESSIONS', 'detail': 'no completed VTI session is stored'})
         return finish()
     base, last = closes[0][0], closes[-1][0]
-    issuer, independent, conflicts, detail, splits = _stored_distributions(store, 'VTI')
+    issuer, independent, conflicts, detail, splits = _stored_distributions(store, 'VTI', at)
     known = [d for d in issuer if d.known_at <= at]
     window = [d for d in known if base < d.ex_date <= last]
     issues = [{'code': 'CONFLICTING_DISTRIBUTION_RECORDS', 'detail': text} for text in conflicts]
@@ -282,6 +287,8 @@ def compute_total_return(store, now=None, *, root=None) -> dict:
         close = by_day.get(d.ex_date)
         entry = {'ex_date': d.ex_date.isoformat(), 'amount': str(d.amount), 'currency': d.currency, 'known_at': d.known_at.isoformat(),
                  'record_date': (detail.get(d.ex_date) or {}).get('record_date'), 'pay_date': (detail.get(d.ex_date) or {}).get('pay_date'),
+                 'benchmark_only': bool((detail.get(d.ex_date) or {}).get('benchmark_only')),
+                 'announcement_timestamp': 'UNAVAILABLE' if (detail.get(d.ex_date) or {}).get('benchmark_only') else 'stored',
                  'issuer_reinvestment_price': stated, 'stored_close_on_ex_date': str(close) if close is not None else None}
         checked.append(entry)
         if close is None:

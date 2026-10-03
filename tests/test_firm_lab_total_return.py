@@ -340,3 +340,106 @@ def test_the_total_return_rulers_are_rulers_only(tmp_path):
     source = (__import__('pathlib').Path(benchmarks.__file__).parent / 'total_return.py').read_text()
     for banned in ('import urllib', 'import socket', 'requests', 'sqlite3', 'open('):
         assert banned not in source, banned                                                    # pure arithmetic: no network, no file
+
+
+# ====================================================================================================== benchmark use is not feature use
+def test_distributions_are_benchmark_only_and_never_reach_the_feature_store(tmp_path):
+    from firm_lab import features, usage
+    lab, days, closes = _ready(tmp_path)
+    report = runner.run_distributions(lab, transport=Fake([('/vmf/api/VTI/distribution', 200, _feed_for(closes))], at=LATER), clock=lambda: LATER)
+    assert report['total_return']['status'] == 'OK'
+    # every stored distribution row says so itself: no validated announcement time, benchmark only
+    rows = _rows(lab, 'corporate_action_observations')
+    assert len(rows) == 2 and all(r['benchmark_only'] == 'true' and r['announcement_timestamp'] == 'UNAVAILABLE' for r in rows)
+    assert all(r['use_restriction'] == usage.RESTRICTION and 'never a model feature' in r['use_restriction'] for r in rows)
+    status = benchmarks.total_return_status(lab)
+    assert status['distribution_use'] == 'BENCHMARK_ONLY' and all(d['benchmark_only'] is True for d in status['distributions_checked'])
+    # benchmark use: the ruler may use what Firm Lab holds now, and each observation says when it could first have been computed
+    held = usage.distribution_rows(lab, 'VTI', purpose=usage.BENCHMARK, as_of=LATER)
+    assert [r['effective_date'] for r in held] == ['2026-09-28', '2026-06-26']
+    assert usage.distribution_rows(lab, 'VTI', purpose=usage.BENCHMARK, as_of=NOW) == []       # before they were fetched, even the ruler has none
+    # predictive use: never. Not on the ex-date, not the day after, not today, not years from now
+    for moment in (datetime(2026, 9, 28, 20, 0, tzinfo=timezone.utc), datetime(2026, 9, 29, 14, 0, tzinfo=timezone.utc), LATER,
+                   LATER + timedelta(days=3650)):
+        assert usage.distribution_rows(lab, 'VTI', purpose=usage.FEATURE, as_of=moment) == [], moment
+    for bad in (None, 'model', 'anything'):
+        with pytest.raises(FirmLabError, match='PURPOSE_REQUIRED'):                              # a reader must say what the data is for
+            usage.distribution_rows(lab, 'VTI', purpose=bad, as_of=LATER)
+    # the rule, from the row itself: only a real, timezone-aware announcement time lifts the restriction, and a marked row stays marked
+    assert usage.is_benchmark_only({'announcement_timestamp': 'UNAVAILABLE'}) and usage.is_benchmark_only({'announcement_timestamp': '2026-09-28'})
+    assert usage.is_benchmark_only({'announcement_timestamp': None}) and usage.is_benchmark_only({})
+    assert usage.is_benchmark_only({'announcement_timestamp': '2026-09-20T12:00:00'})            # no timezone: not a validated time
+    assert not usage.is_benchmark_only({'announcement_timestamp': '2026-09-20T12:00:00+00:00'})
+    assert usage.is_benchmark_only({'announcement_timestamp': '2026-09-20T12:00:00+00:00', 'benchmark_only': 'true'})
+    # a distribution that did come with a validated announcement time is usable from that time on, and not a second earlier
+    with lab.connect() as db:
+        db.execute("INSERT INTO corporate_action_observations (instrument, action_type, provider_action, effective_date, announcement_timestamp, value, "
+                   "currency, contra_instrument, benchmark_only, provider, source_id, source_timestamp, known_at, ingested_at, schema_version, content_hash, "
+                   "run_id) VALUES ('VTI','cash_dividend','Dividend','2026-09-28','2026-09-21T13:00:00+00:00','0.955500','USD','', 'false', 'Announced', "
+                   "'x', ?, ?, ?, 'v', 'h', 1)", (EARLY.isoformat(), EARLY.isoformat(), EARLY.isoformat()))
+    announced = datetime(2026, 9, 21, 13, 0, tzinfo=timezone.utc)
+    assert usage.distribution_rows(lab, 'VTI', purpose=usage.FEATURE, as_of=announced - timedelta(seconds=1)) == []
+    assert [r['provider'] for r in usage.distribution_rows(lab, 'VTI', purpose=usage.FEATURE, as_of=announced)] == ['Announced']
+    # the feature store refuses benchmark-only material, whichever way it is offered
+    count = lab.counts()['feature_observations']
+    offer = dict(instrument='VTI', value='0.9555', source_timestamp=None, known_at='2026-09-28T20:00:00+00:00', exchange_session_date='2026-09-28',
+                 feature_version='x')
+    for extra in (dict(feature_name='dividend_amount', source='firm_lab'),
+                  dict(feature_name='yield_12m', source='corporate_action_observations'),
+                  dict(feature_name='vti_tr', source='benchmark_observations:vti_total_return_index'),
+                  dict(feature_name='income', source='firm_lab', provider='Vanguard distributions'),
+                  dict(feature_name='income', source='firm_lab', metadata={'benchmark_only': True}),
+                  dict(feature_name='income', source='firm_lab', metadata={'computed_from': 'vti_total_return_index'}),
+                  dict(feature_name='income', source='firm_lab', metadata={'source_table': 'corporate_action_observations'})):
+        with pytest.raises(FirmLabError, match='BENCHMARK_ONLY_DATA_NOT_ALLOWED_IN_FEATURES'):
+            lab.add_feature(**offer, **extra)
+    with pytest.raises(FirmLabError, match='BENCHMARK_ONLY_DATA_NOT_ALLOWED_IN_FEATURES'):       # the other write path, too
+        features._insert_closes(lab, [dict(offer, source='vti_total_return_index', provider='x')])
+    assert lab.counts()['feature_observations'] == count                                        # nothing got in
+    assert lab.add_feature(**offer, feature_name='ma200', source='firm_lab_feature_store', metadata={'computed_from': 'close'}) == 'INSERTED'      # ordinary features still do
+    with lab.connect() as db:
+        assert not db.execute("SELECT COUNT(*) FROM feature_observations WHERE lower(feature_name) LIKE '%divid%' OR lower(source) LIKE '%vanguard%' "
+                              "OR lower(source) LIKE '%distribution%' OR lower(source) LIKE '%benchmark%'").fetchone()[0]
+    # the code that builds features never reads distributions or benchmark series, and only the benchmark code and the gate do
+    root = __import__('pathlib').Path(benchmarks.__file__).parent
+    for name in ('features.py', 'baseline.py', 'ingest.py', 'official.py', 'fundamentals.py'):
+        text = (root / name).read_text()
+        for banned in ('corporate_action_observations', 'benchmark_observations', 'distribution_rows', 'total_return', 'compute_total_return'):
+            assert banned not in text, (name, banned)
+    readers = {p.name for p in root.glob('*.py') if 'FROM corporate_action_observations' in p.read_text()}
+    assert readers <= {'usage.py', 'benchmarks.py', 'capabilities.py', 'rawstore.py', 'view.py', 'crosscheck.py'}, readers
+    assert "purpose=usage.BENCHMARK" in (root / 'benchmarks.py').read_text() and 'usage.FEATURE' not in (root / 'benchmarks.py').read_text()
+    # the page and the registry say it in words
+    html = firm_lab_page.render({'firm_lab': view.load(path=lab.path)})
+    assert '<b>BENCHMARK ONLY.</b>' in html and 'never enter the feature store' in html
+    details = {c['capability']: c['detail'] for c in lab.capabilities()}
+    assert 'BENCHMARK ONLY' in details['vti_total_return'] and 'benchmark-only' in details['corporate_actions']
+    assert lab.capability('vti_total_return') == 'AVAILABLE' and lab.capability('total_return_ruler') == 'AVAILABLE'
+
+
+def test_rows_stored_before_the_marking_existed_are_marked_when_the_database_is_opened(tmp_path):
+    import sqlite3
+    from firm_lab import usage
+    from firm_lab.store import FirmLabStore
+    lab, days, closes = _ready(tmp_path)
+    runner.run_distributions(lab, transport=Fake([('/vmf/api/VTI/distribution', 200, _feed_for(closes))], at=LATER), clock=lambda: LATER)
+    before = _rows(lab, 'corporate_action_observations', columns='id, effective_date, value, known_at, content_hash')
+    db = sqlite3.connect(lab.path)                                                            # as the table was on 2026-10-03, before the column existed
+    db.execute('ALTER TABLE corporate_action_observations DROP COLUMN benchmark_only')
+    db.execute('ALTER TABLE corporate_action_observations DROP COLUMN use_restriction')
+    db.commit()
+    db.close()
+    reopened = FirmLabStore(lab.path)
+    rows = _rows(reopened, 'corporate_action_observations')
+    assert all(r['benchmark_only'] == 'true' and r['use_restriction'] == usage.RESTRICTION for r in rows)
+    assert _rows(reopened, 'corporate_action_observations', columns='id, effective_date, value, known_at, content_hash') == before      # nothing else changed
+    with reopened.connect() as db:
+        marks = [json.loads(r[0]) for r in db.execute("SELECT payload_json FROM events WHERE kind='USE_RESTRICTION_MARKED'")]
+    assert marks == [{'table': 'corporate_action_observations', 'rows': 2, 'benchmark_only': True, 'reason': usage.RESTRICTION}]
+    FirmLabStore(lab.path)                                                                    # opening again marks nothing twice
+    with reopened.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM events WHERE kind='USE_RESTRICTION_MARKED'").fetchone()[0] == 1
+    # the same issuer answer fetched again is still recognised as the same records: the marking is not part of what a record is
+    again = runner.run_distributions(reopened, transport=Fake([('/vmf/api/VTI/distribution', 200, _feed_for(closes))], at=LATER + timedelta(hours=1)),
+                                     clock=lambda: LATER + timedelta(hours=1))
+    assert again['runs'][0]['stored'] == 0 and again['runs'][0]['duplicates'] == 2 and again['total_return']['status'] == 'OK'

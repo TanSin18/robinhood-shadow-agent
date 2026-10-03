@@ -19,12 +19,15 @@ LABELS = {
     'vwap': 'VWAP', 'opening_range': 'Opening range', 'time_of_day_rvol': 'Time-of-day RVOL', 'trade_flow': 'Aggressive order flow',
     'order_book': 'Quote and order-book imbalance', 'options_chain': 'Option chain data', 'options_strategy': 'Options strategy',
     'news_catalysts': 'News and catalysts', 'sec_filings': 'SEC filings', 'sector_engine': 'Sector engine', 'ml_ranker': 'ML ranker',
-    'portfolio_optimizer': 'Portfolio optimizer', 'earnings_events': 'Earnings events', 'vti_total_return': 'VTI total return',
+    'portfolio_optimizer': 'Portfolio optimizer', 'earnings_events': 'Earnings events', 'macro_regime': 'Macro regime', 'vti_total_return': 'VTI total return',
     'total_return_ruler': '70/30 total-return ruler', 'corporate_actions': 'Corporate actions and dividends', 'vwap': 'VWAP',
     'options_greeks': 'Options Greeks', 'treasury_total_return': 'T-bill total return', 'tick_trades_quotes': 'Historical trades and quotes',
     'live_quotes': 'Live quotes and trades',
 }
 EVENT_BANNER = 'FACTUAL EVENT DATA ONLY — NO EARNINGS SIGNAL'
+REQUIRED = ('revenue', 'operating_income', 'net_income', 'eps_diluted', 'operating_cash_flow', 'cash_and_equivalents', 'total_debt',
+            'diluted_shares_weighted_average')
+OPTIONAL = ('gross_profit', 'capital_expenditure')
 FIELD_NAMES = {'revenue': 'revenue', 'gross_profit': 'gross profit', 'operating_income': 'operating income', 'net_income': 'net income',
                'eps_diluted': 'diluted EPS', 'operating_cash_flow': 'operating cash flow', 'capital_expenditure': 'capital expenditure',
                'cash_and_equivalents': 'cash and cash equivalents', 'total_debt': 'total debt',
@@ -254,6 +257,9 @@ def _benchmark_readiness(fl):
             notes += f'<p class="v10-note">{esc(text)}</p>'
     return ('<p class="v10-note">Rulers only. The price-return series stored earlier are kept exactly as they were; the total-return series are '
             'separate and are computed only from distributions that passed validation. No vendor adjusted close or vendor total-return index is used.</p>'
+            '<p class="v10-note"><b>BENCHMARK ONLY.</b> The VTI distributions are used to rebuild an after-the-fact ruler. They carry no validated '
+            'announcement time, so they are not treated as information that was known on their ex-dates, and they never enter the feature store '
+            'or any model feature.</p>'
             '<div class="table-wrap"><table class="mini fl-ready fl-benchready"><colgroup><col class="fl-b1"><col class="fl-b2"><col class="fl-b3">'
             '<col class="fl-b4"><col class="fl-b5"><col></colgroup><thead><tr><th>Series</th><th>Capability</th><th class="num">Observations</th>'
             '<th>Oldest</th><th>Newest</th><th>Validation</th></tr></thead>'
@@ -271,7 +277,13 @@ def _fundamentals(fl):
                            for name, reasons in sorted(mappings.items()))
     facts = (('Source', esc(data.get('source'))),
              ('Sample companies', esc(', '.join(c['instrument'] for c in companies) or 'none read yet')),
-             ('Normalized fields', esc(', '.join(FIELD_NAMES.get(f, f) for f in data.get('normalized_fields') or []))),
+             ('Required for AVAILABLE', esc(', '.join(FIELD_NAMES.get(f, f) for f in data.get('required_fields') or REQUIRED) +
+                                            '. Each must be resolved and confirmed for every company and every filing read.')),
+             ('Optional, company-dependent', esc(', '.join(FIELD_NAMES.get(f, f) for f in data.get('optional_fields') or OPTIONAL) +
+                                                 '. One that is not reported is recorded and does not block. Not collected and never synthesized: free cash flow, EBITDA.')),
+             ('Debt rule', 'The combined debt figure when the company reports one; otherwise current plus non-current long-term debt plus '
+                           'short-term borrowings (or commercial paper), each as reported. A part that is not reported is not taken as zero, and '
+                           'lease liabilities are not included.'),
              ('Accepted facts in the latest sample', esc(f'{int(data.get("accepted") or 0):,} ({int(data.get("stored_rows") or 0):,} rows stored in all)')),
              ('Rejected', esc(f'{data.get("rejected_runs", 0)} company answers refused whole') + (f'; {esc(data.get("not_found_in_filing", 0))} stored facts not found in the filing document' if data.get('not_found_in_filing') else '')),
              ('Unresolved mappings', esc(unresolved) if unresolved else ('none' if companies else 'nothing read yet')),

@@ -1,6 +1,8 @@
 # SEC XBRL company facts — normalization rules
 
-Rules version `sec-xbrl-normalization-v1`, written 2026-10-03 for Checkpoint 4. Implementation:
+Rules version `sec-xbrl-normalization-v2` (2026-10-03, afternoon). Version 2 follows the operator's instruction of
+2026-10-03 14:36 ET: it adds the documented debt rule and the required/optional split below; no other mapping changed
+from version 1. Implementation:
 `firm_lab/fundamentals.py` (rules), `firm_lab/ixbrl.py` (reading the filing's own document),
 `firm_lab_collectors/xbrl.py` (the SEC source). Stored in `fundamental_fact_observations`.
 
@@ -36,21 +38,52 @@ that are deliberately not treated as the same thing; seeing one explains why the
 |---|---|---|---|---|
 | `revenue` | `Revenues`, `RevenueFromContractWithCustomerExcludingAssessedTax`, `SalesRevenueNet` | USD | `RevenueFromContractWithCustomerIncludingAssessedTax`, `RevenuesNetOfInterestExpense` | yes |
 | `gross_profit` | `GrossProfit` | USD | `CostOfRevenue`, `CostOfGoodsAndServicesSold`: never derived by subtraction | no |
-| `operating_income` | `OperatingIncomeLoss` | USD | — | no |
+| `operating_income` | `OperatingIncomeLoss` | USD | — | yes |
 | `net_income` | `NetIncomeLoss` | USD | `ProfitLoss` (includes non-controlling interests), `NetIncomeLossAvailableToCommonStockholdersBasic` | yes |
 | `eps_diluted` | `EarningsPerShareDiluted` | USD/shares | `EarningsPerShareBasicAndDiluted`, `EarningsPerShareBasic` | yes |
 | `operating_cash_flow` | `NetCashProvidedByUsedInOperatingActivities` | USD | `…ContinuingOperations` | yes |
 | `capital_expenditure` | `PaymentsToAcquirePropertyPlantAndEquipment` | USD | `PaymentsToAcquireProductiveAssets`, `PaymentsToAcquireOtherPropertyPlantAndEquipment` (`BROADER_CONCEPT_NOT_MAPPED`) | no |
-| `cash_and_equivalents` | `CashAndCashEquivalentsAtCarryingValue` | USD, instant | totals including restricted cash | no |
-| `total_debt` | `DebtLongtermAndShorttermCombinedAmount` | USD, instant | `LongTermDebt`, `LongTermDebtNoncurrent`, `LongTermDebtCurrent`, `CommercialPaper`, `ShortTermBorrowings`, `DebtCurrent`, `LongTermDebtAndCapitalLeaseObligations` (`NEEDS_COMPONENT_RULE`): components are never added together | no |
-| `diluted_shares_weighted_average` | `WeightedAverageNumberOfDilutedSharesOutstanding` | shares | — | no |
+| `cash_and_equivalents` | `CashAndCashEquivalentsAtCarryingValue` | USD, instant | totals including restricted cash | yes |
+| `total_debt` | `DebtLongtermAndShorttermCombinedAmount`, or the documented sum of parts (next section) | USD, instant | `LongTermDebt` (see below), `LongTermDebtAndCapitalLeaseObligations`, any lease liability | yes |
+| `diluted_shares_weighted_average` | `WeightedAverageNumberOfDilutedSharesOutstanding` | shares | — | yes |
 
 "Diluted shares outstanding" is stored as the weighted-average diluted share count the company reports for the
 period (the figure used for diluted EPS). It is not a point-in-time share count.
 
-"Critical" is a choice made in this version, recorded here so it can be challenged: the `fundamentals` capability
-requires the four critical fields for the current period of every filing read. The other six may stay unresolved,
-and when they do the capability text names them.
+**Required and optional (operator rule, 2026-10-03).** The column "Critical" marks the eight required fields:
+revenue, operating income, net income, diluted EPS, operating cash flow, cash and cash equivalents, diluted shares, and
+a debt figure. The `fundamentals` capability needs every one of them, for every company of the sample, for the current
+period of every filing read. Gross profit and capital expenditure are optional and company-dependent: when a company
+does not report one under a mapped concept it is recorded as unresolved and does not block. Free cash flow and EBITDA
+are not collected at all and are never synthesized from other lines. Capital expenditure is not taken from a broader
+line (`PaymentsToAcquireProductiveAssets` can include intangible assets).
+
+## Total debt from its parts
+
+When a company reports no single combined figure, total debt is built by one fixed rule:
+
+    total_debt = LongTermDebtCurrent + LongTermDebtNoncurrent + short-term borrowings
+
+* **Explicit mapping.** `LongTermDebtCurrent` is the current maturities of long-term debt; `LongTermDebtNoncurrent`
+  is the rest. Both are required. Short-term borrowings are `ShortTermBorrowings` when reported, otherwise
+  `CommercialPaper` when reported.
+* **Non-overlapping.** Commercial paper is a kind of short-term borrowing, so the two are never added to each other
+  (if both are reported, `ShortTermBorrowings` is used and commercial paper must not exceed it). `LongTermDebt` is
+  never used: in real filings it need not equal the two parts (AAPL's 2026-06-27 balance: 82,300 against
+  11,007 + 71,340; AMZN's 2026-06-30: 132,995 against 3,330 + 128,894, in millions), so using it could double-count
+  or mis-state. `DebtCurrent` is never added; when reported it must equal current maturities plus the short-term
+  figure, or the field is unresolved (`DEBT_COMPONENTS_DO_NOT_RECONCILE`).
+* **Units and period align.** Every part is a USD balance on the same date, from the same filing, with no dimension.
+* **No guessing.** A part that is not reported is not taken as zero. With no short-term figure the field is
+  unresolved (`SHORT_TERM_DEBT_NOT_REPORTED`), with one exception that is a statement by the company, not a guess:
+  when `DebtCurrent` is reported and equals `LongTermDebtCurrent`, all current debt is the current maturities, so
+  short-term borrowings are zero. A missing long-term part is `LONG_TERM_DEBT_PART_MISSING`.
+* **Borrowings only.** Lease liabilities are not debt here.
+* **Traceable.** The stored row names its parts and their values (`derived_from`), carries the rule
+  `…:total_debt:components`, and is `CONFIRMED` only when every part is found, with the same value, in the filing's
+  own document. A part with a different value refuses the company's answer.
+* Tested in `tests/test_firm_lab_fundamentals.py` (the rule on its own, on the real captured balance dates, and
+  through the pipeline).
 
 ## Periods
 
@@ -97,13 +130,25 @@ skipped, never guessed). Each kept value is then looked up by concept and period
 ## When `fundamentals` is AVAILABLE
 
 All of: every run of the latest sample was accepted; rows are stored with complete provenance; every stored fact has
-its acceptance time; for every company, the four critical fields are resolved for the current period of every filing
+its acceptance time; for every company, the eight required fields are resolved for the current period of every filing
 read and each is `CONFIRMED` in the filing document. Otherwise the capability is `PARTIAL_EXISTING` (rows stored, with
-the reason) or `UNAVAILABLE` (nothing stored).
+the reason, naming the company and the field) or `UNAVAILABLE` (nothing stored).
+
+## Known limit of the document reader
+
+`firm_lab/ixbrl.py` reads one inline tag at a time. When a filing nests one tagged number inside another (GOOGL's
+10-Q for 2026-06-30 tags "no" commercial paper for two dates this way), the inner fact is not read. The effect is on
+the safe side: the value is reported `NOT_FOUND` in the document, kept, flagged, and not counted as confirmed. It was
+left as it is on 2026-10-03 so that no parsing was changed after seeing a sample; a reviewed fix needs its own test.
 
 ## Checked against real filings (2026-10-03)
 
-Run against the operator's captured SEC samples (one latest periodic report each for AAPL, MSFT, NVDA, AMZN, GOOGL):
-140 facts accepted, 140 confirmed in the filing documents, none differing, none not found. Unresolved:
-`total_debt` for all five (reported in parts); `capital_expenditure` for NVDA and AMZN (a broader line);
-`gross_profit` for AMZN and GOOGL (no gross profit line is reported).
+Run against the operator's captured SEC samples (one latest periodic report each for AAPL, MSFT, NVDA, AMZN, GOOGL).
+
+Version 1: 140 facts accepted, 140 confirmed in the filing documents, none differing.
+
+Version 2 (debt rule added): 148 facts accepted, none differing. Total debt: AAPL, NVDA and AMZN resolved and
+confirmed; MSFT unresolved (`SHORT_TERM_DEBT_NOT_REPORTED`: only long-term debt is tagged); GOOGL resolved but
+`NOT_FOUND` in the document (the nested-tag limit above). Optional fields unresolved: `capital_expenditure` for NVDA
+and AMZN (a broader line), `gross_profit` for AMZN and GOOGL (not reported). On that sample the capability rule gives
+`PARTIAL_EXISTING`.

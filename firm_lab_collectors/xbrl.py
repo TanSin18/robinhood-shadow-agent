@@ -149,7 +149,13 @@ class SecXbrlFactsProvider(CompanyFactsProvider):
         for record in versioned:
             accession = record['accession_number']
             url_of_document, tagged = documents[accession]
-            verdict = ixbrl.check(record, tagged)
+            if record.get('derived_from'):
+                # a documented sum: every part, including a part used only as evidence, must itself be in the filing document
+                verdicts = {ixbrl.check({'concept': part['concept'], 'period_start': None, 'period_end': record['period_end'],
+                                         'value': part['value']}, tagged) for part in record['derived_from']}
+                verdict = (ixbrl.MISMATCH if ixbrl.MISMATCH in verdicts else ixbrl.CONFIRMED if verdicts == {ixbrl.CONFIRMED} else ixbrl.NOT_FOUND)
+            else:
+                verdict = ixbrl.check(record, tagged)
             checks[verdict] = checks.get(verdict, 0) + 1
             if verdict == ixbrl.MISMATCH:
                 differing.append((FACT_DIFFERS, f'{accession} {record["concept"]} {record.get("period_start")}..{record["period_end"]}: the data API says '
@@ -182,6 +188,10 @@ class SecXbrlFactsProvider(CompanyFactsProvider):
                          **timing[r['accession_number']]} for r in picked],
             'quality': {**quality, 'critical_not_confirmed_in_filing': [{'accession_number': a, 'field': f} for a, f in not_confirmed],
                         'passes': quality['passes'] and not not_confirmed},
+            'required_fields': list(fundamentals.REQUIRED_FIELDS), 'optional_fields': list(fundamentals.OPTIONAL_FIELDS),
+            'optional_fields_missing': sorted(f for f in fundamentals.OPTIONAL_FIELDS if f not in accepted_by_field),
+            'not_collected': list(fundamentals.NOT_COLLECTED),
+            'derived_totals': sum(1 for r in records if r.get('derived_from')),
         })
         if differing:
             raise ProviderRejected(differing, provenance)

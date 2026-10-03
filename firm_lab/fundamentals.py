@@ -36,6 +36,21 @@ UNCLASSIFIED_PERIOD = 'UNCLASSIFIED_PERIOD'
 UNPARSEABLE_VALUE = 'UNPARSEABLE_VALUE'
 BROADER_CONCEPT_NOT_MAPPED = 'BROADER_CONCEPT_NOT_MAPPED'
 NEEDS_COMPONENT_RULE = 'NEEDS_COMPONENT_RULE'
+LONG_TERM_DEBT_PART_MISSING = 'LONG_TERM_DEBT_PART_MISSING'
+SHORT_TERM_DEBT_NOT_REPORTED = 'SHORT_TERM_DEBT_NOT_REPORTED'
+DEBT_COMPONENTS_DO_NOT_RECONCILE = 'DEBT_COMPONENTS_DO_NOT_RECONCILE'
+# Total debt from its parts (rule "components"). Borrowings only: lease liabilities are not debt here.
+#   total = LongTermDebtCurrent + LongTermDebtNoncurrent + short-term borrowings
+# The two long-term parts are both required and do not overlap (current maturities; the rest). Short-term borrowings are
+# ShortTermBorrowings when reported, otherwise CommercialPaper when reported (commercial paper is a kind of short-term
+# borrowing: the two are never added to each other). When neither is reported the short-term part is zero only if the
+# company reports DebtCurrent equal to LongTermDebtCurrent, which says all current debt is the current maturities; in
+# every other case absence is not read as zero and the field stays unresolved. LongTermDebt is not used: in real
+# filings it need not equal the two parts (it may be stated before hedge adjustments or at face value).
+DEBT_LONG_TERM_PARTS = ('LongTermDebtCurrent', 'LongTermDebtNoncurrent')
+DEBT_SHORT_TERM = ('ShortTermBorrowings', 'CommercialPaper')
+DEBT_CURRENT_TOTAL = 'DebtCurrent'
+DEBT_COMPONENT_CONCEPTS = DEBT_LONG_TERM_PARTS + DEBT_SHORT_TERM + (DEBT_CURRENT_TOTAL,)
 
 
 @dataclass(frozen=True)
@@ -57,7 +72,7 @@ RULES = (
     Rule('gross_profit', ('GrossProfit',), USD, DURATION,
          alternates=('CostOfRevenue', 'CostOfGoodsAndServicesSold'),
          note='Only when the company reports a gross profit line. It is never derived from revenue and cost of revenue.'),
-    Rule('operating_income', ('OperatingIncomeLoss',), USD, DURATION,
+    Rule('operating_income', ('OperatingIncomeLoss',), USD, DURATION, critical=True,
          note='Operating income or loss as reported.'),
     Rule('net_income', ('NetIncomeLoss',), USD, DURATION, critical=True,
          alternates=('ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'),
@@ -74,22 +89,29 @@ RULES = (
          alternate_reason=BROADER_CONCEPT_NOT_MAPPED,
          note='Purchases of property, plant and equipment only. A broader line (for example one that also includes intangible assets) is '
               'not treated as the same thing.'),
-    Rule('cash_and_equivalents', ('CashAndCashEquivalentsAtCarryingValue',), USD, INSTANT,
+    Rule('cash_and_equivalents', ('CashAndCashEquivalentsAtCarryingValue',), USD, INSTANT, critical=True,
          alternates=('CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents', 'CashAndCashEquivalentsFairValueDisclosure'),
          note='Cash and cash equivalents on the balance sheet. Totals that include restricted cash are a different figure.'),
-    Rule('total_debt', ('DebtLongtermAndShorttermCombinedAmount',), USD, INSTANT,
+    Rule('total_debt', ('DebtLongtermAndShorttermCombinedAmount',), USD, INSTANT, critical=True,
          alternates=('LongTermDebt', 'LongTermDebtNoncurrent', 'LongTermDebtCurrent', 'CommercialPaper', 'ShortTermBorrowings', 'DebtCurrent',
                      'LongTermDebtAndCapitalLeaseObligations'),
          alternate_reason=NEEDS_COMPONENT_RULE,
-         note='Only when the company reports one combined debt figure. Adding components together needs a rule per company and is not done.'),
-    Rule('diluted_shares_weighted_average', ('WeightedAverageNumberOfDilutedSharesOutstanding',), SHARES, DURATION,
+         note='The combined debt figure when the company reports one; otherwise the documented sum of non-overlapping parts '
+              '(debt_from_components). Never a guess: a part that is not reported is not taken as zero.'),
+    Rule('diluted_shares_weighted_average', ('WeightedAverageNumberOfDilutedSharesOutstanding',), SHARES, DURATION, critical=True,
          note='Weighted-average diluted shares for the period, as used for diluted EPS. Not a point-in-time share count.'),
 )
 RULE_BY_FIELD = {r.field: r for r in RULES}
 FIELDS = tuple(r.field for r in RULES)
 CRITICAL_FIELDS = tuple(r.field for r in RULES if r.critical)
 WATCHED_CONCEPTS = frozenset(c for r in RULES for c in r.accept + r.alternates)
-RULES_VERSION = 'sec-xbrl-normalization-v1'
+RULES_VERSION = 'sec-xbrl-normalization-v2'
+# The capability rule (operator instruction, 2026-10-03). Required: the capability is AVAILABLE only when every required field
+# is resolved, and confirmed in the filing, for the current period of every filing read, for every company of the sample.
+# Optional: company-dependent; a missing one is recorded and does not block. Not collected: never synthesized from other lines.
+REQUIRED_FIELDS = CRITICAL_FIELDS
+OPTIONAL_FIELDS = tuple(r.field for r in RULES if not r.critical)
+NOT_COLLECTED = ('free_cash_flow', 'ebitda')
 
 
 def _decimal(value):
@@ -121,6 +143,65 @@ def period_type(start, end) -> str:
         if low <= days <= high:
             return name
     return ''
+
+
+def debt_from_components(rows) -> dict:
+    """``rows``: the facts of one filing. Returns {balance date: outcome}; an outcome is either
+    {'value', 'parts': [{'concept', 'value', 'role'}], 'source': fact} or {'reason', 'detail', 'concepts'}.
+    Only dates that carry at least one long-term part are considered."""
+    by_date = {}
+    for f in rows:
+        if f['concept'] in DEBT_COMPONENT_CONCEPTS and f.get('start') is None:
+            by_date.setdefault(str(f.get('end')), {}).setdefault(f['concept'], []).append(f)
+    out = {}
+    for end, found in by_date.items():
+        concepts = sorted(found)
+        if not any(c in found for c in DEBT_LONG_TERM_PARTS):
+            continue
+        fail = lambda reason, detail: {'reason': reason, 'detail': detail, 'concepts': concepts}
+        values, problem = {}, None
+        for concept, members in found.items():
+            if any(m.get('unit') != USD for m in members):
+                problem = fail(UNEXPECTED_UNIT, f'{concept}: expected {USD}')
+                break
+            numbers = {_decimal(m.get('val')) for m in members}
+            if None in numbers:
+                problem = fail(UNPARSEABLE_VALUE, f'{concept}: a value is not a number')
+                break
+            if len(numbers) > 1:
+                problem = fail(CONFLICTING_VALUES, f'{concept}: {sorted(str(x) for x in numbers)}')
+                break
+            values[concept] = numbers.pop()
+        if problem:
+            out[end] = problem
+            continue
+        missing = [c for c in DEBT_LONG_TERM_PARTS if c not in values]
+        if missing:
+            out[end] = fail(LONG_TERM_DEBT_PART_MISSING, 'not reported: ' + ', '.join(missing) + '; a part that is not reported is not taken as zero')
+            continue
+        current = values['LongTermDebtCurrent']
+        parts = [{'concept': c, 'value': str(values[c]), 'role': 'added'} for c in DEBT_LONG_TERM_PARTS]
+        short = next((c for c in DEBT_SHORT_TERM if c in values), None)
+        if short:
+            if short == 'ShortTermBorrowings' and 'CommercialPaper' in values and values['CommercialPaper'] > values[short]:
+                out[end] = fail(DEBT_COMPONENTS_DO_NOT_RECONCILE, 'CommercialPaper is larger than ShortTermBorrowings, of which it should be a part')
+                continue
+            if DEBT_CURRENT_TOTAL in values and values[DEBT_CURRENT_TOTAL] != current + values[short]:
+                out[end] = fail(DEBT_COMPONENTS_DO_NOT_RECONCILE, f'DebtCurrent {values[DEBT_CURRENT_TOTAL]} is not LongTermDebtCurrent {current} + '
+                                                                  f'{short} {values[short]}')
+                continue
+            parts.append({'concept': short, 'value': str(values[short]), 'role': 'added'})
+            total = current + values['LongTermDebtNoncurrent'] + values[short]
+        elif DEBT_CURRENT_TOTAL in values and values[DEBT_CURRENT_TOTAL] == current:
+            # all current debt is the current maturities of long-term debt: there is no other short-term borrowing
+            parts.append({'concept': DEBT_CURRENT_TOTAL, 'value': str(values[DEBT_CURRENT_TOTAL]), 'role': 'evidence that short-term borrowings are zero'})
+            total = current + values['LongTermDebtNoncurrent']
+        else:
+            out[end] = fail(SHORT_TERM_DEBT_NOT_REPORTED, 'neither ShortTermBorrowings nor CommercialPaper is reported, and DebtCurrent does not show '
+                                                          'that there is none; absence is not taken as zero')
+            continue
+        out[end] = {'value': total, 'parts': parts, 'source': found['LongTermDebtNoncurrent'][0]}
+    return out
 
 
 def normalize(facts, filings, *, instrument, cik) -> dict:
@@ -194,6 +275,30 @@ def normalize(facts, filings, *, instrument, cik) -> dict:
                     'relation_to_filing': relation, 'filing_fiscal_year': chosen.get('fy'), 'filing_fiscal_period': chosen.get('fp'),
                     'form': chosen.get('form'), 'accession_number': accession, 'filing_date': chosen.get('filed'), 'frame': chosen.get('frame'),
                     'accepted_timestamp': filing.get('accepted_timestamp')})
+            if rule.field == 'total_debt':
+                # no combined figure for a date: the documented sum of non-overlapping parts, or the reason there is none
+                direct = {r['period_end'] for r in accepted if r['accession_number'] == accession and r['normalized_field'] == 'total_debt'}
+                failed = {u['period_end'] for u in unresolved if u['accession_number'] == accession and u['field'] == 'total_debt'}
+                for end, outcome in sorted(debt_from_components(rows).items()):
+                    if end in direct or end in failed:
+                        continue
+                    relation = CURRENT if end == report_end else COMPARATIVE
+                    if relation == CURRENT:
+                        current_found = True
+                    if 'reason' in outcome:
+                        unresolved.append({'instrument': instrument, 'field': rule.field, 'accession_number': accession, 'period_start': None,
+                                           'period_end': end, 'concepts': outcome['concepts'], 'relation': relation, 'reason': outcome['reason'],
+                                           'detail': outcome['detail']})
+                        continue
+                    source = outcome['source']
+                    accepted.append({
+                        'instrument': instrument, 'cik': f'{int(cik):010d}', 'taxonomy': 'us-gaap',
+                        'concept': '+'.join(p['concept'] for p in outcome['parts'] if p['role'] == 'added'), 'normalized_field': rule.field,
+                        'mapping_rule': RULES_VERSION + ':total_debt:components', 'agreeing_concepts': None, 'unit': rule.unit,
+                        'value': str(outcome['value']), 'period_type': INSTANT, 'period_start': None, 'period_end': end,
+                        'relation_to_filing': relation, 'filing_fiscal_year': source.get('fy'), 'filing_fiscal_period': source.get('fp'),
+                        'form': source.get('form'), 'accession_number': accession, 'filing_date': source.get('filed'), 'frame': None,
+                        'accepted_timestamp': filing.get('accepted_timestamp'), 'derived_from': outcome['parts']})
             if not current_found and report_end:
                 alternates = sorted({f['concept'] for f in rows if f['concept'] in rule.alternates and str(f.get('end')) == report_end})
                 unresolved.append({'instrument': instrument, 'field': rule.field, 'accession_number': accession, 'period_start': None,

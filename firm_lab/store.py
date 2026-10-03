@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import MODE_BUILD_OBSERVE, SCHEMA_VERSION
+from . import usage as _usage
 from .errors import FirmLabError, IsolationError, TrialActivationNotAvailable
 
 SCHEMA = (
@@ -73,7 +74,7 @@ RAW_SCHEMA = (
     "CREATE TABLE IF NOT EXISTS corporate_action_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, action_type TEXT NOT NULL, "
     "provider_action TEXT NOT NULL, effective_date TEXT NOT NULL, effective_date_basis TEXT, announcement_timestamp TEXT NOT NULL, value TEXT, "
     "value_meaning TEXT, currency TEXT, contra_instrument TEXT, contra_name TEXT, name TEXT, record_date TEXT, pay_date TEXT, distribution_type TEXT, "
-    "source_record TEXT, " + _PROV
+    "source_record TEXT, benchmark_only TEXT, use_restriction TEXT, " + _PROV
     + ", UNIQUE (provider, instrument, provider_action, effective_date, contra_instrument, content_hash))",
     # Greeks and implied volatility are stored only as provider values, with who computed them and under which model.
     "CREATE TABLE IF NOT EXISTS option_chain_observations (id INTEGER PRIMARY KEY, contract_id TEXT NOT NULL, underlying TEXT NOT NULL, "
@@ -96,7 +97,7 @@ RAW_SCHEMA = (
     "period_type TEXT NOT NULL, period_start TEXT, period_end TEXT NOT NULL, relation_to_filing TEXT NOT NULL, filing_fiscal_year TEXT, "
     "filing_fiscal_period TEXT, form TEXT NOT NULL, accession_number TEXT NOT NULL, filing_date TEXT NOT NULL, frame TEXT, accepted_timestamp TEXT NOT NULL, "
     "accepted_timestamp_json TEXT, acceptance_time_conflict TEXT, version INTEGER NOT NULL, is_restatement TEXT NOT NULL, prior_value TEXT, "
-    "confirmed_in_filing TEXT NOT NULL, source_url TEXT NOT NULL, filing_document_url TEXT, entity_name TEXT, " + _PROV
+    "confirmed_in_filing TEXT NOT NULL, source_url TEXT NOT NULL, filing_document_url TEXT, entity_name TEXT, derived_from TEXT, " + _PROV
     + ", UNIQUE (provider, instrument, normalized_field, period_end, accession_number, content_hash))",      # the hash covers the whole record
     # Earnings-release filings (8-K, Item 2.02): what was filed and when the SEC accepted it. Facts only; no sentiment, score or signal column.
     "CREATE TABLE IF NOT EXISTS earnings_event_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, accession_number TEXT NOT NULL, "
@@ -108,7 +109,9 @@ RAW_SCHEMA = (
 )
 ADDED_COLUMNS = {'filing_observations': ('accepted_timestamp_header', 'accepted_timestamp_json', 'acceptance_time_conflict',
                                          'acceptance_time_json_offset_seconds'),
-                 'corporate_action_observations': ('record_date', 'pay_date', 'distribution_type', 'source_record')}
+                 'corporate_action_observations': ('record_date', 'pay_date', 'distribution_type', 'source_record', 'benchmark_only',
+                                                   'use_restriction'),
+                 'fundamental_fact_observations': ('derived_from',)}
 RAW_TABLES = ('filing_observations', 'intraday_bar_observations', 'trade_observations', 'quote_observations', 'fundamental_observations',
               'corporate_action_observations', 'option_chain_observations', 'treasury_auction_observations',
               'fundamental_fact_observations', 'earnings_event_observations')
@@ -165,6 +168,14 @@ class FirmLabStore:
                     db.execute('INSERT INTO events(at, kind, payload_json) VALUES (?,?,?)',
                                (now, 'SCHEMA_CHANGE', canonical({'table': table, 'change': 'columns added; existing rows not rewritten',
                                                                  'columns': missing, 'rows_before': db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]})))
+            # A use restriction may be added to a stored row; it is never loosened. A corporate action stored without a validated
+            # announcement time is benchmark-only (firm_lab.usage), including rows stored before this column existed.
+            marked = db.execute("UPDATE corporate_action_observations SET benchmark_only='true', use_restriction=? WHERE benchmark_only IS NULL "
+                                "AND announcement_timestamp='UNAVAILABLE'", (_usage.RESTRICTION,)).rowcount
+            if marked:
+                db.execute('INSERT INTO events(at, kind, payload_json) VALUES (?,?,?)',
+                           (now, 'USE_RESTRICTION_MARKED', canonical({'table': 'corporate_action_observations', 'rows': marked,
+                                                                      'benchmark_only': True, 'reason': _usage.RESTRICTION})))
             # The mode is set once, at creation. Nothing in this package can move it away from BUILD_OBSERVE.
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('mode', MODE_BUILD_OBSERVE, now))
             db.execute('INSERT OR IGNORE INTO firm_meta VALUES (?,?,?)', ('schema_version', str(SCHEMA_VERSION), now))
@@ -239,6 +250,7 @@ class FirmLabStore:
                     feature_version, provider=None, metadata=None, now=None) -> str:
         """Inserts one observation unless the identical value from the same source is already the latest one.
         A different value for the same (instrument, feature, session, version) is appended as the next revision."""
+        _usage.require_feature_source_allowed(source=source, provider=provider, metadata=metadata, feature_name=feature_name)
         text = None if value is None else str(value)
         with self.connect() as db:
             last = db.execute('SELECT value, revision, source FROM feature_observations WHERE instrument=? AND feature_name=? AND '

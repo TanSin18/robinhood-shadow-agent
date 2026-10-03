@@ -54,6 +54,7 @@ INITIAL = (
      'Control A’s advisory desk reads recent filing index entries for its notes. Firm Lab has its own research-only EDGAR reader; nothing is '
      'stored until the operator runs it. Authoritative for filings; not a fundamentals or estimates source.'),
     ('sector_engine', NOT_STARTED, None, 'Not built.'),
+    ('macro_regime', NOT_STARTED, None, 'Not built. No macro feature or regime measure exists.'),
     ('ml_ranker', NOT_STARTED, None, 'No model is fitted. Model, target and features are strategy choices for a registered recipe.'),
     ('portfolio_optimizer', NOT_STARTED, None, 'Not built.'),
     ('live_quotes', PARTIAL_EXISTING, 'Robinhood read gateway (Control A’s runs only)',
@@ -92,7 +93,8 @@ PROVIDER_PLAN = {
 NO_CREDENTIAL_PROVIDERS = (TREASURY_PROVIDER, ISSUER_PROVIDER)
 # Capabilities that say PARTIAL_EXISTING, with the reason, when rows are stored but the evidence does not justify AVAILABLE.
 PARTIAL_WHEN_STORED = ('fundamentals', 'earnings_events', 'corporate_actions')
-CORPORATE_ACTIONS_SCOPE = ('covers VTI cash distributions only; splits, symbol changes, spin-offs, mergers and delistings have no source')
+CORPORATE_ACTIONS_SCOPE = ('covers VTI cash distributions only, marked benchmark-only (no validated announcement time); splits, symbol '
+                           'changes, spin-offs, mergers and delistings have no source')
 NOT_SELECTED = {
     'analyst_revisions': 'No provider selected: no inferior substitute is connected.',
     'earnings_transcripts': 'Not collected. Deferred until storage and licensing terms are settled.',
@@ -332,7 +334,9 @@ def confirm_provider_data(store, now=None):
                     applied = len(state.get('distributions_applied') or [])
                     note = (f'={rows:,} sessions computed through {state.get("last_session")} from the stored closes and {applied} issuer '
                             f'distributions ({provider}), each checked against the stored close on its ex-date. Independent confirmation of the '
-                            'amounts: ' + ('compared and equal' if state.get('independent_confirmation') == 'COMPARED' else 'none stored') + '.')
+                            'amounts: ' + ('compared and equal' if state.get('independent_confirmation') == 'COMPARED' else 'none stored') + '. '
+                            'BENCHMARK ONLY: an after-the-fact ruler. The distributions carry no validated announcement time and are '
+                            'not information known on their ex-dates; they never enter the feature store.')
             evidence[capability] = (provider, rows, proof, problem, note)
     for capability, (provider, rows, proof, problem, note) in evidence.items():
         status_now = current.get(capability, {}).get('status')
@@ -363,8 +367,10 @@ def confirm_provider_data(store, now=None):
 
 def _fundamentals_evidence(db, provider, proof):
     """(problem, note) for the company-facts sample. Stored rows are not enough: every company of the latest sample must
-    have its critical fields resolved for the current period of every filing read and confirmed in the filing's own
-    document, and every stored fact must carry its SEC acceptance time. Fields that stay unresolved are named in the note."""
+    have every REQUIRED field (revenue, operating income, net income, diluted EPS, operating cash flow, cash and cash
+    equivalents, diluted shares, and a debt figure) resolved for the current period of every filing read and confirmed in
+    the filing's own document, and every stored fact must carry its SEC acceptance time. Optional, company-dependent fields
+    that stay unresolved are named in the note and do not block."""
     run_ids = [i for p in proof for i in p['run_ids']]
     marks = ','.join('?' * len(run_ids))
     undated = db.execute("SELECT COUNT(*) FROM fundamental_fact_observations WHERE provider=? AND (accepted_timestamp IS NULL OR accepted_timestamp='')",
@@ -382,11 +388,12 @@ def _fundamentals_evidence(db, provider, proof):
             if not (report.get('accepted_by_field') or {}).get(name):
                 empty.setdefault(name, []).append(instrument)
     if failing:
-        return 'critical fields unresolved or not confirmed in the filing (' + '; '.join(failing) + ')', ''
-    note = ''
+        return 'required fields unresolved or not confirmed in the filing (' + '; '.join(failing) + ')', ''
+    note = 'All required fields resolved and confirmed for every company.'
     if empty:
-        note = 'Left unresolved, never derived: ' + '; '.join(f'{name} ({", ".join(who)})' for name, who in sorted(empty.items())) + '.'
-    return '', note
+        note += ' Optional fields not reported under a mapped concept, never derived: ' + '; '.join(
+            f'{name} ({", ".join(who)})' for name, who in sorted(empty.items())) + '.'
+    return '', note + ' Not collected: free cash flow, EBITDA.'
 
 
 def require(store, capability):

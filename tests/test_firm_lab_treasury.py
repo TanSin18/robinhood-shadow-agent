@@ -414,7 +414,8 @@ def test_the_benchmark_is_a_ruler_only(tmp_path):
     # nothing that ranks, selects or executes reads the benchmark: only the benchmark code, the registry and the read-only view mention it
     readers = {p.name for p in (ROOT / 'firm_lab').glob('*.py') if re.search(r'benchmark_observations|treasury_auction_observations|compute_fixed_70_30',
                                                                              p.read_text())}
-    assert readers <= {'benchmarks.py', 'capabilities.py', 'view.py', 'store.py', 'rawstore.py', 'treasury.py'}, readers
+    # (usage.py only names the table in the list of benchmark-only material it refuses to let into the feature store)
+    assert readers <= {'benchmarks.py', 'capabilities.py', 'view.py', 'store.py', 'rawstore.py', 'treasury.py', 'usage.py'}, readers
     for name in ('baseline.py', 'boundary.py', 'features.py', 'ingest.py', 'official.py'):
         text = (ROOT / 'firm_lab' / name).read_text()
         assert 'compute_fixed_70_30' not in text and 'treasury' not in text.lower().replace('us_treasury_bill', ''), name

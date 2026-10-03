@@ -51,6 +51,25 @@ the page.
   the bills used. So an observation after an ex-date that was computed from a distribution fetched on 2026-10-03
   says 2026-10-03, not the ex-date.
 
+## 3a. Benchmark use is not predictive-feature use (operator rule, 2026-10-03)
+
+* **Benchmark use.** Historical distributions may be used to rebuild an after-the-fact benchmark total-return series.
+  That is what this document does, and all it does.
+* **Predictive-feature use.** A historical distribution amount may not be treated as information that was known on
+  its ex-date unless Firm Lab holds a validated publication or announcement time proving it was known then. The
+  issuer feed gives none.
+* Therefore every stored VTI distribution row is marked `benchmark_only = true`, with the reason in
+  `use_restriction`. The mark is set at storage from the row itself (any corporate action without a validated,
+  timezone-aware announcement time), not supplied by a provider, and it is not part of the record's content hash.
+  Rows stored before the column existed were marked when the database was next opened (event
+  `USE_RESTRICTION_MARKED`); nothing else on them changed. A mark is never removed.
+* `firm_lab/usage.py` is the single gate. `distribution_rows(..., purpose='benchmark')` is what the ruler reads;
+  `purpose='feature'` returns only rows with a validated announcement time at or before the asking time that are
+  not marked, which today is none. Every feature-store write passes `require_feature_source_allowed`, which refuses
+  benchmark-only material (`BENCHMARK_ONLY_DATA_NOT_ALLOWED_IN_FEATURES`).
+* The total-return series built here are benchmark observations, not features, and are refused by the same gate.
+* Enforced by `tests/test_firm_lab_total_return.py::test_distributions_are_benchmark_only_and_never_reach_the_feature_store`.
+
 ## 4. Validation (all must pass, or nothing is computed)
 
 1. The latest issuer run was accepted whole (schema, provenance, no opinion-like field).

@@ -120,7 +120,10 @@ def benchmark_readiness(capability_rows, series=None, treasury_index=None, total
 
 def _fundamentals(db, tables) -> dict:
     """What the latest company-facts sample found, company by company, from the stored validation reports. Reads only."""
+    from .fundamentals import NOT_COLLECTED, OPTIONAL_FIELDS, REQUIRED_FIELDS, RULES_VERSION
     out = {'source': 'SEC XBRL company facts (SEC EDGAR)', 'normalized_fields': list(NORMALIZED_FIELDS), 'companies': [], 'accepted': 0,
+           'required_fields': list(REQUIRED_FIELDS), 'optional_fields': list(OPTIONAL_FIELDS), 'not_collected': list(NOT_COLLECTED),
+           'rules_version': RULES_VERSION,
            'rejected_runs': 0, 'unresolved': 0, 'unresolved_mappings': {}, 'stored_rows': 0, 'restatements': 0, 'not_found_in_filing': 0}
     if 'fundamental_fact_observations' not in tables or 'provider_runs' not in tables:
         return out
@@ -141,7 +144,9 @@ def _fundamentals(db, tables) -> dict:
                    'unresolved': report.get('unresolved') or 0, 'unresolved_by_field': unresolved, 'units': report.get('units') or {},
                    'filings': report.get('filings') or [], 'quality_passes': verdict.get('passes') is True,
                    'critical_unresolved': verdict.get('critical_unresolved') or [], 'checked_against_filing': report.get('checked_against_filing') or {},
-                   'restatements': report.get('restatements') or 0, 'accepted_by_field': report.get('accepted_by_field') or {}}
+                   'restatements': report.get('restatements') or 0, 'accepted_by_field': report.get('accepted_by_field') or {},
+                   'not_confirmed': verdict.get('critical_not_confirmed_in_filing') or [],
+                   'optional_fields_missing': report.get('optional_fields_missing') or [], 'derived_totals': report.get('derived_totals') or 0}
         out['companies'].append(company)
         out['accepted'] += company['accepted'] if status == 'OK' else 0
         out['rejected_runs'] += 1 if status == 'REJECTED' else 0

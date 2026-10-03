@@ -61,7 +61,8 @@ def company_facts():
     for accn, end, start, value in ((Q3_25, '2025-06-28', '2025-03-30', 23434000000), (K25, '2025-09-27', '2024-09-29', 112010000000),
                                     (Q2, '2026-03-28', '2025-12-28', 24780000000), (Q3, '2026-06-27', '2026-03-29', 25100000000)):
         put(usd, 'NetIncomeLoss', 'USD', fact(accn, value, end, start))
-        put(usd, 'GrossProfit', 'USD', fact(accn, value * 2, end, start))
+        if accn != Q2:                                                                         # one report carries no gross profit line (optional field)
+            put(usd, 'GrossProfit', 'USD', fact(accn, value * 2, end, start))
         put(usd, 'OperatingIncomeLoss', 'USD', fact(accn, value + 4000000000, end, start))
     for accn, end, start, value in ((Q3_25, '2025-06-28', '2025-03-30', 1.57), (K25, '2025-09-27', '2024-09-29', 7.46),
                                     (Q2, '2026-03-28', '2025-12-28', 1.65), (Q3, '2026-06-27', '2026-03-29', 1.68)):
@@ -75,6 +76,8 @@ def company_facts():
     for accn, end in ((Q3_25, '2025-06-28'), (K25, '2025-09-27'), (Q2, '2026-03-28'), (Q3, '2026-06-27')):
         put(usd, 'CashAndCashEquivalentsAtCarryingValue', 'USD', fact(accn, 36269000000, end))
         put(usd, 'LongTermDebtNoncurrent', 'USD', fact(accn, 78328000000, end))                # debt is reported in parts only
+        put(usd, 'LongTermDebtCurrent', 'USD', fact(accn, 10912000000, end))
+        put(usd, 'LongTermDebt', 'USD', fact(accn, 89200000000, end))                          # as in real filings: not exactly the two parts
         put(usd, 'CommercialPaper', 'USD', fact(accn, 9967000000, end))
     put(usd, 'Liabilities', 'USD', fact(Q3, 264904000000, '2026-06-27'))                       # not a watched concept: never read
     return {'cik': CIK, 'entityName': 'Apple Inc.', 'facts': {'dei': {}, 'us-gaap': {**usd, **per_share, **shares}}}
@@ -182,7 +185,7 @@ def test_the_ten_fields_are_filled_only_by_their_written_rules():
     got = {(r['normalized_field'], r['period_type'], r['relation_to_filing']): r for r in out['accepted']}
     quarter = got[('revenue', '3M', 'current')]
     assert quarter['value'] == '94036000000' and quarter['concept'] == 'RevenueFromContractWithCustomerExcludingAssessedTax'
-    assert quarter['unit'] == 'USD' and quarter['mapping_rule'] == 'sec-xbrl-normalization-v1:revenue' and quarter['frame'] == 'CY2026Q2'
+    assert quarter['unit'] == 'USD' and quarter['mapping_rule'] == 'sec-xbrl-normalization-v2:revenue' and quarter['frame'] == 'CY2026Q2'
     assert (quarter['period_start'], quarter['period_end'], quarter['accession_number'], quarter['form']) == ('2026-03-29', '2026-06-27', Q3, '10-Q')
     assert got[('revenue', '9M', 'current')]['value'] == '313695000000'                         # year to date is its own fact, not merged with the quarter
     assert got[('revenue', '3M', 'comparative')]['period_end'] == '2025-06-28'                  # last year's quarter, as this filing reports it
@@ -190,14 +193,20 @@ def test_the_ten_fields_are_filled_only_by_their_written_rules():
     assert got[('cash_and_equivalents', 'instant', 'current')]['period_start'] is None
     # the cash-flow statement of a 10-Q is year to date; it stays year to date and no single quarter is computed from it
     assert got[('operating_cash_flow', '9M', 'current')]['value'] == '84000000000' and ('operating_cash_flow', '3M', 'current') not in got
-    # total debt is reported in parts only: no sum is formed
-    debt = [u for u in out['unresolved'] if u['field'] == 'total_debt']
-    assert [u['reason'] for u in debt] == ['NEEDS_COMPONENT_RULE'] and debt[0]['concepts'] == ['CommercialPaper', 'LongTermDebtNoncurrent']
-    assert not [r for r in out['accepted'] if r['normalized_field'] == 'total_debt']
+    # total debt is reported in parts: the documented sum of the non-overlapping parts, with every part named
+    debt = got[('total_debt', 'instant', 'current')]
+    assert debt['value'] == str(10912000000 + 78328000000 + 9967000000) and debt['mapping_rule'] == 'sec-xbrl-normalization-v2:total_debt:components'
+    assert debt['concept'] == 'LongTermDebtCurrent+LongTermDebtNoncurrent+CommercialPaper'
+    assert debt['derived_from'] == [{'concept': 'LongTermDebtCurrent', 'value': '10912000000', 'role': 'added'},
+                                    {'concept': 'LongTermDebtNoncurrent', 'value': '78328000000', 'role': 'added'},
+                                    {'concept': 'CommercialPaper', 'value': '9967000000', 'role': 'added'}]
+    assert not [u for u in out['unresolved'] if u['field'] == 'total_debt']
     assert out['raw_facts'] == len([f for f in flat_rows() if f['accn'] == Q3]) and 'Liabilities' not in out['concepts_seen']
     # nothing is derived: every accepted value is a value the company itself tagged
     tagged = {str(D(str(f['val']))) for f in flat_rows()}
-    assert all(str(D(r['value'])) in tagged for r in out['accepted'])
+    assert all(str(D(r['value'])) in tagged for r in out['accepted'] if not r.get('derived_from'))
+    assert all(part['value'] in tagged for r in out['accepted'] for part in r.get('derived_from') or [])      # a sum is only ever of tagged parts
+    assert [r['normalized_field'] for r in out['accepted'] if r.get('derived_from')] == ['total_debt']         # and debt is the only sum there is
     assert not {'margin', 'growth', 'ratio', 'score', 'rank'} & {k for r in out['accepted'] for k in r}
 
 
@@ -310,7 +319,13 @@ def test_company_facts_are_timed_by_the_filing_header_and_confirmed_in_the_filin
     report = provider.reports['AAPL']
     assert report['normalized_accepted'] == len(records) and report['restatements'] == 1 and report['checked_against_filing'] == {'CONFIRMED': len(records)}
     assert report['quality']['passes'] is True and report['quality']['critical_unresolved'] == []
-    assert report['quality']['unresolved_by_field'] == {'total_debt': {'NEEDS_COMPONENT_RULE': 3}} and report['unresolved'] == 3
+    assert report['quality']['unresolved_by_field'] == {'gross_profit': {'NOT_REPORTED_UNDER_A_MAPPED_CONCEPT': 1}} and report['unresolved'] == 1
+    assert report['required_fields'] == ['revenue', 'operating_income', 'net_income', 'eps_diluted', 'operating_cash_flow', 'cash_and_equivalents',
+                                         'total_debt', 'diluted_shares_weighted_average']
+    assert report['optional_fields'] == ['gross_profit', 'capital_expenditure'] and report['not_collected'] == ['free_cash_flow', 'ebitda']
+    assert report['derived_totals'] == 3 and report['optional_fields_missing'] == []
+    debt = _pick(records, 'total_debt', Q3, None, '2026-06-27')
+    assert debt['confirmed_in_filing'] == 'CONFIRMED' and debt['value'] == '99207000000' and len(debt['derived_from']) == 3      # every part is in the document
     assert [f['accession_number'] for f in report['filings']] == [Q3, Q2, K25] and report['filings'][1]['conflict'] is True
     assert report['units'].keys() == {'USD', 'USD/shares', 'shares'} and report['raw_facts_in_filings_read'] > report['normalized_accepted'] - 1
     # only SEC hosts were asked, and no fact came from anywhere else
@@ -380,10 +395,11 @@ def test_the_fundamentals_capability_follows_the_evidence(tmp_path):
                    'concept', 'unit', 'form', 'accession_number', 'mapping_rule', 'source_url', 'version'):
         assert all(r[column] not in (None, '') for r in rows), column
     detail = {c['capability']: c for c in lab.capabilities()}['fundamentals']
-    assert detail['provider'] == 'SEC EDGAR' and 'Left unresolved, never derived: total_debt (AAPL).' in detail['detail']
+    assert detail['provider'] == 'SEC EDGAR' and 'All required fields resolved and confirmed for every company.' in detail['detail']
+    assert 'Not collected: free cash flow, EBITDA.' in detail['detail']
     with lab.connect() as db:
         diagnostics = json.loads(db.execute('SELECT diagnostics_json FROM provider_runs ORDER BY id DESC LIMIT 1').fetchone()[0])
-    assert diagnostics['validation']['quality']['passes'] is True and diagnostics['validation']['unresolved_detail'][0]['reason'] == 'NEEDS_COMPONENT_RULE'
+    assert diagnostics['validation']['quality']['passes'] is True and diagnostics['validation']['unresolved_detail'][0]['reason'] == 'NOT_REPORTED_UNDER_A_MAPPED_CONCEPT'
     # the same sample again stores nothing new: an observation is never duplicated and never changed
     again = runner.run_xbrl(lab, symbols=('AAPL',), environ=AGENT, transport=Fake(routes()), clock=CLOCK, max_filings=3)
     assert again['runs'][0]['stored'] == 0 and again['runs'][0]['duplicates'] == len(rows) and _rows(lab, 'fundamental_fact_observations') == rows
@@ -519,10 +535,13 @@ def test_the_page_shows_what_was_found_and_makes_no_claim_about_it(tmp_path):
     html = firm_lab_page.render({'firm_lab': state})
     facts = html[html.index('id="fl-fundamentals"'):html.index('id="fl-earnings"')]
     assert '<h2>Fundamentals readiness</h2>' in facts and 'SEC XBRL company facts (SEC EDGAR)' in facts and '<b>AAPL</b>' in facts
-    assert 'revenue, gross profit, operating income, net income, diluted EPS, operating cash flow, capital expenditure' in facts
-    assert 'total debt: NEEDS_COMPONENT_RULE (AAPL)' in facts and '>AVAILABLE</span>' in facts and '>PASS</span>' in facts
+    assert ('<dt>Required for AVAILABLE</dt><dd>revenue, operating income, net income, diluted EPS, operating cash flow, cash and cash equivalents, '
+            'total debt, diluted shares (weighted average).') in facts
+    assert '<dt>Optional, company-dependent</dt><dd>gross profit, capital expenditure.' in facts and 'never synthesized: free cash flow, EBITDA' in facts
+    assert 'A part that is not reported is not taken as zero' in facts
+    assert 'gross profit: NOT_REPORTED_UNDER_A_MAPPED_CONCEPT (AAPL)' in facts and '>AVAILABLE</span>' in facts and '>PASS</span>' in facts
     assert f'CONFIRMED {state["fundamentals"]["companies"][0]["accepted"]}' in facts and '10-Q 2026-06-27, 10-Q 2026-03-28, 10-K 2025-09-27' in facts
-    assert state['fundamentals']['restatements'] == 1 and state['fundamentals']['rejected_runs'] == 0 and state['fundamentals']['unresolved'] == 3
+    assert state['fundamentals']['restatements'] == 1 and state['fundamentals']['rejected_runs'] == 0 and state['fundamentals']['unresolved'] == 1
     events = html[html.index('id="fl-earnings"'):html.index('id="fl-baseline"')]
     assert '<h2>Earnings events</h2>' in events and 'FACTUAL EVENT DATA ONLY — NO EARNINGS SIGNAL' in events
     assert '<dt>Transcripts</dt><dd><span class="cat cat-stop">UNAVAILABLE</span> none is collected</dd>' in events
@@ -572,3 +591,100 @@ def test_the_new_research_modules_cannot_trade_and_cannot_reach_the_network_them
         if path.name != 'firm_lab_page.py':
             assert 'firm_lab_collectors' not in path.read_text(errors='ignore'), path
     assert not list(root.glob('**/*firm_lab*.plist')) and not list(root.glob('**/*collector*.plist'))      # nothing schedules a collector
+
+
+# ====================================================================================================== debt, and the capability rule
+def _debt_rows(**parts):
+    """Balance-date facts of one filing, one per named concept."""
+    return [{'taxonomy': 'us-gaap', 'concept': concept, 'unit': unit, 'start': None, 'end': '2026-06-27', 'val': value, 'accn': Q3, 'fy': 2026, 'fp': 'Q3',
+             'form': '10-Q', 'filed': '2026-07-31', 'frame': None}
+            for concept, (value, unit) in {k: (v if isinstance(v, tuple) else (v, 'USD')) for k, v in parts.items()}.items()]
+
+
+def test_total_debt_is_the_documented_sum_of_non_overlapping_parts_or_it_is_nothing():
+    one = lambda **parts: fundamentals.debt_from_components(_debt_rows(**parts)).get('2026-06-27')
+    total = lambda **parts: one(**parts).get('value')
+    why = lambda **parts: one(**parts).get('reason')
+    # current maturities + the rest of long-term debt + short-term borrowings, each as reported
+    assert total(LongTermDebtCurrent=11007, LongTermDebtNoncurrent=71340, CommercialPaper=1997) == 84344
+    assert total(LongTermDebtCurrent=3330, LongTermDebtNoncurrent=128894, ShortTermBorrowings=325) == 132549
+    assert total(LongTermDebtCurrent=1999, LongTermDebtNoncurrent=98165, CommercialPaper=0) == 100164          # a reported zero is a value
+    # commercial paper is a kind of short-term borrowing: the two are never added together (no double count)
+    both = one(LongTermDebtCurrent=10, LongTermDebtNoncurrent=100, ShortTermBorrowings=30, CommercialPaper=20)
+    assert both['value'] == 140 and [p['concept'] for p in both['parts']] == ['LongTermDebtCurrent', 'LongTermDebtNoncurrent', 'ShortTermBorrowings']
+    assert why(LongTermDebtCurrent=10, LongTermDebtNoncurrent=100, ShortTermBorrowings=30, CommercialPaper=40) == 'DEBT_COMPONENTS_DO_NOT_RECONCILE'
+    # LongTermDebt is never used: in real filings it need not equal the two parts, so it neither adds to the sum nor replaces a part
+    assert total(LongTermDebt=82300, LongTermDebtCurrent=11007, LongTermDebtNoncurrent=71340, CommercialPaper=1997) == 84344
+    assert one(LongTermDebt=82300, CommercialPaper=1997) is None                                # no long-term part at all: not attempted
+    # a part that is not reported is not taken as zero
+    assert why(LongTermDebtNoncurrent=71340, CommercialPaper=1997) == 'LONG_TERM_DEBT_PART_MISSING'
+    assert why(LongTermDebtCurrent=11007, CommercialPaper=1997) == 'LONG_TERM_DEBT_PART_MISSING'
+    assert why(LongTermDebt=40294, LongTermDebtCurrent=9227, LongTermDebtNoncurrent=31067) == 'SHORT_TERM_DEBT_NOT_REPORTED'
+    # ... unless the company itself shows there is none: all its current debt is the current maturities
+    shown = one(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, DebtCurrent=1000)
+    assert shown['value'] == 33366 and shown['parts'][-1] == {'concept': 'DebtCurrent', 'value': '1000', 'role': 'evidence that short-term borrowings are zero'}
+    assert why(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, DebtCurrent=1500) == 'SHORT_TERM_DEBT_NOT_REPORTED'      # some other current debt, untagged
+    assert why(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, CommercialPaper=200, DebtCurrent=1500) == 'DEBT_COMPONENTS_DO_NOT_RECONCILE'
+    assert total(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, CommercialPaper=200, DebtCurrent=1200) == 33566
+    # units and dates must line up; lease liabilities are not debt here
+    assert why(LongTermDebtCurrent=(1000, 'EUR'), LongTermDebtNoncurrent=32366, CommercialPaper=200) == 'UNEXPECTED_UNIT'
+    assert why(LongTermDebtCurrent='n/a', LongTermDebtNoncurrent=32366, CommercialPaper=200) == 'UNPARSEABLE_VALUE'
+    other_day = _debt_rows(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366) + [dict(_debt_rows(CommercialPaper=200)[0], end='2026-03-28')]
+    assert fundamentals.debt_from_components(other_day)['2026-06-27']['reason'] == 'SHORT_TERM_DEBT_NOT_REPORTED'      # a part from another date is not borrowed
+    assert total(LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, CommercialPaper=200, FinanceLeaseLiability=66594) == 33566
+    assert 'FinanceLeaseLiability' not in fundamentals.WATCHED_CONCEPTS and 'LongTermDebt' not in fundamentals.DEBT_COMPONENT_CONCEPTS
+    # a combined figure the company reports itself is used as it is, and no sum is formed beside it
+    rows = _debt_rows(DebtLongtermAndShorttermCombinedAmount=90000, LongTermDebtCurrent=1000, LongTermDebtNoncurrent=32366, CommercialPaper=200)
+    out = fundamentals.normalize(rows, _filings_for(Q3), instrument='AAPL', cik=CIK)
+    debt = [r for r in out['accepted'] if r['normalized_field'] == 'total_debt']
+    assert [(r['value'], r['concept'], r.get('derived_from')) for r in debt] == [('90000', 'DebtLongtermAndShorttermCombinedAmount', None)]
+    # the real balance dates captured on 2026-10-03, as each company tagged them
+    assert total(CommercialPaper=1997000000, LongTermDebt=82300000000, LongTermDebtCurrent=11007000000, LongTermDebtNoncurrent=71340000000) == 84344000000
+    assert why(LongTermDebt=40294000000, LongTermDebtCurrent=9227000000, LongTermDebtNoncurrent=31067000000) == 'SHORT_TERM_DEBT_NOT_REPORTED'
+    assert total(DebtCurrent=1000000000, LongTermDebt=33366000000, LongTermDebtCurrent=1000000000, LongTermDebtNoncurrent=32366000000) == 33366000000
+
+
+def test_fundamentals_are_available_only_when_every_required_field_is_resolved_for_every_company(tmp_path):
+    assert fundamentals.REQUIRED_FIELDS == ('revenue', 'operating_income', 'net_income', 'eps_diluted', 'operating_cash_flow', 'cash_and_equivalents',
+                                            'total_debt', 'diluted_shares_weighted_average')
+    assert fundamentals.OPTIONAL_FIELDS == ('gross_profit', 'capital_expenditure') and fundamentals.NOT_COLLECTED == ('free_cash_flow', 'ebitda')
+    assert not set(fundamentals.NOT_COLLECTED) & set(fundamentals.FIELDS)                       # never synthesized: there is no rule that could fill them
+
+    def run(lab, data):
+        report = runner.run_xbrl(lab, symbols=('AAPL',), environ=AGENT, transport=Fake(routes(data)), clock=CLOCK, max_filings=3)
+        return report, {c['capability']: c for c in lab.capabilities()}['fundamentals']
+
+    def without(*concepts):
+        data = company_facts()
+        for concept in concepts:
+            data['facts']['us-gaap'].pop(concept)
+        return data
+
+    # optional fields absent everywhere: recorded by name, and they do not block
+    report, state = run(_lab(tmp_path / 'optional'), without('GrossProfit', 'PaymentsToAcquirePropertyPlantAndEquipment'))
+    assert state['status'] == 'AVAILABLE' and report['validation']['AAPL']['quality']['passes'] is True
+    assert 'Optional fields not reported under a mapped concept, never derived: capital_expenditure (AAPL); gross_profit (AAPL).' in state['detail']
+    # each required field, when it cannot be resolved, keeps the capability at PARTIAL_EXISTING and is named
+    for concept, field in (('OperatingIncomeLoss', 'operating_income'), ('CashAndCashEquivalentsAtCarryingValue', 'cash_and_equivalents'),
+                           ('WeightedAverageNumberOfDilutedSharesOutstanding', 'diluted_shares_weighted_average'), ('CommercialPaper', 'total_debt'),
+                           ('LongTermDebtCurrent', 'total_debt'), ('NetCashProvidedByUsedInOperatingActivities', 'operating_cash_flow'),
+                           ('RevenueFromContractWithCustomerExcludingAssessedTax', 'revenue'), ('NetIncomeLoss', 'net_income'),
+                           ('EarningsPerShareDiluted', 'eps_diluted')):
+        report, state = run(_lab(tmp_path / concept), without(concept))
+        assert report['runs'][0]['status'] == OK and report['runs'][0]['stored'] > 0, concept            # what is real is still stored
+        assert state['status'] == 'PARTIAL_EXISTING' and f'AAPL: {field}' in state['detail'] and 'required fields unresolved' in state['detail'], concept
+    # debt reported without any short-term figure: no total is made up, and the reason is on record
+    report, state = run(_lab(tmp_path / 'debt'), without('CommercialPaper'))
+    assert state['status'] == 'PARTIAL_EXISTING' and not _rows(_lab(tmp_path / 'debt'), 'fundamental_fact_observations', where="WHERE normalized_field='total_debt'")
+    assert report['validation']['AAPL']['quality']['unresolved_by_field']['total_debt'] == {'SHORT_TERM_DEBT_NOT_REPORTED': 3}
+    # a debt part that the filing document does not carry: the sum is kept, flagged, and does not count as confirmed
+    lab = _lab(tmp_path / 'doc')
+    report = runner.run_xbrl(lab, symbols=('AAPL',), environ=AGENT, transport=Fake(routes(drop='LongTermDebtCurrent')), clock=CLOCK, max_filings=3)
+    row = _rows(lab, 'fundamental_fact_observations', where=f"WHERE normalized_field='total_debt' AND accession_number='{Q3}' AND period_end='2026-06-27'")[0]
+    assert row['confirmed_in_filing'] == 'NOT_FOUND' and json.loads(row['derived_from'])[0]['concept'] == 'LongTermDebtCurrent'
+    assert report['capabilities']['fundamentals'] == 'PARTIAL_EXISTING' and report['validation']['AAPL']['quality']['critical_not_confirmed_in_filing'] == [
+        {'accession_number': Q3, 'field': 'total_debt'}]
+    # ... and a part whose value differs in the document refuses the whole answer
+    report = runner.run_xbrl(_lab(tmp_path / 'differs'), symbols=('AAPL',), environ=AGENT, transport=Fake(routes(wrong='CommercialPaper')), clock=CLOCK,
+                             max_filings=3)
+    assert report['runs'][0]['status'] == REJECTED and report['runs'][0]['issues'] == ['FACT_DIFFERS_FROM_FILING'] and report['runs'][0]['stored'] == 0

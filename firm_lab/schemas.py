@@ -149,7 +149,7 @@ SCHEMAS = {
         identifier='instrument', timestamps=('accepted_timestamp', 'ingestion_timestamp'),
         key=('normalized_field', 'period_start', 'period_end', 'accession_number'), numeric=('value',), positive=('version',),
         optional=('period_start', 'agreeing_concepts', 'filing_fiscal_year', 'filing_fiscal_period', 'frame', 'prior_value', 'entity_name',
-                  'accepted_timestamp_json', 'acceptance_time_conflict', 'filing_document_url'),
+                  'accepted_timestamp_json', 'acceptance_time_conflict', 'filing_document_url', 'derived_from'),
         point_in_time='accepted_timestamp',
         allowed={'unit': ('USD', 'USD/shares', 'shares'), 'taxonomy': ('us-gaap',), 'period_type': ('instant', '3M', '6M', '9M', '12M'),
                  'relation_to_filing': ('current', 'comparative'), 'form': ('10-K', '10-Q', '10-K/A', '10-Q/A'),
