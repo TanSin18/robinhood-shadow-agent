@@ -13,4 +13,5 @@ def validate_definition(definition):
 
 
 def definitions():
-    return ()
+    from .technical import technical_definitions
+    return technical_definitions()
