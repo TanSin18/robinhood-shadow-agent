@@ -21,7 +21,7 @@ VANGUARD_HOST, NASDAQ_HOST = 'investor.vanguard.com', 'api.nasdaq.com'
 PLAIN_AGENT = 'FirmLabResearch/1.0 (personal research; hand-started single requests)'
 COMPANIES = (('AAPL', 320193), ('MSFT', 789019), ('NVDA', 1045810), ('AMZN', 1018724), ('GOOGL', 1652044))
 PUBLIC = (
-    ('vanguard_vti_distribution.json', f'https://{VANGUARD_HOST}/investment-products/etfs/profile/api/VTI/distribution'),
+    ('vanguard_vti_distribution.json', f'https://{VANGUARD_HOST}/vmf/api/VTI/distribution'),
     ('vanguard_divdat_2026.pdf', f'https://{VANGUARD_HOST}/content/dam/retail/publicsite/en/documents/taxes/DIVDAT_2026.pdf'),
     ('vanguard_divdat_2025.pdf', f'https://{VANGUARD_HOST}/content/dam/retail/publicsite/en/documents/taxes/DIVDAT_012025.pdf'),
     ('nasdaq_vti_dividends.json', f'https://{NASDAQ_HOST}/api/quote/VTI/dividends?assetclass=etf'),

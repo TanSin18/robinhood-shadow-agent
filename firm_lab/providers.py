@@ -215,6 +215,24 @@ class TreasuryAuctionsProvider(Provider):
         return self._call('auctions', now=now, start=start)
 
 
+class CompanyFactsProvider(Provider):
+    """Company facts from the SEC's XBRL data, normalized by firm_lab.fundamentals. No ratio or score is computed here."""
+    domain = 'xbrl_facts'
+    capability = 'fundamentals'
+
+    def facts(self, instrument, *, since, limit=None, now=None):
+        return self._call('facts', now=now, expected_instrument=instrument, instrument=instrument, since=since, limit=limit)
+
+
+class EarningsEventsProvider(Provider):
+    """Earnings-release filings as facts: what was filed and when. Nothing is scored, summarised or predicted."""
+    domain = 'earnings_events'
+    capability = 'earnings_events'
+
+    def events(self, instrument, *, start, end, limit=None, now=None):
+        return self._call('events', now=now, expected_instrument=instrument, instrument=instrument, start=start, end=end, limit=limit)
+
+
 class CorporateActionsProvider(Provider):
     """Cash dividends, splits, spin-offs, symbol changes, mergers and delistings, each with its announcement time."""
     domain = capability = 'corporate_actions'
@@ -224,4 +242,5 @@ class CorporateActionsProvider(Provider):
 
 
 INTERFACES = (FundamentalsProvider, EstimatesProvider, EarningsProvider, FilingsProvider, NewsProvider, IntradayMarketDataProvider,
-              OptionsMarketDataProvider, RiskFreeBenchmarkProvider, CorporateActionsProvider, TreasuryAuctionsProvider)
+              OptionsMarketDataProvider, RiskFreeBenchmarkProvider, CorporateActionsProvider, TreasuryAuctionsProvider,
+              CompanyFactsProvider, EarningsEventsProvider)

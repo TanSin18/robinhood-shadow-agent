@@ -21,11 +21,12 @@ from firm_lab.providers import OK, UNAVAILABLE
 from firm_lab.sessions import ET
 from firm_lab.store import now_utc
 
-from . import config, edgar, massive, sharadar, thetadata
+from . import config, distributions, earnings, edgar, massive, sharadar, thetadata, xbrl
 from . import treasury as treasury_source
 from .transport import HttpTransport
 
 EQUITY_SAMPLE = ('SPY', 'VTI', 'SOXX', 'AAPL', 'NVDA')
+FACTS_SAMPLE = ('AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL')    # the SEC XBRL and earnings-event sample (operating companies)
 COMPANY_SAMPLE = ('AAPL', 'NVDA')                       # fundamentals exist for operating companies, not for the ETFs in the sample
 OPTIONS_SAMPLE = ('SPY', 'QQQ', 'NVDA')
 NEEDS = {
@@ -84,6 +85,58 @@ def run_edgar(store, *, symbols=EQUITY_SAMPLE, environ=None, transport=None, clo
                                         diagnostics={'window': [start.isoformat(), end.isoformat()], 'max_filings': int(max_filings),
                                                      'acceptance_time_conflicts': conflicts})
         outcome['flags'] = {'ACCEPTANCE_TIME_CONFLICT': len(conflicts)} if conflicts else {}
+        outcomes.append(outcome)
+    return _finish(store, provider.name, outcomes, transport, clock)
+
+
+# ---------------------------------------------------------------------------- SEC XBRL company facts
+def run_xbrl(store, *, symbols=FACTS_SAMPLE, environ=None, transport=None, clock=now_utc, days=550, max_filings=4) -> dict:
+    """A small normalized set of reported company facts for a few companies, most recent periodic reports first. Each
+    value is timed by its filing's header and checked against the filing's own document. Facts only: no ratio or score."""
+    agent = config.sec_user_agent(environ)
+    if not agent:
+        return _not_configured(store, 'SEC EDGAR', clock)
+    transport = transport or HttpTransport(edgar.HOSTS, user_agent=agent, min_interval=0.2, max_bytes=60_000_000, timeout=40)
+    provider = xbrl.SecXbrlFactsProvider(transport, max_filings=max_filings)
+    started, batch = clock().isoformat(), rawstore.new_batch(store, provider.name, clock())
+    since = (clock().astimezone(ET).date() - timedelta(days=int(days))).isoformat()
+    outcomes, reports = [], {}
+    for symbol in symbols:
+        result = provider.facts(symbol, since=since, now=clock)
+        report = provider.reports.get(symbol.upper()) or {}
+        outcome = rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument=symbol, now=clock(),
+                                        diagnostics={'since': since, 'max_filings': int(max_filings), 'validation': report})
+        outcome['quality_passes'] = bool((report.get('quality') or {}).get('passes')) if result.status == OK else False
+        outcomes.append(outcome)
+        reports[symbol.upper()] = {k: report.get(k) for k in ('raw_facts_in_filings_read', 'normalized_accepted', 'unresolved', 'accepted_by_field',
+                                                              'units', 'restatements', 'checked_against_filing', 'filings', 'quality',
+                                                              'amendments_without_financial_facts')}
+    out = _finish(store, provider.name, outcomes, transport, clock)
+    out['validation'] = reports
+    return out
+
+
+# ---------------------------------------------------------------------------- SEC earnings-release filings
+def run_earnings(store, *, symbols=FACTS_SAMPLE, environ=None, transport=None, clock=now_utc, days=550, max_events=4) -> dict:
+    """Earnings-release filings (8-K, Item 2.02) for a few companies: what was filed and when it was accepted.
+    FACTUAL EVENT DATA ONLY: nothing is read from the release, and there is no sentiment, score, signal or transcript."""
+    agent = config.sec_user_agent(environ)
+    if not agent:
+        return _not_configured(store, 'SEC EDGAR', clock)
+    transport = transport or HttpTransport(edgar.HOSTS, user_agent=agent, min_interval=0.2)
+    provider = earnings.EdgarEarningsEventsProvider(transport, max_events=max_events)
+    started, batch = clock().isoformat(), rawstore.new_batch(store, provider.name, clock())
+    end = clock().astimezone(ET).date()
+    start = end - timedelta(days=int(days))
+    outcomes = []
+    for symbol in symbols:
+        result = provider.events(symbol, start=start.isoformat(), end=end.isoformat(), now=clock)
+        got = result.records() if result.status == OK else ()
+        outcome = rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument=symbol, now=clock(),
+                                        diagnostics={'window': [start.isoformat(), end.isoformat()], 'max_events': int(max_events),
+                                                     'release_document_unavailable': sum(1 for r in got if r['release_document_url'] == 'UNAVAILABLE'),
+                                                     'fiscal_period_unavailable': sum(1 for r in got if r['fiscal_period_end'] == 'UNAVAILABLE'),
+                                                     'acceptance_time_conflicts': sum(1 for r in got if r['acceptance_time_conflict'])})
         outcomes.append(outcome)
     return _finish(store, provider.name, outcomes, transport, clock)
 
@@ -225,4 +278,27 @@ def run_treasury(store, *, environ=None, transport=None, clock=now_utc, start=No
     return report
 
 
-RUNS = {'edgar': run_edgar, 'massive': run_massive, 'sharadar': run_sharadar, 'thetadata': run_thetadata, 'treasury': run_treasury}
+# ---------------------------------------------------------------------------- issuer distributions and total return
+def run_distributions(store, *, environ=None, transport=None, clock=now_utc) -> dict:
+    """The issuer's published cash distributions for VTI, then (only if they validate) the VTI total-return index and the
+    70/30 total-return ruler. Public issuer data: no credential. A ruler only; nothing here can trade."""
+    benchmarks.require_frozen_methodology()                     # the bill leg is the frozen index or nothing
+    benchmarks.seed(store, clock())
+    transport = transport or HttpTransport([distributions.VANGUARD_HOST], user_agent=distributions.RESEARCH_AGENT, min_interval=1.0)
+    provider = distributions.VanguardDistributionsProvider(transport)
+    started, batch = clock().isoformat(), rawstore.new_batch(store, provider.name, clock())
+    today = clock().astimezone(ET).date().isoformat()
+    result = provider.actions('VTI', start=None, end=today, now=clock)
+    outcomes = [rawstore.store_result(store, provider.name, result, started_at=started, batch=batch, instrument='VTI', now=clock(),
+                                      diagnostics={'through': today, 'issuer_stated_frequency': provider.frequency})]
+    computed = benchmarks.compute_total_return(store, clock())    # reads only what is stored; nothing is stored unless validation passes
+    report = _finish(store, provider.name, outcomes, transport, clock)
+    report['total_return'] = {k: computed.get(k) for k in ('status', 'ruler_status', 'ruler_gap_reason', 'issues', 'notes', 'gap_date', 'gap_reason', 'stored', 'unchanged', 'base_date',
+                                                           'last_session', 'distributions_checked', 'distributions_applied', 'distributions_before_window',
+                                                           'independent_confirmation', 'rebalances', 'last_price_return', 'last_total_return',
+                                                           'last_total_return_date', 'last_ruler', 'last_ruler_date', 'observations')}
+    return report
+
+
+RUNS = {'edgar': run_edgar, 'distributions': run_distributions, 'xbrl': run_xbrl, 'earnings': run_earnings, 'massive': run_massive, 'sharadar': run_sharadar,
+        'thetadata': run_thetadata, 'treasury': run_treasury}

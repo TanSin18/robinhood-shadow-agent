@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from . import capabilities, features, sessions, treasury
+from . import capabilities, features, sessions, total_return, treasury
 from .errors import FirmLabError
 from .store import canonical, now_utc
 
@@ -32,6 +32,21 @@ IMPLEMENTATION = 'AUCTION_ACCRUAL_INDEX_V1'
 KIND_BILL_INDEX = 'tbill_13w_accrual_index'
 KIND_RULER = 'index_70_30_vti_price_return_basis'
 STATUS_KEY = 'treasury_index_status'
+# Total return (Checkpoint 4). The price-return ruler above is kept exactly as it is and is called the legacy ruler; the
+# total-return series are separate benchmarks with their own observations. Nothing stored earlier is overwritten.
+VTI_TR = 'VTI_TOTAL_RETURN'
+RULER_70_30_TR = 'FIXED_70_30_TOTAL_RETURN'
+LABELS = {RULER_70_30: 'LEGACY_PRICE_RETURN_RULER', RULER_70_30_TR: 'TOTAL_RETURN_RULER'}
+KIND_VTI_PRICE_INDEX = 'vti_price_return_index'
+KIND_VTI_TR_INDEX = 'vti_total_return_index'
+KIND_RULER_TR = 'index_70_30_vti_total_return'
+TR_STATUS_KEY = 'vti_total_return_status'
+TR_IMPLEMENTATION = 'EX_DATE_REINVESTMENT_V1'
+TR_METHODOLOGY = {'document': 'docs/firm_lab/vti_total_return_methodology.md', 'version': 1}
+DISTRIBUTION_ISSUER = 'Vanguard'                       # the fund's own issuer: the primary source of its distributions
+MAX_EX_DATE_GAP_DAYS = 110                             # a quarterly payer: a longer hole means a distribution is missing
+REINVEST_PRICE_TOLERANCE = Decimal('0.01')             # the issuer's reinvestment price against the stored close on the ex-date
+VALIDATION_FAILED = 'VALIDATION_FAILED'
 # (id, name, status, definition, defined_by, note, implementation_status)
 DEFINITIONS = (
     (VTI, '100% VTI', 'DEFINED', {'weights': {'VTI': '1.00'}, 'rebalancing': 'none', 'basis': 'price return; dividends not yet included'},
@@ -51,6 +66,29 @@ DEFINITIONS = (
      'operator instruction, 2026-10-01; Treasury-bill methodology approved 2026-10-02',
      'Lower-risk passive ruler, defined by the operator. The Treasury-bill leg is an accrual index built from official auction records under the '
      'frozen methodology. The VTI leg is price return. A ruler only: nothing trades it and nothing is chosen from it.', IMPLEMENTATION),
+    (VTI_TR, 'VTI total return', 'DEFINED',
+     {'weights': {'VTI': '1.00'}, 'rebalancing': 'none',
+      'basis': 'total return: each cash distribution is reinvested at the close of its ex-dividend session',
+      'price_series': 'stored completed-session closes (split-adjusted by their provider, not dividend-adjusted)',
+      'distributions': {'source': 'the fund issuer’s published distributions (Vanguard)', 'known_at': 'when Firm Lab fetched the record; the '
+                        'source gives no declaration time', 'validation': 'quarterly cadence; ex-date is a stored session; the issuer’s '
+                        'reinvestment price agrees with the stored close on the ex-date; any independent source stored must agree exactly'},
+      'rules': ['no vendor adjusted close and no vendor total-return index is used', 'a distribution is used only once it is stored and validated',
+                'a data gap stops the series and nothing is filled in', 'a stored observation is never overwritten'],
+      'methodology': TR_METHODOLOGY['document'], 'methodology_version': TR_METHODOLOGY['version']},
+     'operator instruction, Checkpoint 4 (2026-10-02)',
+     'VTI with cash distributions reinvested, beside (not instead of) the price-return series. A ruler only.', TR_IMPLEMENTATION),
+    (RULER_70_30_TR, '70% VTI total return + 30% 3-month U.S. Treasury-bill accrual index', 'DEFINED',
+     {'label': LABELS[RULER_70_30_TR], 'weights': {'VTI_TOTAL_RETURN': '0.70', 'US_TREASURY_BILL_3M_TOTAL_RETURN': '0.30'}, 'allocation': 'fixed',
+      'rebalancing': {'frequency': 'monthly', 'on': 'the first NYSE trading session of each calendar month', 'calendar': 'XNYS'},
+      'rules': ['fixed weights', 'no tactical changes', 'the Firm cannot trade, optimize or alter this benchmark',
+                'no retroactive asset substitution', 'a data gap stops the series and nothing is filled in'],
+      'treasury_bill_series': {'methodology': TREASURY_METHODOLOGY['document'], 'methodology_version': TREASURY_METHODOLOGY['version'],
+                               'methodology_sha256': TREASURY_METHODOLOGY['sha256'], 'note': 'the frozen bill index, unchanged'},
+      'vti_leg': 'total return: ' + TR_METHODOLOGY['document']},
+     'operator instruction, Checkpoint 4 (2026-10-02)',
+     'The 70/30 ruler with dividends included on the VTI side. The earlier price-return ruler is kept, unchanged, as the legacy ruler. '
+     'A ruler only: nothing trades it and nothing is chosen from it.', TR_IMPLEMENTATION),
 )
 
 
@@ -166,6 +204,160 @@ def compute_fixed_70_30(store, now=None, *, root=None) -> dict:
                                                               'methodology_sha256')}, at)
     capabilities.confirm_provider_data(store, at)
     return report
+
+
+def total_return_status(store) -> dict:
+    """What the last total-return computation recorded, or an empty dict when none has run."""
+    text = store.meta(TR_STATUS_KEY)
+    return json.loads(text) if text else {}
+
+
+def _stored_distributions(store, instrument):
+    """Stored cash distributions of the instrument, by source. Returns (issuer records, independent records, conflicts)."""
+    with store.connect() as db:
+        rows = db.execute("SELECT provider, effective_date, value, currency, known_at, provider_action, source_record, record_date, pay_date, id "
+                          "FROM corporate_action_observations WHERE instrument=? AND action_type='cash_dividend' ORDER BY id", (instrument,)).fetchall()
+        splits = db.execute("SELECT provider, effective_date, value FROM corporate_action_observations WHERE instrument=? AND action_type='split' "
+                            'ORDER BY id', (instrument,)).fetchall()
+    seen, conflicts, issuer, independent, detail = {}, [], [], [], {}
+    for provider, ex_date, value, currency, known, kind, source_record, record_date, pay_date, _ in rows:
+        key = (provider, ex_date, kind)
+        if key in seen:
+            if seen[key] != (Decimal(value), currency):     # the same source published two different amounts for one distribution
+                conflicts.append(f'{provider} {ex_date}: {seen[key][0]} and {value}')
+            elif provider == DISTRIBUTION_ISSUER:            # same amount: the first record's known-at stands; the newest details are the ones checked
+                detail[date.fromisoformat(ex_date)] = {'source_record': json.loads(source_record) if source_record else {},
+                                                       'record_date': record_date, 'pay_date': pay_date}
+            continue
+        seen[key] = (Decimal(value), currency)
+        item = total_return.Distribution(date.fromisoformat(ex_date), Decimal(value), str(currency or ''),
+                                         datetime.fromisoformat(known.replace('Z', '+00:00')), 'cash_dividend')
+        (issuer if provider == DISTRIBUTION_ISSUER else independent).append(item)
+        if provider == DISTRIBUTION_ISSUER:
+            detail[item.ex_date] = {'source_record': json.loads(source_record) if source_record else {}, 'record_date': record_date, 'pay_date': pay_date}
+    return issuer, independent, conflicts, detail, splits
+
+
+def compute_total_return(store, now=None, *, root=None) -> dict:
+    """Validates the stored VTI distributions, then computes and stores, one observation per NYSE session:
+
+      * the VTI price-return index and, separately, the VTI total-return index (benchmark VTI_TOTAL_RETURN);
+      * the 70/30 total-return ruler (benchmark FIXED_70_30_TOTAL_RETURN), using the frozen bill index unchanged.
+
+    Nothing is stored unless the distributions pass validation. The legacy price-return ruler and the stored closes are
+    not touched. A ruler only: nothing reads these values to choose or trade."""
+    require_frozen_methodology(root)                          # the bill leg is the frozen index or nothing
+    at = now or now_utc()
+    history = store.feature_history('VTI', 'close', features.FEATURE_VERSION, known_by=at.isoformat())
+    closes = [(date.fromisoformat(h['exchange_session_date']), Decimal(h['value'])) for h in history]
+    close_known = {date.fromisoformat(h['exchange_session_date']): datetime.fromisoformat(h['known_at'].replace('Z', '+00:00')) for h in history}
+    report = {'computed_at': at.isoformat(), 'implementation': TR_IMPLEMENTATION, 'methodology': TR_METHODOLOGY['document'], 'sessions': len(closes),
+              'status': VALIDATION_FAILED, 'issues': [], 'notes': [], 'stored': 0, 'unchanged': 0, 'gap_date': None, 'gap_reason': ''}
+
+    def finish():
+        store.set_meta(TR_STATUS_KEY, canonical(report), at)
+        store.event('TOTAL_RETURN_COMPUTED', {k: report.get(k) for k in ('status', 'ruler_status', 'issues', 'gap_date', 'gap_reason', 'ruler_gap_reason', 'stored', 'unchanged',
+                                                                         'base_date', 'last_session', 'distributions_applied')}, at)
+        capabilities.confirm_provider_data(store, at)
+        return report
+
+    if not closes:
+        report['issues'].append({'code': 'NO_SESSIONS', 'detail': 'no completed VTI session is stored'})
+        return finish()
+    base, last = closes[0][0], closes[-1][0]
+    issuer, independent, conflicts, detail, splits = _stored_distributions(store, 'VTI')
+    known = [d for d in issuer if d.known_at <= at]
+    window = [d for d in known if base < d.ex_date <= last]
+    issues = [{'code': 'CONFLICTING_DISTRIBUTION_RECORDS', 'detail': text} for text in conflicts]
+    if not window:
+        issues.append({'code': total_return.NO_PRIMARY_RECORDS, 'detail': f'no issuer distribution is stored with an ex-date after {base} and up to {last}'})
+    marks = [base] + sorted(d.ex_date for d in window) + [last]
+    for a, b in zip(marks, marks[1:]):
+        if (b - a).days > MAX_EX_DATE_GAP_DAYS:
+            issues.append({'code': total_return.CADENCE_GAP, 'detail': f'no ex-date between {a} and {b} ({(b - a).days} days); the fund pays quarterly'})
+    by_day = dict(closes)
+    checked = []
+    for d in sorted(window, key=lambda x: x.ex_date):
+        stated = (detail.get(d.ex_date) or {}).get('source_record', {}).get('reinvestPrice')
+        close = by_day.get(d.ex_date)
+        entry = {'ex_date': d.ex_date.isoformat(), 'amount': str(d.amount), 'currency': d.currency, 'known_at': d.known_at.isoformat(),
+                 'record_date': (detail.get(d.ex_date) or {}).get('record_date'), 'pay_date': (detail.get(d.ex_date) or {}).get('pay_date'),
+                 'issuer_reinvestment_price': stated, 'stored_close_on_ex_date': str(close) if close is not None else None}
+        checked.append(entry)
+        if close is None:
+            issues.append({'code': total_return.EX_DATE_NOT_A_SESSION, 'detail': f'{d.ex_date} is not a stored VTI session'})
+            continue
+        try:
+            ratio = Decimal(str(stated)) / close
+        except (ArithmeticError, TypeError, ValueError):
+            issues.append({'code': 'REINVESTMENT_PRICE_MISSING', 'detail': f'{d.ex_date}: the issuer record carries no usable reinvestment price'})
+            continue
+        entry['reinvestment_price_over_close'] = str(treasury.q6(ratio))
+        if abs(ratio - 1) > REINVEST_PRICE_TOLERANCE:        # a wrong date, or a share basis that differs from the stored closes (a split)
+            issues.append({'code': 'REINVESTMENT_PRICE_MISMATCH', 'detail': f'{d.ex_date}: issuer reinvestment price {stated}, stored close {close}'})
+    if independent:
+        for code, text in total_return.compare_sources(window, [d for d in independent if d.known_at <= at], base + (date.resolution), last,
+                                                       max_gap_days=10 ** 6):
+            issues.append({'code': code, 'detail': text})
+        report['independent_confirmation'] = 'COMPARED'
+    else:
+        report['independent_confirmation'] = 'NONE_STORED'
+        report['notes'].append('No independent distribution source is stored. The amounts rest on the issuer’s own publication; the dates and the '
+                               'share basis are cross-checked against the stored closes through the issuer’s reinvestment price.')
+    if splits:
+        issues.append({'code': 'SPLIT_RECORD_NEEDS_A_RULE', 'detail': f'{len(splits)} split record(s) are stored for VTI; no split handling is approved'})
+    else:
+        report['notes'].append('No split record is stored and none is assumed away: a split between a distribution and the stored closes would '
+                               'show as a reinvestment-price mismatch, and stops the series.')
+    report.update(base_date=base.isoformat(), last_session=last.isoformat(), distributions_checked=checked, issuer_records=len(issuer),
+                  distributions_before_window=sorted(d.ex_date.isoformat() for d in known if d.ex_date <= base), issues=issues)
+    if issues:
+        return finish()                                       # nothing is computed from distributions that did not validate
+
+    result = total_return.total_return_index(closes, window, (), as_of=at)
+    with store.connect() as db:
+        columns = [r[1] for r in db.execute('PRAGMA table_info(treasury_auction_observations)')]
+        rows = [dict(zip(columns, r)) for r in db.execute('SELECT * FROM treasury_auction_observations ORDER BY id')]
+    bills, unusable = treasury.bills_from_rows(rows, at)
+    index = treasury.accrual_index(bills, unusable, base, last)
+    levels = [(day, result.total_return[day]) for day, _ in closes if day in result.total_return]
+    ruler = treasury.fixed_70_30(levels, index.values)
+    close_time = lambda day: datetime.combine(day, time(16, 0), sessions.ET).astimezone(timezone.utc)
+    stamp = lambda day, *extra: max([x for x in (close_time(day), close_known.get(day), *extra) if x]).isoformat()
+    source_vti = (f'firm_lab.total_return {TR_IMPLEMENTATION}; base {base.isoformat()} = 100 (development base); distributions from '
+                  f'{DISTRIBUTION_ISSUER}, reinvested at the ex-date close')
+    source_ruler = (f'{source_vti}; bill leg: firm_lab.treasury construction A, methodology sha256 {TREASURY_METHODOLOGY["sha256"][:16]}')
+    wanted = []
+    for day, _ in closes:
+        if day in result.price_return:
+            wanted.append((VTI_TR, day, KIND_VTI_PRICE_INDEX, str(treasury.q6(result.price_return[day])), stamp(day), source_vti))
+        if day in result.total_return:
+            wanted.append((VTI_TR, day, KIND_VTI_TR_INDEX, str(treasury.q6(result.total_return[day])), stamp(day, result.known_at.get(day)), source_vti))
+        if day in ruler.values:
+            wanted.append((RULER_70_30_TR, day, KIND_RULER_TR, str(treasury.q6(ruler.values[day])),
+                           stamp(day, result.known_at.get(day), index.known_at.get(day)), source_ruler))
+    with store.connect() as db:
+        for bench, day, kind, value, _, source in wanted:      # nothing already stored may change
+            old = db.execute('SELECT value FROM benchmark_observations WHERE benchmark_id=? AND exchange_session_date=? AND kind=? AND source=?',
+                             (bench, day.isoformat(), kind, source)).fetchone()
+            if old is not None and old[0] != value:
+                raise FirmLabError(f'BENCHMARK_OBSERVATION_CONFLICT:{kind}:{day}: stored {old[0]}, computed {value}. Nothing was changed.')
+        for bench, day, kind, value, known_at, source in wanted:
+            added = db.execute('INSERT OR IGNORE INTO benchmark_observations (benchmark_id, exchange_session_date, value, kind, source, known_at, '
+                               'ingested_at) VALUES (?,?,?,?,?,?,?)', (bench, day.isoformat(), value, kind, source, known_at, at.isoformat())).rowcount
+            report['stored'] += added
+            report['unchanged'] += 1 - added
+    ruler_gap = result if result.status != total_return.OK else index if index.status != treasury.OK else ruler
+    last_of = lambda values: (str(treasury.q6(values[max(values)])), max(values).isoformat()) if values else (None, None)
+    report.update(status=result.status, gap_date=result.gap_date.isoformat() if result.gap_date else None, gap_reason=result.gap_reason,
+                  ruler_status=ruler_gap.status, ruler_gap_date=ruler_gap.gap_date.isoformat() if ruler_gap.gap_date else None,
+                  ruler_gap_reason=ruler_gap.gap_reason,
+                  distributions_applied=[{'ex_date': d.isoformat(), 'amount': str(a)} for d, a, _ in result.applied],
+                  rebalances=len(ruler.rebalances), last_price_return=last_of(result.price_return)[0],
+                  last_total_return=last_of(result.total_return)[0], last_total_return_date=last_of(result.total_return)[1],
+                  last_ruler=last_of(ruler.values)[0], last_ruler_date=last_of(ruler.values)[1],
+                  observations={'price_return': len(result.price_return), 'total_return': len(result.total_return), 'ruler': len(ruler.values)})
+    return finish()
 
 
 def record_vti(store, *, known_at, now=None):

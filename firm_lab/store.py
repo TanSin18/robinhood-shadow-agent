@@ -72,7 +72,8 @@ RAW_SCHEMA = (
     + ", UNIQUE (provider, instrument, dimension, period_end, filing_date, metric, content_hash))",
     "CREATE TABLE IF NOT EXISTS corporate_action_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, action_type TEXT NOT NULL, "
     "provider_action TEXT NOT NULL, effective_date TEXT NOT NULL, effective_date_basis TEXT, announcement_timestamp TEXT NOT NULL, value TEXT, "
-    "value_meaning TEXT, currency TEXT, contra_instrument TEXT, contra_name TEXT, name TEXT, " + _PROV
+    "value_meaning TEXT, currency TEXT, contra_instrument TEXT, contra_name TEXT, name TEXT, record_date TEXT, pay_date TEXT, distribution_type TEXT, "
+    "source_record TEXT, " + _PROV
     + ", UNIQUE (provider, instrument, provider_action, effective_date, contra_instrument, content_hash))",
     # Greeks and implied volatility are stored only as provider values, with who computed them and under which model.
     "CREATE TABLE IF NOT EXISTS option_chain_observations (id INTEGER PRIMARY KEY, contract_id TEXT NOT NULL, underlying TEXT NOT NULL, "
@@ -87,11 +88,30 @@ RAW_SCHEMA = (
     "security_term TEXT NOT NULL, auction_date TEXT NOT NULL, issue_date TEXT NOT NULL, maturity_date TEXT NOT NULL, high_discount_rate TEXT NOT NULL, "
     "price_per100 TEXT NOT NULL, closing_time_comp TEXT, reopening TEXT, original_security_term TEXT, record_date TEXT, result_known_at TEXT NOT NULL, "
     "feed TEXT, " + _PROV + ", UNIQUE (provider, cusip, auction_date, content_hash))",
+    # Company facts from SEC XBRL data, one row per appearance of a fact in a filing. `accepted_timestamp` (the filing-header
+    # time) is when the fact became known. A later filing with a different value for the same period is a new row with a
+    # higher `version`; an earlier row is never changed.
+    "CREATE TABLE IF NOT EXISTS fundamental_fact_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, taxonomy TEXT NOT NULL, "
+    "concept TEXT NOT NULL, normalized_field TEXT NOT NULL, mapping_rule TEXT NOT NULL, agreeing_concepts TEXT, unit TEXT NOT NULL, value TEXT NOT NULL, "
+    "period_type TEXT NOT NULL, period_start TEXT, period_end TEXT NOT NULL, relation_to_filing TEXT NOT NULL, filing_fiscal_year TEXT, "
+    "filing_fiscal_period TEXT, form TEXT NOT NULL, accession_number TEXT NOT NULL, filing_date TEXT NOT NULL, frame TEXT, accepted_timestamp TEXT NOT NULL, "
+    "accepted_timestamp_json TEXT, acceptance_time_conflict TEXT, version INTEGER NOT NULL, is_restatement TEXT NOT NULL, prior_value TEXT, "
+    "confirmed_in_filing TEXT NOT NULL, source_url TEXT NOT NULL, filing_document_url TEXT, entity_name TEXT, " + _PROV
+    + ", UNIQUE (provider, instrument, normalized_field, period_end, accession_number, content_hash))",      # the hash covers the whole record
+    # Earnings-release filings (8-K, Item 2.02): what was filed and when the SEC accepted it. Facts only; no sentiment, score or signal column.
+    "CREATE TABLE IF NOT EXISTS earnings_event_observations (id INTEGER PRIMARY KEY, instrument TEXT NOT NULL, cik TEXT NOT NULL, accession_number TEXT NOT NULL, "
+    "form TEXT NOT NULL, items TEXT NOT NULL, event_date TEXT NOT NULL, filing_date TEXT NOT NULL, accepted_timestamp TEXT NOT NULL, "
+    "accepted_timestamp_header TEXT NOT NULL, accepted_timestamp_json TEXT NOT NULL, acceptance_time_conflict TEXT NOT NULL, acceptance_session TEXT NOT NULL, "
+    "filing_url TEXT NOT NULL, primary_document_url TEXT, release_document_url TEXT NOT NULL, release_document_type TEXT, fiscal_period_end TEXT NOT NULL, "
+    "fiscal_period_basis TEXT, periodic_accession_number TEXT, transcript_available TEXT NOT NULL, entity_name TEXT, " + _PROV
+    + ", UNIQUE (provider, instrument, accession_number, content_hash))",
 )
 ADDED_COLUMNS = {'filing_observations': ('accepted_timestamp_header', 'accepted_timestamp_json', 'acceptance_time_conflict',
-                                         'acceptance_time_json_offset_seconds')}
+                                         'acceptance_time_json_offset_seconds'),
+                 'corporate_action_observations': ('record_date', 'pay_date', 'distribution_type', 'source_record')}
 RAW_TABLES = ('filing_observations', 'intraday_bar_observations', 'trade_observations', 'quote_observations', 'fundamental_observations',
-              'corporate_action_observations', 'option_chain_observations', 'treasury_auction_observations')
+              'corporate_action_observations', 'option_chain_observations', 'treasury_auction_observations',
+              'fundamental_fact_observations', 'earnings_event_observations')
 # Names that must never appear as Firm Lab tables while the mode is BUILD_OBSERVE (checked by a test).
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'paper_account', 'cash', 'portfolio')
 

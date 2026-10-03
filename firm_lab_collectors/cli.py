@@ -3,10 +3,13 @@ Firm Lab research package and this package, and it writes only the Firm Lab data
 
     python -m firm_lab_collectors.cli status
     python -m firm_lab_collectors.cli edgar      [--symbols SPY,VTI,SOXX,AAPL,NVDA] [--days 365] [--max-filings 5]
+    python -m firm_lab_collectors.cli xbrl       [--symbols AAPL,MSFT,NVDA,AMZN,GOOGL] [--days 550] [--max-filings 4]   # reported company facts
+    python -m firm_lab_collectors.cli earnings   [--symbols ...] [--days 550] [--max-events 4]     # earnings-release filings, facts only
     python -m firm_lab_collectors.cli massive    [--symbols ...] [--session-date YYYY-MM-DD] [--no-ticks] [--min-interval SECONDS]
     python -m firm_lab_collectors.cli sharadar   [--symbols AAPL,NVDA] [--years 3]
     python -m firm_lab_collectors.cli thetadata  [--symbols SPY,QQQ,NVDA] [--session-date YYYY-MM-DD] [--expiration YYYY-MM-DD]
     python -m firm_lab_collectors.cli treasury   [--start YYYY-MM-DD]      # 13-week bill auctions, then the 70/30 ruler
+    python -m firm_lab_collectors.cli distributions                        # issuer VTI distributions, then the total-return rulers
     python -m firm_lab_collectors.cli capture    --out DIRECTORY           # raw public samples saved as received; no database
 
 ``--path`` names the Firm Lab database (default: ~/LocalProjects/robinhood-diagnostics/firm_lab/firm_lab.db). It must exist
@@ -51,6 +54,7 @@ def main(argv=None, environ=None, transport=None) -> int:
     p.add_argument('--days', type=int)
     p.add_argument('--years', type=int)
     p.add_argument('--max-filings', type=int)
+    p.add_argument('--max-events', type=int)
     p.add_argument('--min-interval', type=float)
     p.add_argument('--no-ticks', action='store_true')
     a = p.parse_args(argv)
@@ -72,11 +76,12 @@ def main(argv=None, environ=None, transport=None) -> int:
             store = FirmLabStore(path, create=False)
             capabilities.seed(store)
             options = {'symbols': tuple(s.strip().upper() for s in a.symbols.split(',') if s.strip()) if a.symbols else None,
-                       'days': a.days, 'years': a.years, 'max_filings': a.max_filings, 'min_interval': a.min_interval,
+                       'days': a.days, 'years': a.years, 'max_filings': a.max_filings, 'max_events': a.max_events, 'min_interval': a.min_interval,
                        'session_date': a.session_date if a.command == 'massive' else None, 'as_of': a.session_date if a.command == 'thetadata' else None,
                        'expiration': a.expiration, 'ticks': False if a.no_ticks else None, 'start': a.start}
-            allowed = {'edgar': ('symbols', 'days', 'max_filings'), 'massive': ('symbols', 'session_date', 'ticks', 'min_interval'),
-                       'sharadar': ('symbols', 'years'), 'thetadata': ('symbols', 'as_of', 'expiration'), 'treasury': ('start',)}[a.command]
+            allowed = {'edgar': ('symbols', 'days', 'max_filings'), 'xbrl': ('symbols', 'days', 'max_filings'),
+                       'earnings': ('symbols', 'days', 'max_events'), 'massive': ('symbols', 'session_date', 'ticks', 'min_interval'),
+                       'sharadar': ('symbols', 'years'), 'thetadata': ('symbols', 'as_of', 'expiration'), 'treasury': ('start',), 'distributions': ()}[a.command]
             chosen = {k: v for k, v in options.items() if k in allowed and v is not None}
             out['run'] = runner.RUNS[a.command](store, environ=environ, transport=transport, **chosen)
         out['status'] = _status(path, environ)

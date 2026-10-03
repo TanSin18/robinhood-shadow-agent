@@ -17,11 +17,13 @@ from .store import RAW_TABLES, canonical, now_utc
 
 DOMAIN_TABLE = {'filings': 'filing_observations', 'intraday_bars': 'intraday_bar_observations', 'trades': 'trade_observations',
                 'quotes': 'quote_observations', 'fundamentals': 'fundamental_observations', 'corporate_actions': 'corporate_action_observations',
-                'options_chain': 'option_chain_observations', 'treasury_auctions': 'treasury_auction_observations'}
+                'options_chain': 'option_chain_observations', 'treasury_auctions': 'treasury_auction_observations',
+                'xbrl_facts': 'fundamental_fact_observations', 'earnings_events': 'earnings_event_observations'}
 # The column that says when the observation is about, used for "oldest" and "newest".
 TIME_COLUMN = {'filing_observations': 'accepted_timestamp', 'intraday_bar_observations': 'bar_start', 'trade_observations': 'trade_timestamp',
                'quote_observations': 'quote_timestamp', 'fundamental_observations': 'period_end', 'corporate_action_observations': 'effective_date',
-               'option_chain_observations': 'quote_timestamp', 'treasury_auction_observations': 'auction_date'}
+               'option_chain_observations': 'quote_timestamp', 'treasury_auction_observations': 'auction_date',
+               'fundamental_fact_observations': 'period_end', 'earnings_event_observations': 'accepted_timestamp'}
 # What makes two rows "the same observation". A changed record is stored as a further row with the same key.
 NATURAL_KEY = {'filing_observations': ('instrument', 'accession_number'),
                'intraday_bar_observations': ('provider', 'instrument', 'bar_start', 'interval', 'adjusted'),
@@ -30,12 +32,18 @@ NATURAL_KEY = {'filing_observations': ('instrument', 'accession_number'),
                'fundamental_observations': ('provider', 'instrument', 'dimension', 'period_end', 'filing_date', 'metric'),
                'corporate_action_observations': ('provider', 'instrument', 'provider_action', 'effective_date', 'contra_instrument'),
                'option_chain_observations': ('provider', 'contract_id', 'quote_timestamp'),
-               'treasury_auction_observations': ('cusip', 'auction_date')}
+               'treasury_auction_observations': ('cusip', 'auction_date'),
+               'fundamental_fact_observations': ('instrument', 'normalized_field', 'period_start', 'period_end', 'accession_number'),
+               'earnings_event_observations': ('instrument', 'accession_number')}
 # Fields that say when Firm Lab fetched a record, not what the record is. Left out of the content hash, so the same
 # record fetched twice is recognised as the same record.
 VOLATILE_FIELDS = ('ingestion_timestamp', 'known_at')
 # Data-quality flags on rows that were kept: (table, flag, column, value meaning "flagged").
-ROW_FLAGS = (('filing_observations', 'ACCEPTANCE_TIME_CONFLICT', 'acceptance_time_conflict', 'true'),)
+ROW_FLAGS = (('filing_observations', 'ACCEPTANCE_TIME_CONFLICT', 'acceptance_time_conflict', 'true'),
+             ('earnings_event_observations', 'ACCEPTANCE_TIME_CONFLICT', 'acceptance_time_conflict', 'true'),
+             ('fundamental_fact_observations', 'ACCEPTANCE_TIME_CONFLICT', 'acceptance_time_conflict', 'true'),
+             ('fundamental_fact_observations', 'RESTATEMENT', 'is_restatement', 'true'),
+             ('fundamental_fact_observations', 'NOT_FOUND_IN_FILING_DOCUMENT', 'confirmed_in_filing', 'NOT_FOUND'))
 PROVENANCE_COLUMNS = ('provider', 'source_id', 'source_timestamp', 'known_at', 'ingested_at', 'schema_version', 'content_hash', 'run_id')
 CONNECTION_STATES = ('NOT_SELECTED', 'NOT_CONFIGURED', 'CONFIGURED', 'ACTIVE', 'ERROR')
 _VENDOR_GREEK = re.compile(r'^([a-z][a-z0-9]*)_provider_(' + '|'.join(GREEKS) + ')$')
@@ -150,7 +158,10 @@ def summary_db(db) -> dict:
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_runs'").fetchone():
         return out                                              # a database from before Checkpoint 3: nothing is stored
     if True:
+        present = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         for table in RAW_TABLES:
+            if table not in present:
+                continue                                        # a database not yet migrated to this version: the table holds nothing
             column = TIME_COLUMN[table]
             rows, oldest, newest = db.execute(f'SELECT COUNT(*), MIN({column}), MAX({column}) FROM {table}').fetchone()
             domains = [d for d, t in DOMAIN_TABLE.items() if t == table]

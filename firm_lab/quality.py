@@ -39,6 +39,10 @@ SESSION_DATE_MISMATCH = 'SESSION_DATE_MISMATCH'
 CROSSED_MARKET = 'CROSSED_MARKET'
 KNOWN_AT_NOT_HEADER = 'KNOWN_AT_NOT_HEADER'
 JSON_TIME_REWRITTEN = 'JSON_TIME_REWRITTEN'
+SIGNAL_FIELD_NOT_ALLOWED = 'SIGNAL_FIELD_NOT_ALLOWED'
+SIGNAL_WORDS = ('sentiment', 'tone', 'score', 'signal', 'surprise', 'rating', 'bullish', 'bearish', 'prediction', 'forecast', 'rank',
+                'recommendation')
+FACT_ONLY_DOMAINS = ('xbrl_facts', 'earnings_events', 'filings', 'corporate_actions', 'treasury_auctions')
 
 
 @dataclass(frozen=True)
@@ -259,6 +263,16 @@ def check_filing_times(records) -> list:
     return out
 
 
+def check_no_signal_fields(records) -> list:
+    """Factual domains carry facts. A field whose name says it is an opinion, a score or a signal makes the response unusable."""
+    out = []
+    for i, r in enumerate(records):
+        for name in sorted(r):
+            if any(word in str(name).lower() for word in SIGNAL_WORDS):
+                out.append(Issue(SIGNAL_FIELD_NOT_ALLOWED, f'{name!r} is not a fact about a filing or a company', i, str(name)))
+    return out
+
+
 def session_of(stamp) -> str:
     """pre_market 04:00-09:30, regular 09:30-16:00, post_market 16:00-20:00 New York clock time; '' outside those hours.
     Clock only: an exchange early close is not known here, so a bar after an early close is still labelled regular."""
@@ -364,8 +378,10 @@ def validate(domain, records, *, now, provenance=None, expected_instrument=None,
     issues += check_any_of(records, schema.any_of)
     if domain == 'intraday_bars':
         issues += check_sessions(records)
-    if domain == 'filings':
+    if domain in ('filings', 'earnings_events'):
         issues += check_filing_times(records)
+    if domain in FACT_ONLY_DOMAINS:
+        issues += check_no_signal_fields(records)
     if domain == 'treasury_auctions':
         from . import treasury
         issues += [Issue(code, detail, i) for i, code, detail in treasury.check_records(records)]

@@ -144,7 +144,8 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     rows = dict(re.findall(r'<tr><td(?: data-label="Data")?><b>([^<]+)</b></td><td(?: data-label="Capability")?><span class="cat cat-\w+">([^<]+)</span>', html))
     assert rows['Daily closes'] == 'AVAILABLE' and rows['Daily baseline features'] == 'AVAILABLE'      # stored closes that passed validation
     for name in ('Fundamentals', 'Analyst estimates and revisions', 'Intraday 1-minute bars', 'VWAP', 'Time-of-day RVOL', 'Order flow and microstructure',
-                 'Options Greeks', 'T-bill total return', 'Corporate actions and dividends', 'Earnings and transcripts'):
+                 'Options Greeks', 'T-bill total return', 'Corporate actions and dividends', 'Earnings events', 'Earnings transcripts',
+                 'VTI total return', '70/30 total-return ruler'):
         assert rows[name] == 'UNAVAILABLE', name
     assert rows['Options strategy'] == 'NOT_STARTED' and rows['ML ranker'] == 'NOT_STARTED' and rows['Options chains'] == 'BUILD_ONLY'
     assert rows['Live quotes and trades'] == rows['General news'] == rows['SEC filings'] == 'PARTIAL_EXISTING'
@@ -156,7 +157,8 @@ def test_firm_lab_page_shows_the_recorded_state_and_never_a_trade(tmp_path, caps
     assert '<dt>Observations stored</dt><dd>0</dd>' in html and 'Trial 18' not in html
     lowered = html.lower()
     for word in ('alpha', 'outperform', 'beat the market', 'bought ', 'paper trade placed', 'profit'):
-        assert word not in lowered.replace('no outperformance figure is reported', ''), word
+        # "gross profit" is the name of a reported accounting line in the fundamentals section, not a result of the Firm
+        assert word not in lowered.replace('no outperformance figure is reported', '').replace('gross profit', '').replace('gross_profit', ''), word
     assert '<form' not in html and '<button' not in html
 
 

@@ -139,6 +139,35 @@ SCHEMAS = {
         non_negative=('high_discount_rate',),
         optional=('closing_time_comp', 'reopening', 'original_security_term', 'record_date', 'feed'),
         allowed={'security_type': ('Bill',), 'security_term': ('13-Week',)}),
+    # One appearance of a company fact in a filing, normalized by firm_lab.fundamentals. Known-at is the SEC acceptance time.
+    # A fact whose value differs from the filing's own document (MISMATCH) is not an allowed state: the response is refused.
+    'xbrl_facts': Schema(
+        'xbrl_facts',
+        required=('instrument', 'cik', 'taxonomy', 'concept', 'normalized_field', 'mapping_rule', 'unit', 'value', 'period_type', 'period_end',
+                  'relation_to_filing', 'form', 'accession_number', 'filing_date', 'accepted_timestamp', 'version', 'is_restatement',
+                  'confirmed_in_filing', 'source_url', 'ingestion_timestamp'),
+        identifier='instrument', timestamps=('accepted_timestamp', 'ingestion_timestamp'),
+        key=('normalized_field', 'period_start', 'period_end', 'accession_number'), numeric=('value',), positive=('version',),
+        optional=('period_start', 'agreeing_concepts', 'filing_fiscal_year', 'filing_fiscal_period', 'frame', 'prior_value', 'entity_name',
+                  'accepted_timestamp_json', 'acceptance_time_conflict', 'filing_document_url'),
+        point_in_time='accepted_timestamp',
+        allowed={'unit': ('USD', 'USD/shares', 'shares'), 'taxonomy': ('us-gaap',), 'period_type': ('instant', '3M', '6M', '9M', '12M'),
+                 'relation_to_filing': ('current', 'comparative'), 'form': ('10-K', '10-Q', '10-K/A', '10-Q/A'),
+                 'confirmed_in_filing': ('CONFIRMED', 'NOT_FOUND', 'NOT_CHECKED'),
+                 'normalized_field': ('revenue', 'gross_profit', 'operating_income', 'net_income', 'eps_diluted', 'operating_cash_flow',
+                                      'capital_expenditure', 'cash_and_equivalents', 'total_debt', 'diluted_shares_weighted_average')}),
+    # An earnings-release filing. Facts about the filing only. `fiscal_period_end` and `release_document_url` are a value or
+    # the literal UNAVAILABLE; `acceptance_session` is the New York clock time of the SEC acceptance, not a market-hours claim.
+    'earnings_events': Schema(
+        'earnings_events',
+        required=('instrument', 'cik', 'accession_number', 'form', 'items', 'event_date', 'filing_date', 'accepted_timestamp',
+                  'accepted_timestamp_header', 'accepted_timestamp_json', 'acceptance_time_conflict', 'acceptance_session', 'filing_url',
+                  'release_document_url', 'fiscal_period_end', 'transcript_available', 'ingestion_timestamp'),
+        identifier='instrument', timestamps=('accepted_timestamp', 'accepted_timestamp_header', 'ingestion_timestamp'), key=('accession_number',),
+        optional=('primary_document_url', 'release_document_type', 'fiscal_period_basis', 'periodic_accession_number', 'entity_name',
+                  'accepted_timestamp_raw', 'accepted_timestamp_basis', 'acceptance_time_json_offset_seconds'),
+        point_in_time='accepted_timestamp_header',
+        allowed={'form': ('8-K', '8-K/A'), 'acceptance_session': ('before_market_open', 'during_market_hours', 'after_market_close')}),
     # The announcement time is a timestamp or the literal UNAVAILABLE. It is never derived from the effective date.
     'corporate_actions': Schema(
         'corporate_actions',
@@ -146,7 +175,7 @@ SCHEMAS = {
         identifier='instrument', key=('instrument', 'provider_action', 'effective_date', 'contra_instrument'),
         timestamp_or_unavailable=('announcement_timestamp',), numeric=('value',),
         optional=('value', 'value_meaning', 'currency', 'contra_instrument', 'contra_name', 'name', 'effective_date_basis', 'cash_amount',
-                  'split_ratio', 'new_instrument', 'ex_date', 'record_date', 'pay_date', 'terms'),
+                  'split_ratio', 'new_instrument', 'ex_date', 'record_date', 'pay_date', 'terms', 'distribution_type', 'source_record'),
         allowed={'action_type': ('cash_dividend', 'split', 'spin_off', 'symbol_change', 'merger', 'delisting', 'other')}),
 }
 NOT_A_TOTAL_RETURN = ('YIELD', 'DISCOUNT_RATE', 'COUPON_EQUIVALENT', 'PRICE')

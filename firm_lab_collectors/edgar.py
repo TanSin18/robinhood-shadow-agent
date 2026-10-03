@@ -105,6 +105,10 @@ class EdgarFilingsProvider(FilingsProvider):
     # ---------------------------------------------------------------- acceptance time
     def header_time(self, cik, accession):
         """(raw 14 digits, UTC ISO) from the filing's SGML header, or raises: the time is never assumed."""
+        return self.header(cik, accession)[:2]
+
+    def header(self, cik, accession):
+        """(raw 14 digits, UTC time, header text) from the filing's SGML header, or raises: the time is never assumed."""
         folder = accession.replace('-', '')
         match = None
         for name in (accession + '.hdr.sgml', accession + '-index-headers.html'):      # the same SEC header, as a file or as a page
@@ -122,7 +126,40 @@ class EdgarFilingsProvider(FilingsProvider):
             local = datetime.strptime(raw, '%Y%m%d%H%M%S').replace(tzinfo=ET)
         except ValueError:
             raise ProviderRejected([('ACCEPTANCE_TIME_UNVERIFIED', f'{accession}: unreadable header time {raw!r}')]) from None
-        return raw, local.astimezone(timezone.utc)
+        return raw, local.astimezone(timezone.utc), reply.body.decode('utf-8', 'replace')
+
+    # ---------------------------------------------------------------- the filing index
+    def recent_filings(self, instrument) -> dict:
+        """The SEC's own list of the company's recent filings, checked for shape and identity. Returns the identity, the
+        parallel arrays and the answer it came from. Nothing is selected or interpreted here."""
+        who = self.identity(instrument)
+        cik = who['cik']
+        reply = self.transport.get(SUBMISSIONS_URL.format(cik=cik))
+        if not reply.ok:
+            _fail(reply, f'the filing index of {instrument}')
+        data = _json(reply, 'the filing index')
+        provenance = Provenance(provider=self.name, source_id=reply.url, source_timestamp=reply.fetched_at, ingested_at=reply.fetched_at,
+                                known_at=reply.fetched_at, schema_version=SCHEMA_VERSION, content_hash=content_hash(reply.body))
+        if not isinstance(data, dict) or str(data.get('cik', '')).lstrip('0') != str(cik):
+            raise ProviderRejected([('CONFLICTING_INSTRUMENT_IDENTITY', f'asked for CIK {cik}, the answer is for {data.get("cik") if isinstance(data, dict) else "?"}')],
+                                   provenance)
+        recent = (data.get('filings') or {}).get('recent') if isinstance(data.get('filings'), dict) else None
+        if not isinstance(recent, dict) or any(not isinstance(recent.get(k), list) for k in REQUIRED_ARRAYS):
+            raise ProviderRejected([('MALFORMED_FILING', 'the filing index lacks one of ' + ', '.join(REQUIRED_ARRAYS))], provenance)
+        count = len(recent['accessionNumber'])
+        if any(len(recent[k]) != count for k in REQUIRED_ARRAYS):
+            raise ProviderRejected([('MALFORMED_FILING', 'the filing index arrays have different lengths')], provenance)
+        rows = []
+        for i in range(count):
+            accession = str(recent['accessionNumber'][i])
+            if not ACCESSION.match(accession):
+                raise ProviderRejected([('MALFORMED_FILING', f'accession number {accession!r} is not in the expected form')], provenance)
+            pick = lambda key: (recent.get(key)[i] if isinstance(recent.get(key), list) and len(recent[key]) == count else None) or None
+            rows.append({'accession_number': accession, 'form': str(recent['form'][i]), 'filing_date': str(recent['filingDate'][i]),
+                         'report_date': pick('reportDate'), 'json_time': str(recent['acceptanceDateTime'][i]),
+                         'primary_document': str(recent['primaryDocument'][i] or '') or None, 'items': pick('items')})
+        return {'who': who, 'cik': cik, 'entity_name': data.get('name') or who.get('entity_name'), 'rows': rows, 'reply': reply,
+                'provenance': provenance}
 
     @staticmethod
     def reconcile(accession, json_text, header_raw, header_utc):

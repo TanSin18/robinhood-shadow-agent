@@ -283,7 +283,7 @@ def test_vti_ruler_is_defined_and_the_70_30_ruler_is_defined_but_waits_for_treas
     benchmarks.seed(lab)
     benchmarks.seed(lab)
     defs = {d['benchmark_id']: d for d in benchmarks.definitions(lab)}
-    assert set(defs) == {'VTI_100', 'FIXED_70_30'}
+    assert set(defs) == {'VTI_100', 'FIXED_70_30', 'VTI_TOTAL_RETURN', 'FIXED_70_30_TOTAL_RETURN'}      # the total-return rulers are separate definitions
     assert defs['VTI_100']['status'] == 'DEFINED' and json.loads(defs['VTI_100']['definition_json'])['weights'] == {'VTI': '1.00'}
     pending = defs['FIXED_70_30']
     assert pending['status'] == 'DEFINED' and pending['implementation_status'] == 'AUCTION_ACCRUAL_INDEX_V1'
@@ -383,8 +383,11 @@ def test_view_reads_without_writing_and_reports_the_fixed_statuses(tmp_path, cap
         0, 'NOT REGISTERED', 'NO', 'PAUSED', 'DISABLED')
     assert state['baseline']['selected_instrument'] == 'BBB' and state['baseline']['title'] == 'DEVELOPMENT COUNTERFACTUAL — NOT A PAPER TRADE'
     assert state['latest_session'] == '2026-09-30' and state['experiments'] == [] and state['database'].endswith('firm_lab/firm_lab.db')
-    assert {b['benchmark_id']: b['status'] for b in state['benchmarks']} == {'VTI_100': 'DEFINED', 'FIXED_70_30': 'DEFINED'}
-    assert {b['benchmark_id']: b['implementation_status'] for b in state['benchmarks']} == {'VTI_100': 'PRICE_RETURN_ONLY', 'FIXED_70_30': 'AUCTION_ACCRUAL_INDEX_V1'}
+    assert {b['benchmark_id']: b['status'] for b in state['benchmarks']} == {'VTI_100': 'DEFINED', 'FIXED_70_30': 'DEFINED', 'VTI_TOTAL_RETURN': 'DEFINED',
+                                                                            'FIXED_70_30_TOTAL_RETURN': 'DEFINED'}
+    assert {b['benchmark_id']: b['implementation_status'] for b in state['benchmarks']} == {
+        'VTI_100': 'PRICE_RETURN_ONLY', 'FIXED_70_30': 'AUCTION_ACCRUAL_INDEX_V1', 'VTI_TOTAL_RETURN': 'EX_DATE_REINVESTMENT_V1',
+        'FIXED_70_30_TOTAL_RETURN': 'EX_DATE_REINVESTMENT_V1'}
     path.write_bytes(b'not a database')
     broken = view.load(path=path)
     assert broken['error'] and broken['mode'] is None and broken['fills'] == 0         # a broken file is never read as permission

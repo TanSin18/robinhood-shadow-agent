@@ -19,8 +19,17 @@ LABELS = {
     'vwap': 'VWAP', 'opening_range': 'Opening range', 'time_of_day_rvol': 'Time-of-day RVOL', 'trade_flow': 'Aggressive order flow',
     'order_book': 'Quote and order-book imbalance', 'options_chain': 'Option chain data', 'options_strategy': 'Options strategy',
     'news_catalysts': 'News and catalysts', 'sec_filings': 'SEC filings', 'sector_engine': 'Sector engine', 'ml_ranker': 'ML ranker',
-    'portfolio_optimizer': 'Portfolio optimizer',
+    'portfolio_optimizer': 'Portfolio optimizer', 'earnings_events': 'Earnings events', 'vti_total_return': 'VTI total return',
+    'total_return_ruler': '70/30 total-return ruler', 'corporate_actions': 'Corporate actions and dividends', 'vwap': 'VWAP',
+    'options_greeks': 'Options Greeks', 'treasury_total_return': 'T-bill total return', 'tick_trades_quotes': 'Historical trades and quotes',
+    'live_quotes': 'Live quotes and trades',
 }
+EVENT_BANNER = 'FACTUAL EVENT DATA ONLY — NO EARNINGS SIGNAL'
+FIELD_NAMES = {'revenue': 'revenue', 'gross_profit': 'gross profit', 'operating_income': 'operating income', 'net_income': 'net income',
+               'eps_diluted': 'diluted EPS', 'operating_cash_flow': 'operating cash flow', 'capital_expenditure': 'capital expenditure',
+               'cash_and_equivalents': 'cash and cash equivalents', 'total_debt': 'total debt',
+               'diluted_shares_weighted_average': 'diluted shares (weighted average)'}
+SESSION_NAMES = {'before_market_open': 'before 9:30 AM ET', 'during_market_hours': '9:30 AM to 4:00 PM ET', 'after_market_close': '4:00 PM ET or later'}
 WARNING = ('Counterfactual results generated during Firm Lab development are development data. They are not an untouched forward test '
            'and do not count as results of any registered Firm trading trial.')
 
@@ -215,10 +224,126 @@ def _baseline(fl):
               f'<tbody>{rows}</tbody></table></div>')
 
 
+def _benchmark_readiness(fl):
+    """One row per ruler series: the capability state, how many observations are stored, their span and whether they validated."""
+    rows = fl.get('benchmark_readiness') or _view().defaults()['benchmark_readiness']
+    body = ''
+    for r in rows:
+        count = int(r.get('observations') or 0)
+        label = f'<span class="small fl-sub">{esc(r["label"])}</span>' if r.get('label') else ''
+        what = 'latest close' if r.get('kind') == 'close_price_return_basis' else 'latest level'
+        places = 2 if r.get('kind') == 'close_price_return_basis' else 6
+        latest = f'<span class="small fl-sub">{what} {esc(_num(r.get("latest_value"), places))}</span>' if count and r.get('latest_value') else ''
+        body += (f'<tr><td data-label="Series"><b>{esc(r["series"])}</b>{label}</td><td data-label="Capability">{_chip(r["status"])}</td>'
+                 f'<td data-label="Observations" class="num"><b>{count:,}</b></td><td data-label="Oldest">{esc(r.get("oldest") or "—")}</td>'
+                 f'<td data-label="Newest">{esc(r.get("newest") or "—")}{latest}</td>'
+                 f'<td data-label="Validation">{_tag(str(r.get("validation") or "NOT RUN"), VALIDATION_TONE, "neutral")}'
+                 f'<span class="small fl-sub">{esc(r.get("validation_note") or "")}</span></td></tr>')
+    run = fl.get('total_return') or {}
+    notes = ''
+    if run:
+        checked = run.get('distributions_checked') or []
+        if checked:
+            items = '; '.join(f'{c.get("ex_date")}: ${c.get("amount")} per share (issuer reinvestment price {c.get("issuer_reinvestment_price")}, stored close '
+                              f'{_num(c.get("stored_close_on_ex_date"))})' for c in checked)
+            notes += f'<p class="v10-note">VTI distributions used, by ex-dividend date: {esc(items)}.</p>'
+        issues = '; '.join(f'{i.get("code")}: {i.get("detail")}' for i in run.get('issues') or [])
+        if issues:
+            notes += f'<p class="v10-note"><b>Validation issues.</b> {esc(issues)}. Nothing was computed from data that did not validate.</p>'
+        for text in run.get('notes') or []:
+            notes += f'<p class="v10-note">{esc(text)}</p>'
+    return ('<p class="v10-note">Rulers only. The price-return series stored earlier are kept exactly as they were; the total-return series are '
+            'separate and are computed only from distributions that passed validation. No vendor adjusted close or vendor total-return index is used.</p>'
+            '<div class="table-wrap"><table class="mini fl-ready fl-benchready"><colgroup><col class="fl-b1"><col class="fl-b2"><col class="fl-b3">'
+            '<col class="fl-b4"><col class="fl-b5"><col></colgroup><thead><tr><th>Series</th><th>Capability</th><th class="num">Observations</th>'
+            '<th>Oldest</th><th>Newest</th><th>Validation</th></tr></thead>'
+            f'<tbody>{body}</tbody></table></div>' + notes)
+
+
+def _fundamentals(fl):
+    """Fundamentals readiness: what the latest SEC XBRL sample found, and what stayed unresolved. Facts only."""
+    data = fl.get('fundamentals') or {'source': 'SEC XBRL company facts (SEC EDGAR)', 'normalized_fields': list(FIELD_NAMES), 'companies': []}
+    rows, _, _ = _registry(fl)
+    state = next((r for r in rows if r['capability'] == 'fundamentals'), {'status': 'UNAVAILABLE', 'detail': ''})
+    companies = data.get('companies') or []
+    mappings = data.get('unresolved_mappings') or {}
+    unresolved = '; '.join(f'{FIELD_NAMES.get(name, name)}: ' + ', '.join(f'{reason} ({", ".join(who)})' for reason, who in sorted(reasons.items()))
+                           for name, reasons in sorted(mappings.items()))
+    facts = (('Source', esc(data.get('source'))),
+             ('Sample companies', esc(', '.join(c['instrument'] for c in companies) or 'none read yet')),
+             ('Normalized fields', esc(', '.join(FIELD_NAMES.get(f, f) for f in data.get('normalized_fields') or []))),
+             ('Accepted facts in the latest sample', esc(f'{int(data.get("accepted") or 0):,} ({int(data.get("stored_rows") or 0):,} rows stored in all)')),
+             ('Rejected', esc(f'{data.get("rejected_runs", 0)} company answers refused whole') + (f'; {esc(data.get("not_found_in_filing", 0))} stored facts not found in the filing document' if data.get('not_found_in_filing') else '')),
+             ('Unresolved mappings', esc(unresolved) if unresolved else ('none' if companies else 'nothing read yet')),
+             ('Restatements stored as new versions', esc(data.get('restatements', 0))),
+             ('Capability', _chip(state.get('status')) + f' <span class="small">{esc(state.get("detail") or "")}</span>'))
+    body = ''
+    for c in companies:
+        filings = ', '.join(f'{f.get("form")} {f.get("report_date")}' for f in c.get('filings') or [])
+        checks = ', '.join(f'{k} {v}' for k, v in sorted((c.get('checked_against_filing') or {}).items()))
+        left = '; '.join(f'{FIELD_NAMES.get(name, name)} ({", ".join(sorted(reasons))})' for name, reasons in sorted((c.get('unresolved_by_field') or {}).items()))
+        verdict = 'PASS' if c.get('quality_passes') else 'FAIL'
+        refused = ', '.join(c.get('issues') or [])
+        body += (f'<tr><td data-label="Company"><b>{esc(c["instrument"])}</b></td><td data-label="Filings read" class="small">{esc(filings or "none")}</td>'
+                 f'<td data-label="Raw facts" class="num">{esc(c.get("raw_facts") if c.get("raw_facts") is not None else "—")}</td>'
+                 f'<td data-label="Accepted" class="num">{esc(c.get("accepted", 0))}</td>'
+                 f'<td data-label="Unresolved" class="small">{esc(str(c.get("unresolved", 0)) + (": " + left if left else ""))}</td>'
+                 f'<td data-label="Checked against the filing" class="small">{esc(checks or "—")}</td>'
+                 f'<td data-label="Quality">{_tag(verdict if c.get("status") == "OK" else "FAIL", VALIDATION_TONE, "neutral")}'
+                 f'<span class="small fl-sub">{esc(refused)}</span></td></tr>')
+    table = ('<div class="table-wrap"><table class="mini fl-ready fl-fund"><colgroup><col class="fl-f1"><col class="fl-f2"><col class="fl-f3">'
+             '<col class="fl-f4"><col class="fl-f5"><col class="fl-f6"><col></colgroup><thead><tr><th>Company</th><th>Filings read</th><th class="num">Raw facts</th>'
+             '<th class="num">Accepted</th><th>Unresolved</th><th>Checked against the filing</th><th>Quality</th></tr></thead>'
+             f'<tbody>{body}</tbody></table></div>') if companies else '<p class="v10-empty">No company-facts sample has been run yet.</p>'
+    return ('<p class="v10-note">Reported values exactly as each company tagged them in its own SEC filings. A value is known from the moment the SEC '
+            'accepted the filing that carries it; a later filing with a different value is stored as a new version beside the first. A field is filled '
+            'only by a written mapping rule, and is otherwise left unresolved: nothing is derived, estimated, scored or ranked.</p>'
+            + _facts(facts) + table)
+
+
+def _earnings(fl):
+    """Earnings-release filings: what was filed and when. No sentiment, score, signal or transcript."""
+    data = fl.get('earnings_events') or {'events': [], 'stored': 0}
+    body = ''
+    for e in data.get('events') or []:
+        values = e.get('reported_values') or {}
+        shown = '; '.join(f'{FIELD_NAMES.get(name, name)} {_num(v.get("value"), 2 if name == "eps_diluted" else 0)} {v.get("unit")} ({v.get("period_type")})'
+                          for name, v in values.items())
+        if shown:
+            first = next(iter(values.values()))
+            shown += f' — from periodic report {e.get("periodic_accession_number")}, accepted {_when(first.get("accepted_timestamp"))}'
+        link = lambda url, text: (f'<a href="{esc(url)}" rel="noopener noreferrer" target="_blank">{esc(text)}</a>'
+                                  if str(url or '').startswith('https://www.sec.gov/') else esc(text if url in (None, '') else str(url)))
+        flag = ('<span class="small fl-sub">flagged: the SEC JSON time disagrees with the filing header; the header time is used</span>'
+                if e.get('acceptance_time_conflict') else '')
+        body += (f'<tr><td data-label="Company"><b>{esc(e["instrument"])}</b></td><td data-label="Fiscal period end">{esc(e.get("fiscal_period_end"))}</td>'
+                 f'<td data-label="Event date">{esc(e.get("event_date"))}</td>'
+                 f'<td data-label="SEC accepted">{esc(_when(e.get("accepted_timestamp")))}'
+                 f'<span class="small fl-sub">{esc(SESSION_NAMES.get(e.get("acceptance_session"), e.get("acceptance_session")))}</span>{flag}</td>'
+                 f'<td data-label="Form">{esc(e.get("form"))}<span class="small fl-sub">{esc(e.get("accession_number"))}</span></td>'
+                 f'<td data-label="Reported values" class="small">{esc(shown) if shown else "not stored"}</td>'
+                 f'<td data-label="Links" class="small">{link(e.get("filing_url"), "filing")} · '
+                 f'{link(e.get("release_document_url"), "release document") if e.get("release_document_url") != "UNAVAILABLE" else "release document unavailable"}</td></tr>')
+    table = ('<div class="table-wrap"><table class="mini fl-ready fl-events"><colgroup><col class="fl-e1"><col class="fl-e2"><col class="fl-e3">'
+             '<col class="fl-e4"><col class="fl-e5"><col class="fl-e6"><col></colgroup><thead><tr><th>Company</th><th>Fiscal period end</th><th>Event date</th>'
+             '<th>SEC accepted</th><th>Form</th><th>Reported values</th><th>Links</th></tr></thead>'
+             f'<tbody>{body}</tbody></table></div>') if body else '<p class="v10-empty">No earnings-release filing is stored yet.</p>'
+    return (f'<p class="fl-stamp">{esc(EVENT_BANNER)}</p>'
+            '<p class="v10-note">Each row is a filing: an 8-K with Item 2.02, timed by its SEC filing header. The release is not read, summarised or '
+            'scored, and no transcript is collected. The fiscal period is linked by a stated rule to the periodic report for that period, and the '
+            'reported values shown are taken from that periodic report with its own acceptance time, not from the release. The time-of-day label is '
+            'the New York clock time of the SEC acceptance only.</p>'
+            + _facts((('Events stored', esc(data.get('stored', 0))), ('Source', esc(data.get('source') or 'SEC EDGAR (8-K, Item 2.02)')),
+                      ('Transcripts', '<span class="cat cat-stop">UNAVAILABLE</span> none is collected'),
+                      ('Signal or model', '<b>NONE</b> no sentiment, tone, surprise, score or prediction exists')))
+            + table)
+
+
 def _benchmarks(fl):
     rows = fl.get('benchmarks')
     if not rows:                                          # database not created yet: show the definitions it starts with
         rows = _view().defaults()['benchmarks']
+    total = fl.get('total_return') or {}
     method = fl.get('treasury_methodology') or _view().defaults().get('treasury_methodology') or {}
     index = fl.get('treasury_index')
     out = ''
@@ -231,6 +356,37 @@ def _benchmarks(fl):
                            ('Completed-session closes stored', esc(b.get('observations'))),
                            ('Latest stored close', esc(f'{_num(latest[1])} for the {latest[0]} session') if latest else 'none')))
             out += f'<article class="fl-bench"><h3>VTI</h3>{body}</article>'
+        elif b['benchmark_id'] in ('VTI_TOTAL_RETURN', 'FIXED_70_30_TOTAL_RETURN'):
+            series = b.get('series') or {}
+            is_ruler = b['benchmark_id'] == 'FIXED_70_30_TOTAL_RETURN'
+            kind = series.get('index_70_30_vti_total_return' if is_ruler else 'vti_total_return_index')
+            price = series.get('vti_price_return_index')
+            if not total:
+                computed = '<span class="cat cat-neutral">NOT COMPUTED</span> No validated VTI distribution history is stored yet.'
+            elif total.get('status') == 'OK' and is_ruler and total.get('ruler_status') != 'OK':
+                computed = (f'<span class="cat cat-stop">{esc(total.get("ruler_status") or "DATA_GAP")}</span> '
+                            f'{esc(total.get("ruler_gap_reason") or "no reason recorded")}. Nothing is filled in.')
+            elif total.get('status') == 'OK':
+                computed = (f'<span class="cat cat-good">OK</span> through the {esc(total.get("last_session"))} session; '
+                            f'{esc(len(total.get("distributions_applied") or []))} distributions reinvested.')
+            else:
+                why = ', '.join(sorted({i.get('code', '') for i in total.get('issues') or []})) or total.get('gap_reason') or 'no reason recorded'
+                computed = f'<span class="cat cat-stop">{esc(total.get("status"))}</span> {esc(why)}. Nothing is filled in.'
+            level = lambda s: esc(f'{_num(s["latest"][1], 6)} on the {s["latest"][0]} session (base {s["first"]} = 100; {s["observations"]:,} sessions)') if s else 'none'
+            facts = [('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'), ('Definition', f'<b>{esc(b.get("name"))}</b>')]
+            if is_ruler:
+                facts.append(('Label', '<span class="cat cat-neutral">TOTAL_RETURN_RULER</span>'))
+            facts += [('Implementation status', f'<span class="cat cat-neutral">{esc(b.get("implementation_status"))}</span>'),
+                      ('Method', 'Each cash distribution is reinvested at the close of its ex-dividend session. Stored closes are used as they are; '
+                                 'no vendor adjusted close and no vendor total-return index is used. docs/firm_lab/vti_total_return_methodology.md'),
+                      ('Computation', computed),
+                      ('70/30 total-return level' if is_ruler else 'VTI total-return index', level(kind))]
+            if not is_ruler:
+                facts.append(('VTI price-return index', level(price)))
+            else:
+                facts.append(('Treasury-bill leg', 'The frozen 13-week bill accrual index, unchanged.'))
+            facts.append(('Defined by', esc(b.get('defined_by') or 'not recorded')))
+            out += f'<article class="fl-bench"><h3>{"70/30 total return" if is_ruler else "VTI total return"}</h3>{_facts(facts)}</article>'
         else:
             definition = b.get('definition') or {}
             rules = '; '.join(definition.get('rules') or [])
@@ -251,6 +407,7 @@ def _benchmarks(fl):
             level = lambda s: esc(f'{_num(s["latest"][1], 6)} on the {s["latest"][0]} session (base {s["first"]} = 100; {s["observations"]:,} sessions)') if s else 'none'
             body = _facts((('Status', '<span class="cat cat-neutral">Fixed benchmark</span>'),
                            ('Definition', f'<b>{esc(b.get("name"))}</b>'),
+                           ('Label', '<span class="cat cat-neutral">LEGACY_PRICE_RETURN_RULER</span> kept as first computed; the total-return ruler is separate'),
                            ('Implementation status', f'<span class="cat cat-{"neutral" if frozen else "warn"}">{esc(b.get("implementation_status") or "DATA_SOURCE_PENDING")}</span>'),
                            ('Treasury-bill data', 'Official U.S. Treasury 13-week bill auction records. Each bill enters at its auction price, is held to '
                                                   'maturity and is rolled into the next. Between auction and maturity the value is an accrual, not a market price. No fund, '
@@ -310,6 +467,9 @@ def render(state):
             + f'<section class="v10-panel" id="fl-status"><h2>System status</h2>{_facts(status)}</section>'
             + f'<section class="v10-panel" id="fl-readiness"><h2>Data Readiness</h2>{_readiness(fl)}</section>'
             + f'<section class="v10-panel" id="fl-capabilities"><h2>Derived measures and strategy components</h2>{_capabilities(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-fundamentals"><h2>Fundamentals readiness</h2>{_fundamentals(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-earnings"><h2>Earnings events</h2>{_earnings(fl)}</section>'
             + f'<section class="v10-panel" id="fl-baseline"><h2>Control A baseline — counterfactual plumbing test</h2>{_baseline(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-benchready"><h2>Benchmark readiness</h2>{_benchmark_readiness(fl)}</section>'
             + f'<section class="v10-panel" id="fl-benchmarks"><h2>Benchmarks</h2>{_benchmarks(fl)}</section>'
             + f'<section class="v10-panel fl-warning" id="fl-warning"><h2>Development warning</h2><p>{esc(WARNING)}</p></section>')

@@ -81,8 +81,10 @@ def test_every_interface_returns_unavailable_when_no_provider_is_connected():
         'risk_free': [lambda p: p.total_return_series(start='2026-01-01', end='2026-09-30', known_at=NOW, now=NOW)],
         'corporate_actions': [lambda p: p.actions('AAPL', start=NOW, end=NOW, now=NOW)],
         'treasury_auctions': [lambda p: p.auctions(start='2025-01-01', now=NOW)],
+        'xbrl_facts': [lambda p: p.facts('AAPL', since='2025-01-01', now=NOW)],
+        'earnings_events': [lambda p: p.events('AAPL', start=NOW, end=NOW, now=NOW)],
     }
-    assert {i.domain for i in providers.INTERFACES} == set(calls) and len(providers.INTERFACES) == 10
+    assert {i.domain for i in providers.INTERFACES} == set(calls) and len(providers.INTERFACES) == 12
     for interface in providers.INTERFACES:
         provider = interface()
         assert provider.connected is False and provider.name is None
@@ -308,14 +310,14 @@ def test_an_existing_checkpoint_1_database_is_upgraded_without_touching_delibera
     assert status['sec_filings'] == 'BUILD_ONLY'                                        # a row someone had edited is left alone
     assert status['daily_closes'] == 'UNAVAILABLE'                                      # it claimed AVAILABLE with nothing stored
     assert status['live_quotes'] == 'PARTIAL_EXISTING' and status['treasury_total_return'] == 'UNAVAILABLE' and len(status) == len(capabilities.INITIAL)
-    assert lab.meta('capability_registry_version') == str(capabilities.REGISTRY_VERSION) == '4'
+    assert lab.meta('capability_registry_version') == str(capabilities.REGISTRY_VERSION) == '5'
     capabilities.seed(lab)
     assert {c['capability']: c['status'] for c in lab.capabilities()} == status
 
 
 def test_no_capability_is_a_silent_stand_in_for_another():
     names = [c for c, *_ in capabilities.INITIAL]
-    assert len(names) == len(set(names)) and set(capabilities.READINESS_KEYS) <= set(names) and len(capabilities.DATA_READINESS) == 14
+    assert len(names) == len(set(names)) and set(capabilities.READINESS_KEYS) <= set(names) and len(capabilities.DATA_READINESS) == 15
     assert not [c for c, s, *_ in capabilities.INITIAL if s == 'AVAILABLE']             # availability is earned from stored data, never declared
     source = (ROOT / 'firm_lab' / 'capabilities.py').read_text() + (ROOT / 'firm_lab' / 'providers.py').read_text()
     for word in ('fallback', 'default_value', 'estimate_from', 'proxy_for', 'substitute('):
@@ -446,20 +448,21 @@ def test_data_readiness_renders_truthfully_from_the_registry(tmp_path, capsys):
     assert ('<th>Data</th><th>Capability</th><th>Provider</th><th>Connection</th><th>Validation</th><th>Stored</th>'
             '<th>Last successful ingest</th><th>Quality failures and flags</th>') in section
     expect = {'Daily closes': 'AVAILABLE', 'Fundamentals': 'UNAVAILABLE', 'Analyst estimates and revisions': 'UNAVAILABLE',
-              'Earnings and transcripts': 'UNAVAILABLE', 'SEC filings': 'PARTIAL_EXISTING', 'General news': 'PARTIAL_EXISTING',
+              'Earnings events': 'UNAVAILABLE', 'Earnings transcripts': 'UNAVAILABLE', 'SEC filings': 'PARTIAL_EXISTING', 'General news': 'PARTIAL_EXISTING',
               'Intraday 1-minute bars': 'UNAVAILABLE', 'Historical trades and quotes': 'UNAVAILABLE', 'Live quotes and trades': 'PARTIAL_EXISTING', 'Order flow and microstructure': 'UNAVAILABLE',
               'Options chains': 'BUILD_ONLY', 'Options Greeks': 'UNAVAILABLE', 'T-bill total return': 'UNAVAILABLE',
               'Corporate actions and dividends': 'UNAVAILABLE'}
     assert {k: v[0] for k, v in rows.items()} == expect
-    chosen = {'Fundamentals': 'Sharadar', 'SEC filings': 'SEC EDGAR', 'Intraday 1-minute bars': 'Massive', 'Historical trades and quotes': 'Massive',
-              'Options chains': 'ThetaData', 'Options Greeks': 'ThetaData', 'Corporate actions and dividends': 'Sharadar',
-              'T-bill total return': 'U.S. Treasury Fiscal Data'}
+    chosen = {'Fundamentals': 'SEC EDGAR', 'Earnings events': 'SEC EDGAR', 'SEC filings': 'SEC EDGAR', 'Intraday 1-minute bars': 'Massive',
+              'Historical trades and quotes': 'Massive', 'Options chains': 'ThetaData', 'Options Greeks': 'ThetaData',
+              'Corporate actions and dividends': 'Vanguard', 'T-bill total return': 'U.S. Treasury Fiscal Data'}
+    public = ('T-bill total return', 'Corporate actions and dividends')                 # free public sources: nothing to configure
     for label, (state, provider, limitation, required) in rows.items():
         assert limitation and required, label                                           # every row says what is wrong and what is needed
         cells = _ready_cells(html, label)
         if label in chosen:                                                             # chosen is not connected, and not a capability
             assert provider == chosen[label], label
-            if label == 'T-bill total return':                                          # public data: ready, simply not run yet
+            if label in public:                                                         # public data: ready, simply not run yet
                 assert cells['Connection'].startswith('CONFIGURED') and 'Public data, no credential. Not run yet.' in cells['Connection']
             else:
                 assert cells['Connection'].startswith('NOT CONFIGURED') and 'Credentials or provider activation required' in cells['Connection'], label
@@ -482,7 +485,7 @@ def test_data_readiness_before_the_database_exists_and_with_an_unknown_status():
     html = firm_lab_page.render({'firm_lab': view.load(path='/nonexistent/firm_lab.db')})
     section, rows = _ready_rows(html)
     assert rows['Daily closes'][0] == 'UNAVAILABLE' and 'AVAILABLE</span>' not in section.replace('UNAVAILABLE</span>', '')
-    assert 'not created on this machine yet' in section and len(rows) == 14
+    assert 'not created on this machine yet' in section and len(rows) == 15
     odd = dict(view.load(path='/nonexistent/x.db'), exists=True, mode='BUILD_OBSERVE',
                capabilities=[{'capability': 'fundamentals', 'status': 'LOOKS_GREAT', 'provider': 'x', 'detail': 'd'}])
     section, rows = _ready_rows(firm_lab_page.render({'firm_lab': odd}))

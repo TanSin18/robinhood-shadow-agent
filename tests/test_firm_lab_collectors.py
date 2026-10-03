@@ -119,9 +119,10 @@ def test_configuration_reports_booleans_only_and_refuses_a_user_agent_without_a_
     assert config.sec_user_agent(env) is None and config.sec_user_agent({}) is None
     assert config.sec_user_agent(AGENT) == 'Example Research research@example.com'
     states = config.states(env)
-    assert states == {'SEC EDGAR': False, 'Massive': True, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True}
+    assert states == {'SEC EDGAR': False, 'Massive': True, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True, 'Vanguard': True}
     assert SECRET not in json.dumps(states) and all(isinstance(v, bool) for v in states.values())
-    assert config.states({}) == {'SEC EDGAR': False, 'Massive': False, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True}
+    assert config.states({}) == {'SEC EDGAR': False, 'Massive': False, 'Sharadar': False, 'ThetaData': False, 'U.S. Treasury Fiscal Data': True,
+                                 'Vanguard': True}                                    # public sources need no setting
 
 
 # ====================================================================================================== SEC EDGAR
@@ -633,7 +634,9 @@ def test_sharadar_restated_rows_never_overwrite_as_reported_rows_in_storage(tmp_
     stored = _rows(lab, 'fundamental_observations', where="WHERE metric='revenue' AND period_end='2026-03-28'")
     assert sorted((r['dimension'], r['value'], r['last_updated']) for r in stored) == [
         ('ARQ', '95359000000', '2026-08-01'), ('MRQ', '95400000000', '2026-09-15'), ('MRQ', '95500000000', '2026-11-20')]
-    assert lab.capability('fundamentals') == 'AVAILABLE' and lab.capability('corporate_actions') == 'AVAILABLE'
+    # Checkpoint 4: no paid provider is the chosen source any more (fundamentals come from SEC XBRL, distributions from the issuer), so rows
+    # stored by this dormant adapter make neither capability available
+    assert lab.capability('fundamentals') == 'UNAVAILABLE' and lab.capability('corporate_actions') == 'UNAVAILABLE'
     assert SECRET.encode() not in lab.path.read_bytes()
     for name in ('ml_ranker', 'sector_engine', 'portfolio_optimizer'):                   # raw fundamentals unlock no strategy component
         assert lab.capability(name) == 'NOT_STARTED'
@@ -1016,10 +1019,11 @@ def test_a_checkpoint_2_database_is_upgraded_in_place_without_losing_or_inventin
     capabilities.seed(lab, NOW)
     after = {c['capability']: c for c in lab.capabilities()}
     assert {k: after[k]['status'] for k in before} == before                             # the upgrade changes descriptions, never a status
-    assert 'Sharadar is chosen' in after['fundamentals']['detail'] and 'approved and frozen' in after['treasury_total_return']['detail']
+    assert 'SEC XBRL company facts' in after['fundamentals']['detail'] and 'approved and frozen' in after['treasury_total_return']['detail']
     assert after['options_chain']['provider'] is None and 'ThetaData is chosen and not connected' in after['options_chain']['detail']
     assert after['corporate_actions']['detail'] == 'Edited by the operator on purpose.'  # a deliberate edit is left alone
-    assert after['tick_trades_quotes']['status'] == 'UNAVAILABLE' and lab.meta('capability_registry_version') == '4'
+    assert after['tick_trades_quotes']['status'] == 'UNAVAILABLE' and lab.meta('capability_registry_version') == '5'
+    assert after['earnings_events']['status'] == 'UNAVAILABLE' and after['vti_total_return']['status'] == 'UNAVAILABLE'      # new rows start unavailable
     assert not [c for c in after.values() if c['status'] == 'AVAILABLE']                 # nothing became available by upgrading
     capabilities.seed(lab, NOW)
     assert {c['capability']: (c['status'], c['detail']) for c in lab.capabilities()} == {k: (v['status'], v['detail']) for k, v in after.items()}
@@ -1044,7 +1048,7 @@ def test_raw_capture_saves_what_arrived_asks_named_hosts_only_and_keeps_the_cont
               'primaryDocument': ['a8k.htm', 'aapl-20260627.htm']}
     sec = Fake([('companyfacts', 200, {'cik': 320193, 'facts': {}}), ('submissions', 200, {'cik': '320193', 'filings': {'recent': recent}}),
                 ('.hdr.sgml', 200, '<SEC-HEADER>'), ('index.json', 200, {'directory': {'item': []}}), ('aapl-20260627.htm', 200, '<html>')])
-    plain = Fake([('profile/api/VTI/distribution', 200, {'x': 1}), ('DIVDAT_2026', 403, b'')])
+    plain = Fake([('/vmf/api/VTI/distribution', 200, {'x': 1}), ('DIVDAT_2026', 403, b'')])
     report = capture.run(tmp_path / 'samples', environ=AGENT, sec_transport=sec, plain_transport=plain)
     manifest = json.loads((tmp_path / 'samples' / 'manifest.json').read_text())
     assert report['requested'] == len(manifest) and report['sec_user_agent_declared'] is True

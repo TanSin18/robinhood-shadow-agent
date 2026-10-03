@@ -16,9 +16,11 @@ PARTIAL_EXISTING, BLOCKED = 'PARTIAL_EXISTING', 'BLOCKED'
 # PARTIAL_EXISTING: a source exists somewhere in the system but is not sufficient for, or not connected to, Firm Lab.
 # BLOCKED: no candidate provider can supply it cleanly.
 STATUSES = (AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY, PARTIAL_EXISTING, BLOCKED)
-REGISTRY_VERSION = 4
+REGISTRY_VERSION = 5
 CONTROL_A_CLOSES = 'Robinhood read gateway, as recorded by Control A'
 TREASURY_PROVIDER = 'U.S. Treasury Fiscal Data'
+SEC_PROVIDER = 'SEC EDGAR'
+ISSUER_PROVIDER = 'Vanguard'
 
 # (capability, status, provider, detail). Edited only by a deliberate change here, never inferred at run time.
 # daily_closes and daily_baseline_features start UNAVAILABLE and are promoted only when stored data passes validation.
@@ -27,9 +29,15 @@ INITIAL = (
      'Completed-session closes for the registered names, read from Control A’s decision capsules (read-only). None is stored yet.'),
     ('daily_baseline_features', UNAVAILABLE, 'Firm Lab feature store',
      'Completed-session count, 200-session average, above-average flag and 126-session momentum. None is stored yet.'),
-    ('fundamentals', UNAVAILABLE, None, 'Sharadar is chosen; it is not connected and nothing is stored. No fundamental value is stored or estimated.'),
+    ('fundamentals', UNAVAILABLE, None,
+     'SEC XBRL company facts (free, authoritative) are the chosen source for a small normalized set of reported values. Nothing is stored '
+     'yet. No value is estimated or derived, and no paid provider is connected.'),
     ('analyst_revisions', UNAVAILABLE, None, 'No provider is connected. No estimate or revision value is stored or estimated.'),
-    ('earnings_transcripts', UNAVAILABLE, None, 'No earnings-event or transcript source is connected.'),
+    ('earnings_transcripts', UNAVAILABLE, None, 'No transcript source is connected and none is collected. Earnings-release filings are a separate, '
+                                                'factual row (earnings events).'),
+    ('earnings_events', UNAVAILABLE, None,
+     'Earnings-release filings (8-K, Item 2.02) from SEC EDGAR: what was filed and when it was accepted. Facts about the filing only: '
+     'nothing is scored, interpreted or predicted, and no transcript is collected. Nothing is stored yet.'),
     ('intraday_bars', UNAVAILABLE, None, 'Massive is chosen; it is not connected and nothing is stored. The registered read path supplies daily bars only.'),
     ('vwap', UNAVAILABLE, None, 'Needs intraday bars.'),
     ('opening_range', UNAVAILABLE, None, 'Needs intraday bars.'),
@@ -55,8 +63,14 @@ INITIAL = (
      'Official U.S. Treasury 13-week bill auction records are the input. The construction methodology is approved and frozen; the index is '
      'an accrual between auction and maturity, not a market value. A yield series is not a total return. No auction record is stored yet.'),
     ('corporate_actions', UNAVAILABLE, None,
-     'Sharadar is chosen; it is not connected and nothing is stored. Stored closes are split-adjusted by their provider; dividends, spin-offs, '
-     'symbol changes, mergers and delistings are not recorded, so nothing here is a total return.'),
+     'The only free source chosen is the fund issuer’s published cash distributions for VTI (for the total-return ruler); nothing is stored '
+     'yet. Splits, symbol changes, spin-offs, mergers and delistings have no source. Stored closes are split-adjusted by their provider.'),
+    ('vti_total_return', UNAVAILABLE, None,
+     'VTI with each cash distribution reinvested at the close of its ex-dividend session, beside the price-return series. Not computed: no '
+     'validated distribution history is stored.'),
+    ('total_return_ruler', UNAVAILABLE, None,
+     'TOTAL_RETURN_RULER: 70% VTI total return + 30% frozen Treasury-bill accrual index, rebalanced monthly. Not computed until the VTI '
+     'distributions pass validation. The earlier price-return ruler is kept unchanged as LEGACY_PRICE_RETURN_RULER.'),
     ('tick_trades_quotes', UNAVAILABLE, None, 'No historical trades or NBBO quotes are stored.'),
 )
 # The research data stack the operator chose on 2026-10-01. A choice is not a connection and not a capability:
@@ -65,17 +79,23 @@ PROVIDER_PLAN = {
     'sec_filings': ('SEC EDGAR', ('filings',), 'a declared User-Agent (FIRM_LAB_SEC_USER_AGENT), set by the operator'),
     'intraday_bars': ('Massive', ('intraday_bars',), 'an operator-purchased plan and API key'),
     'tick_trades_quotes': ('Massive', ('trades', 'quotes'), 'a plan that includes trades and NBBO quotes, and an API key'),
-    'fundamentals': ('Sharadar', ('fundamentals',), 'an operator-purchased subscription and API key'),
-    'corporate_actions': ('Sharadar', ('corporate_actions',), 'an operator-purchased subscription and API key'),
+    'fundamentals': (SEC_PROVIDER, ('xbrl_facts',), 'a declared User-Agent (FIRM_LAB_SEC_USER_AGENT), set by the operator'),
+    'earnings_events': (SEC_PROVIDER, ('earnings_events',), 'a declared User-Agent (FIRM_LAB_SEC_USER_AGENT), set by the operator'),
+    'corporate_actions': (ISSUER_PROVIDER, ('corporate_actions',), 'nothing: public issuer data, no credential'),
+    'vti_total_return': (ISSUER_PROVIDER, ('corporate_actions',), 'nothing: public issuer data, no credential'),
+    'total_return_ruler': (ISSUER_PROVIDER, ('corporate_actions',), 'nothing: public issuer data, no credential'),
     'options_chain': ('ThetaData', ('options_chain',), 'an operator-purchased subscription and a running Theta Terminal'),
     'options_greeks': ('ThetaData', ('options_chain',), 'a ThetaData tier that includes implied volatility and Greeks'),
     'treasury_total_return': (TREASURY_PROVIDER, ('treasury_auctions',), 'nothing: public data, no credential'),
 }
 # Providers that need no credential: before their first run they are ready, not "not configured".
-NO_CREDENTIAL_PROVIDERS = (TREASURY_PROVIDER,)
+NO_CREDENTIAL_PROVIDERS = (TREASURY_PROVIDER, ISSUER_PROVIDER)
+# Capabilities that say PARTIAL_EXISTING, with the reason, when rows are stored but the evidence does not justify AVAILABLE.
+PARTIAL_WHEN_STORED = ('fundamentals', 'earnings_events', 'corporate_actions')
+CORPORATE_ACTIONS_SCOPE = ('covers VTI cash distributions only; splits, symbol changes, spin-offs, mergers and delistings have no source')
 NOT_SELECTED = {
     'analyst_revisions': 'No provider selected: no inferior substitute is connected.',
-    'earnings_transcripts': 'Deferred until storage and licensing terms are settled. EDGAR event times arrive with SEC filings.',
+    'earnings_transcripts': 'Not collected. Deferred until storage and licensing terms are settled.',
     'news_catalysts': 'No paid provider yet. Google News RSS stays advisory and discovery only.',
     'trade_flow': 'Needs validated trades and quotes first.',
     'order_book': 'Depth provider (Databento) deliberately not connected yet.',
@@ -103,15 +123,24 @@ V3_TEXT = {
     'treasury_total_return': (None, 'Official U.S. Treasury auction and bill-rate data are the chosen inputs. The construction methodology is a draft '
                                     'awaiting operator approval, so nothing is computed. A yield series is not a total return.'),
 }
+# Registry version 5 (free research data foundation, 2026-10-02): fundamentals come from SEC XBRL company facts and earnings
+# events become their own factual row. Descriptions change; no status does.
+V4_TEXT = {
+    'fundamentals': (None, 'Sharadar is chosen; it is not connected and nothing is stored. No fundamental value is stored or estimated.'),
+    'earnings_transcripts': (None, 'No earnings-event or transcript source is connected.'),
+    'corporate_actions': (None, 'Sharadar is chosen; it is not connected and nothing is stored. Stored closes are split-adjusted by their provider; '
+                                'dividends, spin-offs, symbol changes, mergers and delistings are not recorded, so nothing here is a total return.'),
+}
 # Registry versions: (capability, status it must currently have, new status). Each is applied once to an existing database.
 CHANGES_V2 = (('news_catalysts', NOT_STARTED, PARTIAL_EXISTING), ('sec_filings', NOT_STARTED, PARTIAL_EXISTING))
 
 # The Data Readiness view: (label, capability, what is required next). Infrastructure readiness, not a trading feature.
 DATA_READINESS = (
     ('Daily closes', 'daily_closes', 'A direct, research-only read of provider daily bars, so raw timestamps are stored instead of reconstructed ones.'),
-    ('Fundamentals', 'fundamentals', 'Operator access to Sharadar, then a small validated sample with as-reported and restated values kept apart.'),
+    ('Fundamentals', 'fundamentals', 'A hand-started SEC XBRL sample for a few companies. Each value is timed by its filing header and checked against the filing’s own document; a field without an explicit mapping rule stays unresolved.'),
     ('Analyst estimates and revisions', 'analyst_revisions', 'A feed with dated historical consensus snapshots. Today’s consensus alone is not enough.'),
-    ('Earnings and transcripts', 'earnings_transcripts', 'Storage and licensing terms for transcripts. Earnings-related SEC filings arrive through the SEC filings row.'),
+    ('Earnings events', 'earnings_events', 'A hand-started sample of earnings-release filings (8-K, Item 2.02). Factual event data only: nothing is scored or interpreted.'),
+    ('Earnings transcripts', 'earnings_transcripts', 'Storage and licensing terms for transcripts. None is collected.'),
     ('SEC filings', 'sec_filings', 'The operator declares a User-Agent and runs the research-only EDGAR sample. Each acceptance time is checked against the filing’s own header.'),
     ('General news', 'news_catalysts', 'A licensed news source with a stable archive, precise publication times and ticker mapping.'),
     ('Intraday 1-minute bars', 'intraday_bars', 'Operator access to Massive, then a small validated sample of unadjusted 1-minute bars.'),
@@ -121,7 +150,7 @@ DATA_READINESS = (
     ('Options chains', 'options_chain', 'Operator access to ThetaData (subscription and a running Theta Terminal), then a small validated sample.'),
     ('Options Greeks', 'options_greeks', 'A ThetaData tier with implied volatility and Greeks. Stored under the vendor’s name with its model; never as a bare Greek.'),
     ('T-bill total return', 'treasury_total_return', 'A hand-started auction sample, then the accrual index under the frozen methodology. A ruler only; a yield series does not qualify.'),
-    ('Corporate actions and dividends', 'corporate_actions', 'Operator access to Sharadar, then a small validated sample of raw events. This source gives no announcement time.'),
+    ('Corporate actions and dividends', 'corporate_actions', 'A hand-started read of the issuer’s published VTI distributions, for the total-return ruler. Splits, symbol changes and other actions need a source that is not chosen yet.'),
 )
 READINESS_KEYS = tuple(c for _, c, _ in DATA_READINESS)
 
@@ -218,6 +247,14 @@ def seed(store, now=None):
             status, provider, detail = initial[capability]
             if row and row['status'] == status and (row['provider'], row['detail']) == before:
                 set_status(store, capability, status, provider, detail, now, reason='registry version 4: Treasury methodology approved and frozen')
+    if version < 5:
+        rows = {c['capability']: c for c in store.capabilities()}
+        initial = {c: (s, p, d) for c, s, p, d in INITIAL}
+        for capability, before in V4_TEXT.items():
+            row = rows.get(capability)
+            status, provider, detail = initial[capability]
+            if row and row['status'] == status and (row['provider'], row['detail']) == before:
+                set_status(store, capability, status, provider, detail, now, reason='registry version 5: free research data foundation')
     if version < REGISTRY_VERSION:
         store.set_meta('capability_registry_version', REGISTRY_VERSION, now)
     confirm_daily_data(store, now)
@@ -273,21 +310,83 @@ def confirm_provider_data(store, now=None):
                     problem = 'the bill index is not computed' if not state else f'the bill index stopped: {state.get("gap_reason") or state.get("status")}'
                 elif not observations:
                     problem = 'no bill-index observation is stored'
-            evidence[capability] = (provider, rows, proof, problem)
-    for capability, (provider, rows, proof, problem) in evidence.items():
+            note = ''
+            if capability == 'fundamentals' and not problem:
+                problem, note = _fundamentals_evidence(db, provider, proof)
+            if capability == 'corporate_actions' and not problem:
+                problem = CORPORATE_ACTIONS_SCOPE          # real rows, narrow scope: never called available as a whole
+            if capability in ('vti_total_return', 'total_return_ruler') and not problem:
+                state = db.execute("SELECT value FROM firm_meta WHERE key='vti_total_return_status'").fetchone()
+                state = json.loads(state[0]) if state else {}
+                kind = 'vti_total_return_index' if capability == 'vti_total_return' else 'index_70_30_vti_total_return'
+                rows = db.execute('SELECT COUNT(*) FROM benchmark_observations WHERE kind=?', (kind,)).fetchone()[0]
+                if state.get('status') != 'OK':
+                    codes = ', '.join(sorted({i.get('code', '') for i in state.get('issues') or []}))
+                    problem = ('the total return is not computed' if not state else
+                               f'the total return stopped: {codes or state.get("gap_reason") or state.get("status")}')
+                elif capability == 'total_return_ruler' and state.get('ruler_status') != 'OK':
+                    problem = f'the total-return ruler stopped: {state.get("ruler_gap_reason") or state.get("ruler_status")}'
+                elif not rows:
+                    problem = 'no total-return observation is stored'
+                else:
+                    applied = len(state.get('distributions_applied') or [])
+                    note = (f'={rows:,} sessions computed through {state.get("last_session")} from the stored closes and {applied} issuer '
+                            f'distributions ({provider}), each checked against the stored close on its ex-date. Independent confirmation of the '
+                            'amounts: ' + ('compared and equal' if state.get('independent_confirmation') == 'COMPARED' else 'none stored') + '.')
+            evidence[capability] = (provider, rows, proof, problem, note)
+    for capability, (provider, rows, proof, problem, note) in evidence.items():
         status_now = current.get(capability, {}).get('status')
         if not problem and rows > 0:
-            detail = f'{rows:,} validated rows stored from {provider}; last run {proof[-1]["finished_at"][:19]} UTC.'
+            detail = note[1:] if note.startswith('=') else (f'{rows:,} validated rows stored from {provider}; last run '
+                                                            f'{proof[-1]["finished_at"][:19]} UTC.' + (' ' + note if note else ''))
             if status_now != AVAILABLE or current[capability].get('detail') != detail:
                 set_status(store, capability, AVAILABLE, provider, detail, at, reason='validated provider data',
                            evidence={'provider': provider, 'records': rows, 'validation_passed': True, 'validated_at': at.isoformat(), 'runs': proof})
             outcome[capability] = AVAILABLE
         else:
             floor, source, text = base[capability]
-            if status_now == AVAILABLE:                      # the evidence is gone or the latest validation failed: take it back
+            if capability in PARTIAL_WHEN_STORED and rows > 0:
+                # Something real is stored, but not enough to call the capability available. Say so, with the reason.
+                detail = f'{rows:,} rows stored from {provider}, not sufficient: {problem}.'
+                if status_now != PARTIAL_EXISTING or current[capability].get('detail') != detail:
+                    set_status(store, capability, PARTIAL_EXISTING, provider, detail, at, reason=problem)
+                outcome[capability] = PARTIAL_EXISTING
+                continue
+            if status_now == AVAILABLE or (capability in PARTIAL_WHEN_STORED and status_now == PARTIAL_EXISTING):
+                # the evidence is gone or the latest validation failed: take it back
                 set_status(store, capability, floor, source, f'{text} Not available: {problem}.', at, reason=problem)
-            outcome[capability] = current.get(capability, {}).get('status') if status_now != AVAILABLE else floor
+                outcome[capability] = floor
+                continue
+            outcome[capability] = status_now
     return outcome
+
+
+def _fundamentals_evidence(db, provider, proof):
+    """(problem, note) for the company-facts sample. Stored rows are not enough: every company of the latest sample must
+    have its critical fields resolved for the current period of every filing read and confirmed in the filing's own
+    document, and every stored fact must carry its SEC acceptance time. Fields that stay unresolved are named in the note."""
+    run_ids = [i for p in proof for i in p['run_ids']]
+    marks = ','.join('?' * len(run_ids))
+    undated = db.execute("SELECT COUNT(*) FROM fundamental_fact_observations WHERE provider=? AND (accepted_timestamp IS NULL OR accepted_timestamp='')",
+                         (provider,)).fetchone()[0]
+    if undated:
+        return f'{undated} stored facts carry no SEC acceptance time', ''
+    failing, empty = [], {}
+    for instrument, text in db.execute(f'SELECT instrument, diagnostics_json FROM provider_runs WHERE id IN ({marks}) ORDER BY id', run_ids):
+        report = (json.loads(text or '{}') or {}).get('validation') or {}
+        verdict = report.get('quality') or {}
+        if verdict.get('passes') is not True:
+            fields = sorted({x['field'] for x in (verdict.get('critical_unresolved') or []) + (verdict.get('critical_not_confirmed_in_filing') or [])})
+            failing.append(f'{instrument}: ' + (', '.join(fields) if fields else 'no validation report'))
+        for name in (verdict.get('unresolved_by_field') or {}):
+            if not (report.get('accepted_by_field') or {}).get(name):
+                empty.setdefault(name, []).append(instrument)
+    if failing:
+        return 'critical fields unresolved or not confirmed in the filing (' + '; '.join(failing) + ')', ''
+    note = ''
+    if empty:
+        note = 'Left unresolved, never derived: ' + '; '.join(f'{name} ({", ".join(who)})' for name, who in sorted(empty.items())) + '.'
+    return '', note
 
 
 def require(store, capability):

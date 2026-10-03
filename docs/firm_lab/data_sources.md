@@ -7,6 +7,11 @@ trade, and no measure is computed from any of it.
 Companion documents: `provider_matrix.md` (candidate providers, with evidence and fit labels) and
 `ARCHITECTURE.md` (isolation rules).
 
+**Checkpoint 4 update (2026-10-03).** Fundamentals, earnings-release filings and VTI distributions now come from
+free, authoritative sources (the SEC and the fund issuer); see `free_research_data_foundation.md`,
+`sec_xbrl_normalization.md`, `earnings_events.md` and `vti_total_return_methodology.md`. Where the domain notes
+below name a paid provider as chosen, that choice is superseded for fundamentals and corporate actions.
+
 ## Rules that apply to every domain
 
 1. **Interfaces fail cleanly.** With no provider connected an interface returns `UNAVAILABLE` and no records.

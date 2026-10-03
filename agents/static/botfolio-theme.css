@@ -529,6 +529,11 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 .agent-desk table.fl-ready .fl-r1{width:12%}.agent-desk table.fl-ready .fl-r2{width:12%}.agent-desk table.fl-ready .fl-r3{width:11%}
 .agent-desk table.fl-ready .fl-r4{width:20%}.agent-desk table.fl-ready .fl-r5{width:11%}.agent-desk table.fl-ready .fl-r6{width:11%}.agent-desk table.fl-ready .fl-r7{width:10%}
 .agent-desk table.fl-ready thead th{white-space:normal;vertical-align:bottom}
+.agent-desk table.fl-fund .fl-f1{width:9%}.agent-desk table.fl-fund .fl-f2{width:15%}.agent-desk table.fl-fund .fl-f3{width:8%}.agent-desk table.fl-fund .fl-f4{width:8%}.agent-desk table.fl-fund .fl-f5{width:36%}.agent-desk table.fl-fund .fl-f6{width:14%}
+.agent-desk table.fl-events .fl-e1{width:8%}.agent-desk table.fl-events .fl-e2{width:10%}.agent-desk table.fl-events .fl-e3{width:10%}.agent-desk table.fl-events .fl-e4{width:17%}.agent-desk table.fl-events .fl-e5{width:14%}.agent-desk table.fl-events .fl-e6{width:29%}
+.agent-desk table.fl-benchready .fl-b1{width:24%}.agent-desk table.fl-benchready .fl-b2{width:14%}.agent-desk table.fl-benchready .fl-b3{width:12%}.agent-desk table.fl-benchready .fl-b4{width:14%}.agent-desk table.fl-benchready .fl-b5{width:18%}
+.agent-desk table.fl-fund td,.agent-desk table.fl-events td,.agent-desk table.fl-benchready td{overflow-wrap:break-word;word-break:normal;border-bottom:1px solid var(--hair-2)!important;padding-bottom:10px!important}
+.agent-desk table.fl-events a{color:var(--text-2);text-decoration:underline}
 .agent-desk table.fl-ready tbody td{vertical-align:top!important}
 .agent-desk table.fl-ready tr.fl-ready-note td{border-top:0!important;padding-top:0!important;padding-bottom:14px!important}
 .agent-desk table.fl-ready .fl-sub{display:block;margin-top:4px;color:var(--text-4);line-height:1.35}
