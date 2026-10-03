@@ -351,26 +351,26 @@ to corresponding task files. Local receipts/data stay outside Git.
 **Files:** create `docs/firm_lab/CHECKPOINT6_CLOSURE.md`, update
 `docs/review/CODEX_STATUS.md` and `docs/firm_lab/ARCHITECTURE.md`.
 
-- [ ] Before deploy, confirm detailed plan approval, no unresolved critical review,
+- [x] Before deploy, confirm detailed plan approval, no unresolved critical review,
   parser/input/calculation validation passes and cloud evidence or explicit
   operator exception. Prepare hash manifest and backup of researchDB/UI overlay.
-- [ ] Migrate only isolated live FirmLabDB with additive new tables and deliberate
+- [x] Migrate only isolated live FirmLabDB with additive new tables and deliberate
   manual generator; never copy validationDB over liveDB. Compare all old table
   content before/after; only approved capability audit entries may change.
-- [ ] Install reviewed UI files in dashboardoverlay; runtime trading checkout
+- [x] Install reviewed UI files in dashboardoverlay; runtime trading checkout
   untouched. Restart only com.openai.robinhood-inbox if necessary. Verify HTTP,
   screenshots/disclosures, SQLite readonly behavior and no source-ref leakage.
-- [ ] Rollback if validation fails: restore changed UI files from backup and
+- [x] Rollback prepared (not needed): restore changed UI files from backup and
   restart only inbox. Derived research tables may remain ignored; DB restoration
   only after proving no subsequent writes, from verified research backup.
   Never restore anything into officialDB or restart daily.
-- [ ] Recheck exact ReleaseN fingerprint, unchanged daily service definition,
+- [x] Recheck exact ReleaseN fingerprint, unchanged daily service definition,
   no stopfile, LaneBpause, mode, trial count0, no orders/fills, unchanged frozen
   Treasury methodology. Capture sanitized evidence, not private config/logs.
-- [ ] Fill every section51 report heading with actual counts/limitations; never
+- [x] Fill every section51 report heading with actual counts/limitations; never
   mark hypothetical capabilities AVAILABLE. Document cloud/native separately.
   Print required invariant lines and CLOSED only if all gates pass; STOP.
-- [ ] Update canonical local CODEX_STATUS and branch copy, inspect staged data,
+- [x] Update canonical local CODEX_STATUS and branch copy, inspect staged data,
   commit `docs: close verified Checkpoint 6 research feature layer`, push and
   verify remote SHA. No Checkpoint7 work.
 
@@ -417,3 +417,8 @@ Checkpoint 6 cloud-test exception: APPROVED BY OPERATOR
 See CHECKPOINT6_DEPLOYMENT.md for backup/rollback and the narrowly reviewed
 nearest-retracement UI disclosure repair. Accepted feature implementation,
 222-definition inventory and calculation hash are unchanged. No Checkpoint7.
+
+Task12 complete: see CHECKPOINT6_CLOSURE.md for deployed counts, source manifest,
+backup/rollback, native tests, known failure, browser/read-only checks and exact
+Control A invariants. Cloud gate waived only by the explicit operator exception.
+No merge, trading restart, maintenance installation or Checkpoint7 work.

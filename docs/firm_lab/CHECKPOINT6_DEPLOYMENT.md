@@ -57,6 +57,12 @@ executor responsibilities. Signed distances and malformed values were independen
 probed; no new generator imports or writes. Test coverage beyond these cases is
 a minor deferred item, not permission to relax missingness.
 
+Post-deployment narrow-browser check found the expanded two-column audit table
+made a324px panel scroll335px. A one-property CSS correction (`table-layout:fixed`)
+preserves the existing wrapping and makes the expanded table280px within the
+same324px panel, with scrollWidth324px. Browser RED→GREEN at390×844. No layout
+redesign or generator change; assets reload without a second service restart.
+
 ## Backup and rollback — before mutation
 
 Timestamped SQLite backup, content hashes for all 26 old tables, original daily

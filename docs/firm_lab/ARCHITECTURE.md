@@ -1,5 +1,20 @@
 # Firm Lab — architecture and status
 
+## Checkpoint 6 closed — 2026-10-03
+
+Task12 deployed only the isolated research-feature store and read-only explorer.
+222definitions;153,180stored results across23instruments/30sessions, explicitly
+retrospective at an October3knowledge cutoff. No strategy, score, model, orders,
+fills, schedule or Control A changes. Close-based structure uses
+`close_fractal_3x3_v1`; future OHLC-based structure remains a separate version.
+OHLCV/volume/intraday and incomplete data stay unavailable. Overall feature
+families are PARTIAL_EXISTING, intraday UNAVAILABLE, macro regime/options
+strategy/ML ranker NOT_STARTED. See `CHECKPOINT6_CLOSURE.md` for exact evidence,
+cloud exception, known installed-Codex failure and accepted limitations.
+Only the dashboard service restarted. Checkpoint7 is not started.
+
+The sections below retain earlier plans as history, not current deployment status.
+
 ## Checkpoint 5 continuation (2026-10-03)
 
 See `CODEX_CHECKPOINT5_HANDOFF.md` for current, verified progress. The historical

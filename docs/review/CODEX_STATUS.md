@@ -1,5 +1,45 @@
 # Codex status and questions
 
+## 2026-10-03 19:52 ET — Checkpoint 6 Task 12 deployed and closed; STOP
+
+Operator authorized Task12 only and the Checkpoint6 cloud-test exception.
+Owner: Codex; branch `codex/checkpoint6-features`; accepted calculation source
+`34531dfbfe9567ee65a749af416c73a5eb42f104`; reviewed UI correction `d15d804`,
+plus a browser-proven one-property narrow-table CSS correction in this closeout.
+No Checkpoint7, no merge to main, no maintenance installation.
+
+- Backed up the live research DB and full dashboard overlay before mutation.
+  Backup/receipts: `/Users/tanmaysinnarkar/LocalProjects/robinhood-diagnostics/checkpoint6-deployment-20261003/`.
+- Reviewed manual CLI migrated the research DB in place: five additive tables;
+  23instruments ×30sessions, explicit retrospective cutoff2026-10-03T22:00:00Z.
+  153,180results:85,204available/67,976unavailable;222definitions;9,270source/content
+  versions. All hashes/provenance/manifests checked. Idempotent rerun0inserted,
+  222duplicates. Historical September30cutoff0available. No backdating.
+- All26old tables unchanged by generation. Only deliberate capability metadata
+  and appended capability-audit events changed afterward; all24other tables
+  and every old event preserved. BUILD_OBSERVE, no experiments/execution tables.
+- Ten read-only UI/projection files installed in `agent-desk.3K4Fam`.
+  Only `com.openai.robinhood-inbox` restarted once. No generator installed in UI.
+  Desktop1440×1000 and mobile390×844 verified, explicit retrospective/research
+  warnings and unavailable reasons; GET200 and research DB hash unchanged.
+- Tests:100focused;350FirmLab;full native development1068passed/1failed/27warnings.
+  Known failure remains `test_installed_child_filters_tools_and_denies_unexpected_server`
+  from installed Codex `configWarning`; guard unchanged. Not an all-green suite.
+- Cloud suite: NOT RUN — executor unavailable
+- Checkpoint 6 cloud-test exception: APPROVED BY OPERATOR
+- Control A ReleaseN fingerprint:
+  `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`.
+  Strategy/daily definition unchanged; runner not restarted; no STOP_TRADING;
+  LaneB PAUSED; Stage1 paper broker; real execution DISABLED.
+  Codex maintenance: PREPARED_AND_PROVEN_NOT_INSTALLED.
+- Accepted limitations unchanged: incomplete authoritative three-meeting FOMC
+  coverage and grouped nontechnical missing reasons. No capability inflated.
+- Full report: `docs/firm_lab/CHECKPOINT6_CLOSURE.md`; rollback:
+  `docs/firm_lab/CHECKPOINT6_DEPLOYMENT.md`. Sanitized branch push is part of
+  closeout; no private DB/config/logs/screenshots included.
+
+CHECKPOINT 6 = CLOSED. Next action: STOP; await separate Checkpoint7 authorization.
+
 ## 2026-10-03 19:24 ET — Checkpoint 6 native review/validation finished; STOP before deployment
 
 Operator explicitly chose **STOP BEFORE DEPLOYMENT**; no cloud-test exception.
