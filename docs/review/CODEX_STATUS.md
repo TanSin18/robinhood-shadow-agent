@@ -1,5 +1,25 @@
 # Codex status and questions
 
+## 2026-10-03 17:20 ET — Checkpoint 5 closed; research-only deployment verified
+
+Accepted code `9750665` unchanged; closeout on `codex/checkpoint5-macro`.
+Final report: `docs/firm_lab/CHECKPOINT5_CLOSURE.md`.
+Fed 6/PCE 12 observations and 18 linked event/version rows now in the separate
+live research DB. CPI/labor API transport works but cannot establish exact
+publication/vintage; release pages remain 403. Treasury yields lack exact
+historical publication evidence. Those capabilities remain UNAVAILABLE.
+Only three read-only dashboard-overlay files copied, only inbox restarted.
+Control A release N fingerprint unchanged:
+`901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`.
+No daily restart, strategy/config/broker/official-DB writes or new experiment.
+Lane B paused, no stop file, BUILD_OBSERVE, fills 0. Native tests 69 focused,
+250 Firm Lab, 968 passed/1 known Codex configWarning failure full suite.
+Cloud NOT RUN — executor unavailable. Post-deployment read-only checks, backup
+integrity, preserved old research rows, UI provenance/revision expansion passed.
+Maintenance remains PREPARED_AND_PROVEN_NOT_INSTALLED. Provider NONE pending
+licensing/retention; Level 2 not required. No paid calls or feed activation.
+Stop at Checkpoint 5. Do not start Checkpoint 6 without a new request.
+
 ## 2026-10-03 17:05 ET — Checkpoint 5 continuation; isolated macro validation
 
 Accepted storage base `5d4b4fe` retained on `codex/checkpoint5-macro`. Added

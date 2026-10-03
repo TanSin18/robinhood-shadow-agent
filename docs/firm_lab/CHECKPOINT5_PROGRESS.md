@@ -1,5 +1,10 @@
 # Checkpoint 5 continuation ledger
 
+2026-10-03 17:20 ET: **CHECKPOINT 5 = CLOSED**. Final source investigation,
+native tests, bounded research deployment and post-deployment checks completed.
+See `CHECKPOINT5_CLOSURE.md` for precise evidence, rollback and final states.
+No Checkpoint 6 work; no parser rebuild or Control A change.
+
 Accepted base: `5d4b4feb6aa28ef799263ab39f769cca20dd4c33`.
 Branch: `codex/checkpoint5-macro`. No Checkpoint 6 work.
 

@@ -1,5 +1,27 @@
 # Checkpoint 5 — Codex continuation
 
+## 2026-10-03 17:20 ET — CHECKPOINT 5 CLOSED; stop here
+
+The operator accepted unavailable sources and unavailable cloud execution as
+non-blocking under explicit native/deployment checks. Those checks passed with
+the one separately reported installed Codex compatibility failure unchanged.
+Current authority: [closure report](CHECKPOINT5_CLOSURE.md), not older entries.
+
+Accepted implementation `9750665` unchanged. Live isolated research DB now holds
+6 Fed + 12 PCE observations and 18 linked event/version rows. No CPI/labor/yield
+rows: BLS API reachable but lacks exact publication/vintage time; release pages
+403; Treasury quote time is not publication time. Metadata explains each gap.
+Only three read-only overlay files installed; only inbox/dashboard restarted.
+Control A release N fingerprint remains
+`901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`.
+Native tests: focused 69, Firm Lab 250, full 968 passed / one known configWarning
+failure. Cloud NOT RUN — executor unavailable. Post-deployment read-only/UI
+verification passed. Backups and rollback are documented in the closure report.
+Codex maintenance PREPARED_AND_PROVEN_NOT_INSTALLED. No strategy, runner, broker,
+config or preregistration edits. No experiment/fill/model/feed activation.
+Owner Codex; no active collector, no overlapping work or paid API spend.
+GitHub branch codex/checkpoint5-macro; no merge. Do not begin Checkpoint 6.
+
 ## 2026-10-03 17:05 ET — Parsers, isolated real validation, factual UI; gate incomplete
 
 Continue from this entry, not the storage-only entry below. Accepted base

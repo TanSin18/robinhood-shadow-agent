@@ -4,8 +4,10 @@
 
 See `CODEX_CHECKPOINT5_HANDOFF.md` for current, verified progress. The historical
 status blocks below describe earlier checkpoints; they are not current acceptance
-evidence. Macro storage/validation is now implemented on a development branch,
-but live macro ingestion and UI remain unfinished. No macro trading model exists.
+evidence. Checkpoint 5 closed on 2026-10-03: validated Fed/PCE observations and
+the read-only macro UI are deployed to the isolated research DB/dashboard only.
+CPI, labor and Treasury yields remain unavailable with documented timing gaps.
+See `CHECKPOINT5_CLOSURE.md`. No macro trading model exists.
 
 ### Checkpoint 6 — future feature work, not activated
 

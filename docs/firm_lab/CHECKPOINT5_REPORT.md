@@ -1,5 +1,9 @@
 # Checkpoint 5 — continuation report
 
+**Historical pre-deployment report. Superseded by [Checkpoint 5 closure](CHECKPOINT5_CLOSURE.md),
+2026-10-03 17:20 ET: research-only deployment verified; CHECKPOINT 5 = CLOSED.**
+The earlier results below are retained as an audit trail, not current status.
+
 2026-10-03, 17:05 ET. Accepted base `5d4b4fe`, branch
 `codex/checkpoint5-macro`. **Partial real-data validation; not a completed
 deployment gate.** No Checkpoint 6 work has started.
