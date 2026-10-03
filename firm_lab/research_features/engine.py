@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import hashlib
 from .types import timestamp, canonical
+from .calendar import session_dates,session_close
 from .technical import technical_features
 from .structure import structure_features, result_builder
 from .fibonacci import fibonacci_features
@@ -26,7 +27,13 @@ def compute(snapshot,request):
     def eligible_bars(bars):
         rows=[r for r in bars if r['session']<=request.as_of_session and
               timestamp(r['known_at'])<=request.knowledge_cutoff and r['ref'].known_at<=request.knowledge_cutoff]
-        return sorted(rows,key=lambda r:r['session'])
+        rows=sorted(rows,key=lambda r:r['session'])
+        if rows:
+            days=tuple(r['session'] for r in rows)
+            if (days!=session_dates(days[0],request.as_of_session) or
+                    session_close(request.as_of_session)>request.knowledge_cutoff):
+                raise ValueError('INVALID_SESSION_WINDOW')
+        return rows
     for key in ('closes','ohlcv'):
         snapshot[key]=eligible_bars(snapshot.get(key,[]))
     snapshot['reference_closes']={symbol:eligible_bars(bars) for symbol,bars in snapshot.get('reference_closes',{}).items()}

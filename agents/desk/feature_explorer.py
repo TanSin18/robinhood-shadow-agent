@@ -14,10 +14,15 @@ def _levels(rows):
         return '<p>No validated close-based Fibonacci levels in this snapshot.</p>'
     try:
         values=[Decimal(r['value']) for r in levels]
-        low,high=min(values),max(values)
+        current=levels[0].get('audit',{}).get('current_close')
+        domain=values+([Decimal(current)] if current is not None else [])
+        low,high=min(domain),max(domain)
         if high<=low:
             return '<p>Stored levels have no drawable range; inspect their values below.</p>'
         lines=[]
+        if current is not None:
+            y=30+float((high-Decimal(current))/(high-low))*280
+            lines.append(f'<line x1="20" x2="300" y1="{y:.2f}" y2="{y:.2f}" stroke-dasharray="5 4"/><text x="310" y="{y+4:.2f}">Current close · {esc(current)}</text>')
         for row,value in zip(levels,values):
             y=30+float((high-value)/(high-low))*280
             label=row['name'].removeprefix('close_fib_').replace('_',' ')
@@ -25,7 +30,7 @@ def _levels(rows):
                          f'<text x="310" y="{y+4:.2f}">{esc(label)} · {value:.2f}</text>')
         graph='<svg class="feature-levels" viewBox="0 0 640 345" role="img" aria-label="Stored close-based Fibonacci levels"><title>Stored close-based Fibonacci levels; descriptive projections only</title>'+''.join(lines)+'</svg>'
         anchor=levels[0].get('audit',{})
-        anchors='<dl class="v10-facts">'
+        anchors=f'<p>Current close: {esc(current or "Not recorded")}</p><dl class="v10-facts">'
         for key,label in [('start','Start anchor'),('end','End anchor')]:
             point=anchor.get(key,{})
             anchors+=f'<div><dt>{label}</dt><dd>Close {esc(point.get("value","Not recorded"))} on {esc(point.get("session","Not recorded"))}<br>Confirmed session: {esc(point.get("confirmed_session","Not recorded"))}<br>Known at: {esc(point.get("known_at","Not recorded"))}</dd></div>'
@@ -53,7 +58,8 @@ def render_features(view):
         out+='<details><summary>Recent stored snapshots</summary><ul>'+choices+'</ul></details>'
     if selected:
         out+=f'<p><b>{esc(selected.get("instrument"))}</b> · Session {esc(selected.get("session"))} · Known by {esc(selected.get("knowledge_cutoff"))}</p>'
-        if selected.get('knowledge_cutoff','')[:10]>selected.get('session',''):
+        if (selected.get('temporal_mode')=='RETROSPECTIVE_NOT_HISTORICAL_AVAILABILITY' or
+                selected.get('knowledge_cutoff','')[:10]>selected.get('session','')):
             out+='<p class="feature-warning">Retrospective snapshot — later-captured data was used. This is not evidence of what was available on the historical session.</p>'
     if view.get('missing_reason'):
         out+=f'<p>No eligible stored results: {esc(view["missing_reason"])}. Generate deliberately with the research-only CLI; this page never fills gaps.</p>'
@@ -66,7 +72,8 @@ def render_features(view):
         out+='<details><summary>Close-based swing and Fibonacci map</summary>'+_levels(families['fibonacci'])+'</details>'
     for family,items in sorted(families.items()):
         available=sum(r['availability']=='AVAILABLE' for r in items)
-        out+=f'<details class="feature-family"><summary>{esc(family.replace("_"," ").capitalize())} — {available} of {len(items)} recorded values</summary><dl>'
+        state='AVAILABLE' if available==len(items) else 'PARTIAL_EXISTING' if available else 'UNAVAILABLE'
+        out+=f'<details class="feature-family"><summary>{esc(family.replace("_"," ").capitalize())} — {state} · {available} of {len(items)} recorded values</summary><p>Coverage of this stored snapshot, not deployment or library-completion status.</p><dl>'
         for row in items:
             value=json.dumps(row['value'],sort_keys=True) if isinstance(row['value'],(dict,bool)) else row['value']
             out+=f'<div class="feature-row"><dt>{esc(row["name"])}</dt><dd><b>{esc(value if value is not None else "Unavailable")}</b> · {esc(row["unit"])}'

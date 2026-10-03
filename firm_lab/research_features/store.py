@@ -37,6 +37,8 @@ def validate_path(path, official_db):
 
 class FeatureStore:
     def __init__(self, path, official_db=CANONICAL_OFFICIAL):
+        self.active_run=None
+        self.result_ids=[]
         self.path = validate_path(path, official_db)
         self.db = sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True)
         with self.db:
@@ -70,6 +72,8 @@ class FeatureStore:
         with self.db:
             self._insert('research_feature_inputs',input_set_id,inputs)
             added = self._insert('research_feature_results', identity, payload)
+        if self.active_run is not None:
+            self.result_ids.append(identity)
         return added
 
     def register(self, definition):
@@ -80,6 +84,12 @@ class FeatureStore:
             if previous and previous[0] != canonical(definition):
                 raise ValueError('FORMULA_CHANGE_REQUIRES_VERSION')
             return self._insert('research_feature_definitions', identity, definition)
+
+    def register_mapping(self,record):
+        from .sector import validate_mapping_record
+        record=validate_mapping_record(record)
+        with self.db:
+            return self._insert('research_sector_mappings',record['content_hash'],record)
 
     def read(self, request):
         selected = {}
@@ -100,15 +110,26 @@ class FeatureStore:
         return tuple(selected[k] for k in sorted(selected))
 
     def start_run(self, request):
+        if self.active_run is not None:
+            raise ValueError('RUN_ALREADY_ACTIVE')
         run_id = uuid.uuid4().hex
         with self.db:
             self._insert('research_feature_runs', run_id, {'request': asdict(request), 'state': 'STARTED'})
+        self.active_run=run_id
+        self.result_ids=[]
         return run_id
 
     def finish_run(self, run_id, receipt):
         with self.db:
             if not self.db.execute('SELECT 1 FROM research_feature_runs WHERE id=?', (run_id,)).fetchone():
                 raise ValueError('UNKNOWN_RUN')
+            if self.db.execute('SELECT 1 FROM research_feature_runs WHERE id=?',(run_id+':finished',)).fetchone():
+                raise ValueError('RUN_ALREADY_FINISHED')
+            if self.active_run!=run_id:
+                raise ValueError('RUN_NOT_ACTIVE')
+            receipt={**receipt,'result_ids':sorted(set(self.result_ids)),
+                     'result_count':len(set(self.result_ids))}
             if not self._insert('research_feature_runs', run_id + ':finished',
                                 {'run_id': run_id, 'state': 'FINISHED', 'receipt': receipt}):
                 raise ValueError('RUN_ALREADY_FINISHED')
+        self.active_run=None

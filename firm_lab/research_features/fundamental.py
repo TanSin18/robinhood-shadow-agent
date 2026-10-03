@@ -58,7 +58,12 @@ def _facts(snapshot,request):
 def fundamental_features(snapshot,request):
     facts=_facts(snapshot,request)
     make=result_builder({'closes':facts},request,__file__)
-    fields={name:sorted([f for f in facts if f['normalized_field']==name],key=lambda r:(r['period_end'],r['known_at']),reverse=True)
+    # At a common economic end date prefer the shortest explicit duration.
+    # Never select a 6M fact merely because the publisher serialized it first.
+    duration={'INSTANT':0,'instant':0,'3M':3,'6M':6,'9M':9,'12M':12}
+    fields={name:sorted([f for f in facts if f['normalized_field']==name],
+            key=lambda r:(r['period_end'],-duration.get(r['period_type'],999),
+                          timestamp(r['known_at']),r.get('period_start') or ''),reverse=True)
             for name in set(GROWTH_FIELDS)|{x for pair in RATIOS.values() for x in pair}}
     values={}
     audits={}
@@ -67,13 +72,10 @@ def fundamental_features(snapshot,request):
         if not rows:
             continue
         current=rows[0]
-        try:
-            year=int(current['filing_fiscal_year'])
-        except (ValueError,TypeError,KeyError):
-            continue
         prior=next((r for r in rows[1:] if r['period_type']==current['period_type'] and
-            r.get('filing_fiscal_period')==current.get('filing_fiscal_period') and
-            str(r.get('filing_fiscal_year'))==str(year-1) and
+            all(r.get(k)==current.get(k) for k in ('unit','concept','taxonomy','cik','reporting_basis')) and
+            r.get('period_start') and current.get('period_start') and
+            350<=(date.fromisoformat(current['period_start'])-date.fromisoformat(r['period_start'])).days<=380 and
             350<=(date.fromisoformat(current['period_end'])-date.fromisoformat(r['period_end'])).days<=380),None)
         if prior:
             values[field+'_yoy']=signed_growth(D(current['value']),D(prior['value']))
@@ -98,5 +100,5 @@ def fundamental_features(snapshot,request):
     shares=values.get('diluted_shares_weighted_average_yoy')
     values['dilution_trend']={'direction':'INCREASE' if shares>0 else 'DECREASE' if shares<0 else 'UNCHANGED'} if shares is not None else None
     return tuple(make(d['name'],'fundamentals',values.get(d['name']),d['unit'],
-        audit={'basis':'SEC_CONFIRMED_AS_REPORTED',**audits.get(d['name'],{})},
+        audit={'basis':'SEC_CONFIRMED_AS_REPORTED','duration_selection':'LATEST_END_SHORTEST_EXPLICIT_DURATION',**audits.get(d['name'],{})},
         reason='MISSING_OR_INCOMPATIBLE_CONFIRMED_FACTS') for d in fundamental_definitions())

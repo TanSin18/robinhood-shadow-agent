@@ -68,3 +68,9 @@ def test_resistance_retest_keeps_crossed_level_not_new_side():
     state=rows['close_prior_resistance_break_retest'].value
     assert state['retest'] is True and state['age']==1
     assert state['level']=='110'
+def test_equal_level_and_distinct_touch_count_are_not_lost():
+    from firm_lab.research_features.structure import structure_features
+    from firm_lab.research_features.types import Request
+    rows={r.name:r for r in structure_features({'closes':bars([5,4,3,1,2,3,4,9,8,7,1])},Request('VTI','2026-09-11','2026-09-11T20:00:00Z'))}
+    assert rows['close_level_equality'].value=={'levels':['1']}
+    assert 'close_support_touch_count' in rows

@@ -35,6 +35,8 @@ def test_close_anchor_visual_audit_has_prices_dates_and_confirmations():
     html=render_features({'rows':[asdict(r) for r in rows]})
     assert '<svg' in html and 'Stored level values' in html
     assert 'Start anchor' in html and 'End anchor' in html and 'Confirmed session' in html
+    assert 'Current close' in html
+    assert 'PARTIAL_EXISTING' in html
     assert '2026-09-04' in html and '2026-09-11' in html
 
 
@@ -67,7 +69,29 @@ def test_unfinished_or_malformed_results_not_available(tmp_path):
         c.execute('INSERT INTO research_feature_results VALUES(?,?,?)',('bad',json.dumps(payload),'2026-10-03T21:00:00Z'))
         c.commit()
         state=feature_view(c)
-    assert len(state['rows'])==1 and state['invalid_rows']==1
+    assert len(state['rows'])==1 and state['invalid_rows']==0
+
+
+def test_completed_receipt_owns_exact_results_not_later_partial_run(tmp_path):
+    from firm_lab.research_features.view import feature_view
+    from firm_lab.research_features.store import FeatureStore
+    from firm_lab.research_features.types import Request
+    db=recorded(tmp_path)
+    request=Request('VTI','2026-09-30','2026-10-03T20:00:00Z')
+    with FeatureStore(db) as store:
+        store.start_run(request)
+        store.append(result(value='20',audit={'knowledge_cutoff':request.knowledge_cutoff}))
+    with sqlite3.connect(db) as conn:
+        state=feature_view(conn)
+    assert [r['value'] for r in state['rows']]==['0']
+
+
+def test_same_date_retrospective_receipt_is_labelled():
+    from agents.desk.feature_explorer import render_features
+    page=render_features({'selected':{'instrument':'VTI','session':'2026-09-30',
+        'knowledge_cutoff':'2026-09-30T23:00:00Z',
+        'temporal_mode':'RETROSPECTIVE_NOT_HISTORICAL_AVAILABILITY'},'rows':[]})
+    assert 'Retrospective snapshot' in page
 
 
 def test_page_integrates_feature_view_without_generator(tmp_path,monkeypatch):

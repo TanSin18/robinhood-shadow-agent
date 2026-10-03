@@ -15,7 +15,7 @@ def fibonacci_definitions():
             out.append(definition('close_fib_'+key+suffix,'fibonacci',unit,
                 'directed confirmed close leg A→B; retrace B-r(B-A); extend A+r(B-A); touches after confirmation within0.5%',
                 optional=('validated_atr14',) if suffix=='_atr_distance' else ()))
-    for suffix,unit in (('nearest','level'),('clusters','levels')):
+    for suffix,unit in (('nearest','level'),('nearest_extension','level'),('clusters','levels')):
         out.append(definition('close_fib_'+suffix,'fibonacci',unit,'latest3 completed close legs; bounded0.5% clusters; nearest fractional distance'))
     return tuple(out)
 
@@ -37,6 +37,7 @@ def fibonacci_features(snapshot,request):
     levels=directed_levels(D(legs[-1]['start']['value']),D(legs[-1]['end']['value'])) if legs else {}
     audit={k:({x:y for x,y in v.items() if x!='refs'} if isinstance(v,dict) else v) for k,v in legs[-1].items()} if legs else {}
     current=D(bars[-1]['value']) if bars else None
+    audit['current_close']=str(current) if current is not None else None
     ohlc=snapshot.get('ohlcv',[])
     atr_value=None
     # Close-anchor identity is unchanged. ATR is a separate optional input and
@@ -80,6 +81,9 @@ def fibonacci_features(snapshot,request):
         out.append(make('close_fib_'+key+'_cross_count','fibonacci',D(crosses) if value is not None else None,'count',detail))
     nearest=min((k for k,v in levels.items() if v>0),key=lambda k:(abs(current/levels[k]-1),D(k.split('_')[1]),k)) if levels else None
     out.append(make('close_fib_nearest','fibonacci',{'name':nearest,'level':str(levels[nearest])} if nearest else None,'level',audit))
+    extension=min((k for k,v in levels.items() if v>0 and k.startswith('extension_')),
+        key=lambda k:(abs(current/levels[k]-1),k),default=None)
+    out.append(make('close_fib_nearest_extension','fibonacci',{'name':extension,'level':str(levels[extension])} if extension else None,'level',audit))
     all_levels=[]
     members=[]
     for leg in legs[-3:]:

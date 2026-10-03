@@ -69,3 +69,10 @@ def test_atr_distance_uses_validated_aligned_ohlc_without_changing_close_anchors
     assert abs(D(row.value)-D('1.944')/19)<D('1e-25')
     snap['ohlcv']=ohlc[:-1]
     assert next(r for r in fibonacci_features(snap,request) if r.name==row.name).value is None
+def test_nearest_extension_is_separate_and_current_close_is_audited():
+    from firm_lab.research_features.fibonacci import fibonacci_features
+    from firm_lab.research_features.types import Request
+    from test_research_feature_structure import bars
+    rows={r.name:r for r in fibonacci_features({'closes':bars([5,4,3,1,2,3,4,9,8,7,6])},Request('VTI','2026-09-11','2026-09-11T20:00:00Z'))}
+    assert rows['close_fib_nearest_extension'].value['name'].startswith('extension_')
+    assert rows['close_fib_nearest_extension'].audit['current_close']=='6'

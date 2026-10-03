@@ -5,7 +5,7 @@ from datetime import date
 import json
 import re
 import sqlite3
-from .types import from_payload,timestamp,valid_hash
+from .types import from_payload,timestamp,valid_hash,content_hash
 from .stored_payload import read_result
 
 
@@ -41,19 +41,34 @@ def feature_view(db,filters=None):
         if not eligible:
             return {**empty,'choices':choices,'missing_reason':'NO_COMPLETED_RUN_AT_CUTOFF'}
         selected=eligible[0]
-        query="""SELECT payload,created_at FROM research_feature_results
-            WHERE json_extract(payload,'$.instrument')=? AND json_extract(payload,'$.as_of_session')=?
-            AND json_extract(payload,'$.calculation_hash')=?
-            AND json_extract(payload,'$.audit.knowledge_cutoff')=? ORDER BY id"""
+        identifiers=selected.get('result_ids')
+        if not isinstance(identifiers,list) or len(set(identifiers))!=len(identifiers) or selected.get('result_count')!=len(identifiers):
+            return {**empty,'choices':choices,'selected':selected,'missing_reason':'MISSING_OR_INVALID_RUN_MANIFEST'}
         rows=[]; invalid=0
-        for payload,created in db.execute(query,(selected['instrument'],selected['session'],selected['calculation_hash'],selected['knowledge_cutoff'])):
+        logical=set()
+        for identity in identifiers:
             try:
+                valid_hash(identity)
+                stored=db.execute('SELECT payload,created_at FROM research_feature_results WHERE id=?',(identity,)).fetchone()
+                if stored is None:
+                    raise ValueError('MISSING_RESULT')
+                payload,created=stored
                 r=read_result(db,payload)
+                if (content_hash(r)!=identity or r.instrument!=selected['instrument'] or
+                    r.as_of_session!=selected['session'] or r.calculation_hash!=selected['calculation_hash'] or
+                    r.audit.get('knowledge_cutoff')!=selected['knowledge_cutoff']):
+                    raise ValueError('RESULT_MANIFEST_MISMATCH')
+                key=(r.family,r.name,r.feature_version)
+                if key in logical:
+                    raise ValueError('DUPLICATE_LOGICAL_FEATURE')
+                logical.add(key)
                 if r.known_at and r.known_at>selected['knowledge_cutoff']:
                     raise ValueError('FUTURE_RESULT')
                 rows.append({**asdict(r),'computed_at':created})
             except (ValueError,KeyError,TypeError):
                 invalid+=1
+        if invalid:
+            return {**empty,'choices':choices,'selected':selected,'invalid_rows':invalid,'missing_reason':'INVALID_RUN_MANIFEST_RESULTS'}
         rows.sort(key=lambda r:(r['family'],r['name'],r['feature_version']))
         return {**empty,'rows':rows,'choices':choices,'selected':selected,'invalid_rows':invalid,
                 'coverage':dict(Counter(r['availability'] for r in rows)),

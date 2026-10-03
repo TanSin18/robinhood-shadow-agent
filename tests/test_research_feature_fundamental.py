@@ -51,3 +51,23 @@ def test_revision_ten_is_newer_than_revision_two_at_same_capture():
     facts=[fact('revenue','100'),dict(fact('operating_income','20'),version=2),dict(fact('operating_income','30'),version=10)]
     rows=fundamental_features({'facts':facts},Request('AAPL','2026-09-30','2026-10-03T20:00:00Z'))
     assert next(r for r in rows if r.name=='operating_margin').value=='0.3'
+
+
+def test_same_end_duration_selection_is_stable_and_explicit():
+    from firm_lab.research_features.fundamental import fundamental_features
+    from firm_lab.research_features.types import Request
+    facts=[fact('revenue','100'),fact('revenue','300','6M',start='2026-01-01'),
+           fact('cash_and_equivalents','30','INSTANT',start=None)]
+    request=Request('AAPL','2026-09-30','2026-10-03T20:00:00Z')
+    results=[next(r for r in fundamental_features({'facts':order},request) if r.name=='cash_revenue')
+             for order in (facts,list(reversed(facts)))]
+    assert [r.value for r in results]==['0.3','0.3']
+    assert all(r.audit['duration']=='3M' for r in results)
+
+
+def test_comparative_fact_uses_economic_period_not_filing_fiscal_year():
+    from firm_lab.research_features.fundamental import fundamental_features
+    from firm_lab.research_features.types import Request
+    facts=[fact('revenue','120'),fact('revenue','100',end='2025-06-30',start='2025-04-01',year='2026')]
+    rows=fundamental_features({'facts':facts},Request('AAPL','2026-09-30','2026-10-03T20:00:00Z'))
+    assert next(r for r in rows if r.name=='revenue_yoy').value=='0.2'

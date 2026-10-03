@@ -81,11 +81,12 @@ def definition(name,family,unit,formula,lookback=7,optional=()):
 def structure_definitions():
     out=[]
     for side in ('support','resistance'):
-        for suffix,unit in (('level','price'),('distance','fraction'),('pivot_count','count'),('age','sessions')):
+        for suffix,unit in (('level','price'),('distance','fraction'),('pivot_count','count'),('touch_count','count'),('age','sessions')):
             out.append(definition(f'close_{side}_{suffix}','support_resistance',unit,
                 'trailing252 confirmed close pivots; bounded0.5% clusters; mean level; strict nearest side'))
         out.append(definition(f'close_prior_{side}_break_retest','support_resistance','state',
             'prior-session frozen confirmed level; strict cross; return within0.5% from crossed side within5sessions'))
+    out.append(definition('close_level_equality','support_resistance','state','current close equals confirmed cluster mean; equality is neither above nor below',252))
     for n in (20,50,252):
         for side in ('high','low'):
             for name,unit in ((f'close_distance_{side}{n}','fraction'),(f'close_new_{side}{n}','boolean'),
@@ -123,6 +124,8 @@ def structure_features(snapshot,request):
     recent=[p for p in pivots if p['session'] in {b['session'] for b in bars[-252:]}]
     clusters=cluster_levels([D(p['value']) for p in recent])
     means=[sum(g)/len(g) for g in clusters]
+    out.append(make('close_level_equality','support_resistance',
+        {'levels':[str(m) for m in means if m==values[-1]]} if values and means else None,'state',reason='NO_CONFIRMED_LEVEL'))
     for side in ('support','resistance'):
         candidates=[m for m in means if (m<values[-1] if side=='support' else m>values[-1])] if values else []
         level=(max(candidates) if side=='support' else min(candidates)) if candidates else None
@@ -131,6 +134,19 @@ def structure_features(snapshot,request):
         out.append(make('close_'+side+'_level','support_resistance',level,audit=audit,reason='NO_CONFIRMED_LEVEL'))
         out.append(make('close_'+side+'_distance','support_resistance',values[-1]/level-1 if level else None,'fraction',audit))
         out.append(make('close_'+side+'_pivot_count','support_resistance',D(len(members)) if members else None,'count',audit))
+        touches=None
+        if members:
+            confirmed=max(p['confirmed_session'] for p in members)
+            inside=False
+            touches=0
+            for bar in bars:
+                if bar['session']<confirmed:
+                    continue
+                near=abs(D(bar['value'])/level-1)<=D('.005')
+                touches+=int(near and not inside)
+                inside=near
+        out.append(make('close_'+side+'_touch_count','support_resistance',touches,'count',
+                        {**audit,'touch_definition':'distinct entries within0.5% after cluster confirmation'}))
         age=next((len(bars)-1-i for i,b in enumerate(bars) if members and b['session']==max(p['session'] for p in members)),None)
         out.append(make('close_'+side+'_age','support_resistance',age,'sessions',audit))
         # Prior level is reconstructed without the current bar; use that frozen

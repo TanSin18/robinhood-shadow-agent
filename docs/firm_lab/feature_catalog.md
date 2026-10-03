@@ -23,6 +23,39 @@ Detailed conventions: [approved design](../superpowers/specs/2026-10-03-checkpoi
 
 ## Inventory
 
+### Independent-review additions
+
+#### `close_support_touch_count` / `close_resistance_touch_count`
+
+Versions: `close_support_touch_count_v1`, `close_resistance_touch_count_v1`.
+Unit count; confirmed close cluster from trailing252 sessions. Count distinct
+entries into a 0.5% band after all cluster pivots are confirmed, not pivot count.
+Required close history and confirmed level; unavailable without one. Daily,
+Decimal count, point-in-time and source contract above applies.
+
+#### `close_level_equality`
+
+Version `close_level_equality_v1`; state object containing all confirmed cluster
+means exactly equal to current close. Equality is separate from strict support
+below / resistance above. Empty list means no equality when valid levels exist;
+null means no confirmed levels. Trailing252 sessions, daily, close inputs only.
+
+#### `close_fib_nearest_extension`
+
+Version `close_fib_nearest_extension_v1`; level object. Select nearest positive
+extension by absolute fractional distance (name tie-break), separately from
+retracements. Requires a completed confirmed close leg; no leg means null.
+Daily; same anchor provenance and confirmation contract as other close Fib rows.
+
+Fundamental duration selection is explicit: latest economic end date, then
+shortest available reported duration (3M before6M before9M before12M). Audit
+stores the selected duration; no YTD-to-quarter synthesis. YoY compares matching
+economic start/end periods approximately one year apart (350–380days), unit,
+concept, taxonomy, entity and reporting basis, never the filing's fiscal year.
+Sector breadth is the positive one-session close-return fraction of a complete
+dated constituent set; SMA50 participation is the fraction strictly above SMA50.
+Neither substitutes a partial research shortlist for sector constituents.
+
 ### trend
 
 #### `sma20`
