@@ -188,3 +188,23 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - Codex: see `docs/review/CODEX_PATH_2026-10-02.md`. App update moved the executable; Control A's fallback is stale; scheduled runs do not use Codex; next release install would roll back on `test_installed_isolation`; a path-only fix is not sufficient (codex-cli 0.159.0 ignores `tools.view_image`, Control A's guard stops on the `configWarning`). Prepared, NOT installed: branch `claude/codex-path-fix` @ `9548ff5`.
 - Tests: cloud 869 passed / 1 skipped. Native Mac 814 passed / 4 failed (3 pre-existing overlay failures + the isolation test, now failing on the `configWarning`).
 - Firm Lab fills 0; Firm trading trial NOT REGISTERED; October research stop not superseded; Lane B PAUSED; real execution DISABLED.
+
+## 2026-10-03 14:20 ET — Checkpoint 4 (free research data foundation)
+
+- Control A: UNCHANGED. Release N, fingerprint `901f7606…c876` (240 files), re-verified 14:19 ET; no stop file; runner not restarted.
+- Firm Lab branch `claude/firm-lab-foundation` @ `3dc4bbe` (+ docs commit), pushed. Dashboard overlay v24 deployed
+  (backup `agent-desk.3K4Fam.v23-20261003`); Firm Lab DB migrated to registry version 5 (backup `firm_lab.before-checkpoint4.db`).
+- Built: VTI issuer distributions → VTI price-return and total-return indices → `TOTAL_RETURN_RULER` (legacy ruler kept
+  as `LEGACY_PRICE_RETURN_RULER`); SEC XBRL company facts with fail-closed normalization; factual earnings events;
+  `/firm-lab` sections Benchmark readiness, Fundamentals readiness, Earnings events.
+- Live: distributions run OK (6 stored, 1,134 observations, independently verified). `vti_total_return` and
+  `total_return_ruler` AVAILABLE; `corporate_actions` PARTIAL_EXISTING (VTI distributions only).
+- NOT YET RUN LIVE: `python -m firm_lab_collectors.cli xbrl` and `… earnings` (both NOT_CONFIGURED: the operator's shell had
+  no `FIRM_LAB_SEC_USER_AGENT`). `fundamentals` and `earnings_events` stay UNAVAILABLE until they run. Checked against the
+  operator's captured SEC samples: 140 facts, all confirmed in the filing documents.
+- Codex maintenance: `claude/codex-path-fix` @ `ca4aacf`, proven natively (29 + 873 passed), NOT installed. See
+  `CODEX_MAINTENANCE_2026-10-03.md`. Any future Control A release must include it or the install rolls back.
+- Tests: cloud 895 passed / 1 skipped; Mac native overlay 840 passed / 4 failed (same four as before).
+- Firm Lab: BUILD_OBSERVE, fills 0, trial NOT REGISTERED, October stop not superseded, Lane B PAUSED, real execution DISABLED.
+- Open decision for the operator: which fields count as critical for `fundamentals` (currently revenue, net income,
+  diluted EPS, operating cash flow; total debt is never resolved under the current rules).
