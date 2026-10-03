@@ -31,12 +31,14 @@ def cli_identity(executable=None):
 
 
 def command(executable, *, collector=False, model=None):
+    # Image viewing is switched off with features.view_image: codex-cli 0.159.0 ignores the older tools.view_image key and
+    # says so in a configWarning, which validate_notification treats as an unexpected capability. No warning is tolerated.
     # Empty maps merge with user config. Disable each inherited server explicitly.
     config_path=Path(os.environ.get('CODEX_HOME',str(Path.home()/'.codex')))/'config.toml'
     cfg=tomllib.loads(config_path.read_text()) if config_path.exists() else {}
     names=set(cfg.get('mcp_servers',{})) | {'robinhood-trading'}
     if any(not re.fullmatch(r'[A-Za-z0-9_-]+',n) for n in names): raise CapabilityError('Unsupported inherited server name')
-    settings=['features.apps=false','features.plugins=false','features.shell_tool=false','features.unified_exec=false','features.multi_agent=false','features.tool_suggest=false','project_doc_max_bytes=0','tools.view_image=false','web_search="disabled"','model_reasoning_effort="low"']
+    settings=['features.apps=false','features.plugins=false','features.shell_tool=false','features.unified_exec=false','features.multi_agent=false','features.tool_suggest=false','project_doc_max_bytes=0','features.view_image=false','web_search="disabled"','model_reasoning_effort="low"']
     settings += [f'mcp_servers.{name}.enabled=false' for name in sorted(names)]
     if collector:
         settings += ['mcp_servers.robinhood-trading.enabled=true','mcp_servers.robinhood-trading.url="https://agent.robinhood.com/mcp/trading"','mcp_servers.robinhood-trading.enabled_tools='+json.dumps(sorted(SCHEMAS))]
