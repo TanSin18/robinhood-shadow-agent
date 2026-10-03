@@ -1,5 +1,33 @@
 # Firm Lab — architecture and status
 
+## Checkpoint 5 continuation (2026-10-03)
+
+See `CODEX_CHECKPOINT5_HANDOFF.md` for current, verified progress. The historical
+status blocks below describe earlier checkpoints; they are not current acceptance
+evidence. Macro storage/validation is now implemented on a development branch,
+but live macro ingestion and UI remain unfinished. No macro trading model exists.
+
+### Checkpoint 6 — future feature work, not activated
+
+The Technical Structure family will include moving averages, momentum, RSI,
+MACD, ATR/volatility, support/resistance, breakout/breakdown structure, candlestick
+geometry, volume confirmation, Fibonacci retracements/extensions, distance to the
+nearest Fibonacci level, confluence with support/resistance and moving averages,
+later VWAP confluence, and reaction/rejection around levels. Fibonacci anchors
+must come from deterministic swing-high/swing-low logic—never manual drawing or
+LLM visual interpretation.
+
+Sector features planned for Checkpoint 6: relative momentum, breadth, volatility,
+constituent participation and leadership change. No sector rotation or technical
+strategy is introduced by Checkpoint 5.
+
+### Checkpoint 7 — future validation, not a buy rule
+
+Fibonacci is a testable feature, not a trading rule. Test incremental out-of-sample
+value against simpler technical features; if it adds none, retain it only as an
+explanation. A 61.8% retracement is not automatically a BUY. No technical engine,
+ML model, options strategy or new trading schedule is activated by this roadmap.
+
 Firm Lab is built beside Control A and is completely separate from it. It starts, and at this checkpoint stays,
 in `BUILD_OBSERVE`: it may store data, features, research records, capability status, counterfactual
 recommendations and benchmark observations, and show them read-only. It may not create a paper order, write a
