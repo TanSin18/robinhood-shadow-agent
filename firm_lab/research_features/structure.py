@@ -4,7 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 import hashlib
 from .technical import precision, prices
-from .types import FeatureResult, content_hash
+from .types import FeatureResult, content_hash, timestamp
 
 PIVOT_VERSION = 'close_fractal_3x3_v1'
 
@@ -105,7 +105,8 @@ def result_builder(snapshot,request,module):
         available=value is not None
         return FeatureResult(request.instrument,family,name,
             value if isinstance(value,(bool,dict)) or value is None else str(value),unit,
-            request.as_of_session,max(b['known_at'] for b in bars) if available else None,
+            request.as_of_session,max(timestamp(b[k]) for b in bars for k in
+                ('known_at','accepted_timestamp','published_at') if b.get(k)) if available else None,
             'AVAILABLE' if available else 'UNAVAILABLE',None if available else reason or 'INSUFFICIENT_HISTORY',
             refs,name+'_v1',digest,{'knowledge_cutoff':request.knowledge_cutoff,
                 'basis':'CLOSE_ONLY',**(audit or {})})

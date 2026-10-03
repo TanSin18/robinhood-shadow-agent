@@ -18,4 +18,6 @@ def definitions():
     from .fibonacci import fibonacci_definitions
     from .ohlcv import ohlcv_definitions
     from .sector import sector_definitions
-    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()+sector_definitions()
+    from .fundamental import fundamental_definitions
+    from .events import event_definitions
+    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()+sector_definitions()+fundamental_definitions()+event_definitions()
