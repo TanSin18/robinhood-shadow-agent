@@ -17,4 +17,5 @@ def definitions():
     from .structure import structure_definitions
     from .fibonacci import fibonacci_definitions
     from .ohlcv import ohlcv_definitions
-    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()
+    from .sector import sector_definitions
+    return technical_definitions()+structure_definitions()+fibonacci_definitions()+ohlcv_definitions()+sector_definitions()
