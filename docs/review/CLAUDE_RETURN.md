@@ -208,3 +208,21 @@ Clean cold-start handoff written: `docs/review/HANDOFF_2026-09-30_EVENING.md`. `
 - Firm Lab: BUILD_OBSERVE, fills 0, trial NOT REGISTERED, October stop not superseded, Lane B PAUSED, real execution DISABLED.
 - Open decision for the operator: which fields count as critical for `fundamentals` (currently revenue, net income,
   diluted EPS, operating cash flow; total debt is never resolved under the current rules).
+
+## 2026-10-03 15:00 ET — Checkpoint 4 closed
+
+- Control A: UNCHANGED. Release N, fingerprint `901f7606…c876` (240 files), re-verified 14:59 ET; no stop file; runner not restarted.
+- Codex maintenance: `PREPARED_AND_PROVEN_NOT_INSTALLED` (`claude/codex-path-fix` @ `ca4aacf`). The next Control A release must
+  include it, or the install tests fail and the install rolls back. Not installed in this closure.
+- Firm Lab `claude/firm-lab-foundation` @ `8c25f1e` (+ docs), overlay v25 deployed (backup `agent-desk.3K4Fam.v24-20261003`);
+  DB backup `firm_lab.before-checkpoint4-closure.db`.
+- Fundamentals rule (operator, 14:36 ET): eight required fields incl. a debt figure; documented debt-components rule
+  (rules v2); optional gross profit and capex. Live: 531 facts / 20 filings / 5 companies, 0 refused, 530 confirmed, 1 not found.
+  `fundamentals = PARTIAL_EXISTING` (MSFT total debt unresolved; GOOGL total debt unresolved for one filing and not confirmed for another).
+- Earnings events live: 20 stored, release document resolved for all, `earnings_events = AVAILABLE`. No signal of any kind.
+- Benchmark provenance: VTI distributions `benchmark_only = true`; `firm_lab/usage.py` gate; feature store refuses them (tested).
+  `vti_total_return` and `total_return_ruler` AVAILABLE.
+- Tests: cloud 899 passed / 1 skipped; Mac native overlay 844 passed / 4 failed (the same four as before).
+- Known follow-up (not done, on purpose): the filing-document reader does not read a tag nested inside another tag.
+- Firm Lab: BUILD_OBSERVE, fills 0, trial NOT REGISTERED, October stop not superseded, Lane B PAUSED, real execution DISABLED.
+- Not begun: macro features, sector features, technical feature engine, intraday integration, options strategy, ML, trial registration.
