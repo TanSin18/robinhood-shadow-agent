@@ -447,6 +447,51 @@ def _benchmarks(fl):
             'These are rulers only: nothing reads them to rank, select or trade. No outperformance figure is reported while Firm Lab is in BUILD / OBSERVE.</p>')
 
 
+def _macro(fl):
+    macro=fl.get('macro') or {}
+    rows={r['series']:r for r in macro.get('latest',[])}
+    caps={r['capability']:r for r in fl.get('capabilities',[])}
+    labels=[('fed_target_lower','Fed target lower','fed_policy_data'),('fed_target_upper','Fed target upper','fed_policy_data'),
+            ('treasury_2y','2-year constant maturity yield','treasury_yields'),('treasury_10y','10-year constant maturity yield','treasury_yields'),
+            ('cpi_headline_nsa','CPI headline · unadjusted index','cpi'),('cpi_core_nsa','CPI core · unadjusted index','cpi'),
+            ('pce_headline_mom_sa','PCE headline · monthly change, seasonally adjusted','pce'),
+            ('pce_core_mom_sa','PCE core · monthly change, seasonally adjusted','pce'),
+            ('unemployment_rate','Unemployment rate · seasonally adjusted','labor_data'),
+            ('nonfarm_payroll_change','Payroll change · thousands, seasonally adjusted','labor_data')]
+    cards=[]
+    for series,label,cap in labels:
+        row=rows.get(series); capability=caps.get(cap,{})
+        if not row:
+            body=f'<p>No validated observation stored · {esc(capability.get("status","UNAVAILABLE"))}</p><p>{esc(capability.get("detail","Publication evidence not confirmed."))}</p>'
+        else:
+            metadata=row.get('source_metadata') or {}
+            details=_facts([('Observation period',esc(row['period'])),('Unit',esc(row['unit'])),('Source',esc(row['source'])),
+                            ('Publisher identities',esc('; '.join(metadata.get('source_series_ids',[])) or 'Not recorded')),
+                            ('Seasonal adjustment',esc(metadata.get('seasonal_adjustment','Not recorded'))),
+                            ('Change versus previous decision (basis points)',esc(metadata.get('change_basis_points','Not applicable'))),
+                            ('Source URL',esc(row['source_url'])),('Publication time',esc(row['published_at'])),
+                            ('Known locally at',esc(row['known_at'])),('Captured at',esc(row['ingested_at'])),
+                            ('Revision',f'Local revision {esc(row["revision"])} — not proof of original economic vintage'),
+                            ('Content hash',esc(row['source_hash'])),('Capability',esc(capability.get('status','UNAVAILABLE')))])
+            body=f'<p><strong>{esc(row["value"])}</strong> · {esc(row["unit"])} · {esc(row["period"])}</p><details><summary>Source and timing</summary>{details}</details>'
+        cards.append(f'<article class="fl-bench"><h3>{esc(label)}</h3>{body}</article>')
+    events=[]
+    for row in macro.get('events',[]):
+        facts=_facts([('Period',esc(row['period'])),('Released value',esc(str(row.get('released_value'))+' '+row['unit'])),
+                      ('Scheduled time',esc(row.get('scheduled_at') or 'UNAVAILABLE')),
+                      ('Actual publication',esc(row.get('actual_published_at') or 'UNAVAILABLE')),
+                      ('Known locally at',esc(row['known_at'])),('Prior value',esc(row.get('prior_value') or 'UNAVAILABLE')),
+                      ('Previous local vintage value',esc(row.get('previous_local_value') if row.get('previous_local_value') is not None else 'UNAVAILABLE')),
+                      ('Revision',f'Local revision {esc(row["revision"])}'),('Source',esc(row['source_url'])),('Consensus','UNAVAILABLE')])
+        events.append(f'<details><summary>{esc(row["event_type"])} · {esc(row["series"])} · {esc(row["period"])}</summary>{facts}</details>')
+    return ('<p><b>FACTUAL MACRO DATA ONLY — NO MACRO TRADING SIGNAL</b></p>'
+            '<p>Data state: validated facts below. Model state: <b>macro_regime = NOT_STARTED</b>. Trading state: <b>NO TRADES</b>.</p>'
+            '<p>Capture is local availability, not a historical backtest permission. Monthly changes and index levels are different measures.</p>'
+            +'<div class="fl-benches">'+''.join(cards)+'</div><h3>Recent factual events</h3>'
+            '<p>One record per series and local vintage; multiple records can belong to one release. No future schedule is inferred.</p>'
+            +(''.join(events) or '<p>No validated events stored.</p>'))
+
+
 def render(state):
     fl = state.get('firm_lab') or {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'firm_trading_trial': 'NOT REGISTERED'}
     head = ('<div class="room-head fl-head"><div><h1>Firm Lab</h1>'
@@ -478,6 +523,7 @@ def render(state):
     return (head
             + f'<section class="v10-panel" id="fl-status"><h2>System status</h2>{_facts(status)}</section>'
             + f'<section class="v10-panel" id="fl-readiness"><h2>Data Readiness</h2>{_readiness(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-macro"><h2>Macro / Regime Readiness</h2>{_macro(fl)}</section>'
             + f'<section class="v10-panel" id="fl-capabilities"><h2>Derived measures and strategy components</h2>{_capabilities(fl)}</section>'
             + f'<section class="v10-panel" id="fl-fundamentals"><h2>Fundamentals readiness</h2>{_fundamentals(fl)}</section>'
             + f'<section class="v10-panel" id="fl-earnings"><h2>Earnings events</h2>{_earnings(fl)}</section>'

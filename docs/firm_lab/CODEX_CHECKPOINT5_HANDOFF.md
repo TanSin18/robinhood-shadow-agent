@@ -1,5 +1,49 @@
 # Checkpoint 5 — Codex continuation
 
+## 2026-10-03 17:05 ET — Parsers, isolated real validation, factual UI; gate incomplete
+
+Continue from this entry, not the storage-only entry below. Accepted base
+`5d4b4fe` was retained. Full current results and exact remaining boundaries are
+in [CHECKPOINT5_REPORT.md](CHECKPOINT5_REPORT.md); provider research is in
+[CHECKPOINT5_MARKET_DATA_DECISION.md](CHECKPOINT5_MARKET_DATA_DECISION.md).
+
+New: deterministic official-release parsers; manual research-only capture/replay;
+atomic event/observation insertion; content-checked cache; per-document rejection
+receipts; family-scoped capability updates; read-only macro UI with disclosures.
+Isolated real validation: Fed 6 observations, PCE 12, events 18. PCE is monthly
+change, not an index level. Real July revisions pass an as-of check. BLS CPI and
+labor returned 403; their parsers are synthetic-tested only. Treasury's 570 CMT
+candidates all lack exact publication timing and were rejected. No FRED date-only
+vintage is promoted. Macro regime remains NOT_STARTED. No new model/strategy.
+
+Tests: 69 focused, 250 Firm Lab, full native 968 passed / 1 pre-existing failure
+(installed Codex configWarning). No cloud executor/test result. No maintenance
+install or guard relaxation. Five independent-review findings reproduced and
+fixed with tests. Current Control A fingerprint remains the one below.
+
+No live research migration, dashboard deployment, official DB write or service
+restart. The temporary isolated UI test server was stopped. No paid API calls.
+Validation database: `robinhood-diagnostics/firm_lab/checkpoint5-final-validation.db`.
+Source captures: `robinhood-diagnostics/firm_lab/checkpoint5-capture-1`.
+These are local diagnostics, not GitHub artifacts or official experiment data.
+
+Manual commands (from this worktree, primary `.venv/bin/python`):
+
+```sh
+python -m firm_lab_collectors.macro_ingest --database /absolute/isolated/research.db --official-database /absolute/official/agent.db --capture-directory /absolute/new/capture-directory
+python -m firm_lab_collectors.macro_ingest --database /absolute/isolated/research.db --official-database /absolute/official/agent.db --from-capture /absolute/existing/capture-directory
+```
+
+The first deliberately captures the fixed June–September 2026 validation window;
+it is not an ongoing release watcher. The second makes zero requests. Exit 2
+means one or more rejected documents/rows: inspect printed receipt and the
+`macro_ingest_receipts` table, never interpret it as complete source coverage.
+No scheduler or broker dependency. Do not point these at the live research DB
+until the remaining validation/deployment gate is satisfied. Never use Official.
+
+Next is **only closing Checkpoint 5's documented gaps**, not Checkpoint 6. Do not
+rebuild the completed foundation/parsers or re-fetch accepted samples to restart.
+
 ## 2026-10-03 16:04 ET — Storage foundation; checkpoint NOT complete
 
 Owner: Codex. Development branch: `codex/checkpoint5-macro`.

@@ -841,7 +841,7 @@ def test_thetadata_needs_the_operators_terminal_and_tier(tmp_path):
 
 # ====================================================================================================== isolation
 STDLIB_ALLOWED = {'__future__', 'argparse', 'csv', 'dataclasses', 'datetime', 'decimal', 'gzip', 'hashlib', 'html', 'io', 'json', 'os', 'pathlib', 're', 'time',
-                  'typing', 'urllib'}
+                  'typing', 'urllib', 'zoneinfo'}
 TRADING_MODULES = ('agents', 'broker', 'risk', 'data', 'research', 'eval', 'scripts', 'broker_proxy')
 TRADING_WORDS = ('PaperBroker', 'PaperInbox', 'RiskEngine', 'issue_desk_entry', 'submit_order', 'place_order', 'robinhood.com', 'robinhood-shadow-agent', 'robinhood_', 'launchctl', 'plist',
                  'keychain_get', 'find-generic-password -s robinhood')

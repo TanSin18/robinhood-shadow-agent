@@ -6,6 +6,7 @@ a release time. Collectors must supply cited timing evidence or reject the row.
 ingestion). Historical publication alone never backdates a later capture.
 """
 from datetime import date, datetime, timezone
+from contextlib import nullcontext
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
@@ -18,6 +19,10 @@ from .store import FirmLabStore, canonical
 # Identity, units and broad plausibility bounds, not a macro scoring rubric.
 # The percent ranges allow negative rates; payroll change is not payroll level.
 SERIES = {
+    "cpi_headline_nsa": ("index_1982_84_100_nsa", 0, 10000, ("BLS",)),
+    "cpi_core_nsa": ("index_1982_84_100_nsa", 0, 10000, ("BLS",)),
+    "pce_headline_mom_sa": ("percent_change_mom_sa", -100, 100, ("BEA",)),
+    "pce_core_mom_sa": ("percent_change_mom_sa", -100, 100, ("BEA",)),
     "fed_target_lower": ("percent", -10, 100, ("Federal Reserve", "FRED")),
     "fed_target_upper": ("percent", -10, 100, ("Federal Reserve", "FRED")),
     "effective_federal_funds": ("percent", -10, 100, ("New York Fed", "FRED")),
@@ -42,8 +47,8 @@ SOURCE_HOSTS = {
 EVENT_SERIES = {
     "fomc_rate_decision": ("fed_target_lower", "fed_target_upper"),
     "fomc_statement": ("fed_target_lower", "fed_target_upper"),
-    "cpi_release": ("cpi_headline", "cpi_core"),
-    "pce_release": ("pce_headline", "pce_core"),
+    "cpi_release": ("cpi_headline", "cpi_core", "cpi_headline_nsa", "cpi_core_nsa"),
+    "pce_release": ("pce_headline", "pce_core", "pce_headline_mom_sa", "pce_core_mom_sa"),
     "payrolls_release": ("nonfarm_payroll_change",),
     "unemployment_release": ("unemployment_rate",),
 }
@@ -189,13 +194,14 @@ class MacroStore:
             for statement in SCHEMA:
                 db.execute(statement)
 
-    def add_observation(self, row, *, raw, now):
+    def add_observation(self, row, *, raw, now, _connection=None):
         row = validate_observation(row, raw=raw, now=now)
         identity = {k: v for k, v in row.items() if k not in ("ingested_at", "known_at")}
         digest = hashlib.sha256(canonical(identity).encode()).hexdigest()
-        with self.lab.connect() as db:
+        with (self.lab.connect() if _connection is None else nullcontext(_connection)) as db:
             # Serialize revision checks with insertion; another writer cannot race the chain.
-            db.execute("BEGIN IMMEDIATE")
+            if _connection is None:
+                db.execute("BEGIN IMMEDIATE")
             if db.execute("SELECT 1 FROM macro_observations WHERE record_hash=?", (digest,)).fetchone():
                 return "DUPLICATE"
             prior = db.execute("SELECT revision,published_at FROM macro_observations WHERE series=? AND period=? "
@@ -218,12 +224,13 @@ class MacroStore:
                 latest[row["series"], row["period"]] = row
         return list(latest.values())
 
-    def add_event(self, row, *, raw, now):
+    def add_event(self, row, *, raw, now, _connection=None):
         row = validate_event(row, raw=raw, now=now)
         identity = {k: v for k, v in row.items() if k not in ("ingested_at", "known_at")}
         digest = hashlib.sha256(canonical(identity).encode()).hexdigest()
-        with self.lab.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
+        with (self.lab.connect() if _connection is None else nullcontext(_connection)) as db:
+            if _connection is None:
+                db.execute("BEGIN IMMEDIATE")
             if db.execute("SELECT 1 FROM macro_events WHERE record_hash=?", (digest,)).fetchone():
                 return "DUPLICATE"
             prior = db.execute("SELECT revision,published_at,payload_json FROM macro_events WHERE event_id=? "
