@@ -2,28 +2,29 @@
 
 **MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE.**
 
-## State at the time of writing (2026-10-04)
+## State (2026-10-04 11:31 ET)
 
-**NOT DEPLOYED.** The research, validation and review were done in the cloud container. The Mac was reachable until
-2026-10-03 22:37 ET and not on 2026-10-04 when the work was ready (the link was tried at 08:40, 09:10, 09:55, 10:00 and
-10:05 ET and each time the device was not connected), so nothing of Checkpoint 7 has been written to the Mac: no
-overlay file, no laboratory file, no capability row. The Firm Lab page on the Mac is as Checkpoint 6 left it.
+**INSTALLED on the Mac at 11:30 ET (15:30 UTC), under the operator's order of 09:51 ET.** The dashboard restart, the
+live page check and the native test run are the operator's and are recorded at the end of this note when done.
 
-The operator's order of 2026-10-04 09:51 ET accepts the scientific result and fixes the deployment scope: the
-laboratory file, the six read-only dashboard files and the eight capability rows below, and nothing else. The source
-to deploy is commit `35d6656`. A bundle with exactly these files and their sha256 sums is staged in the session.
-
-Last checks made on the Mac (2026-10-03 22:36 ET, read-only):
-
-| | |
+| Step | Evidence |
 |---|---|
-| Control A fingerprint | `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`, 240 files, match |
-| Stop file | none |
-| `daily.log` | being written by the one registered service |
-| Live research database | sha256 `8611da11beda1d97012c9ea773a3c86777805ce28a526e4785148365eaa27b14`, unchanged since the snapshot was taken |
-| Dashboard overlay | the four files this checkpoint changes equal the Checkpoint 6 source exactly |
+| Control A before | fingerprint `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`, 240 files, match; no stop file; `daily.log` being written (15:28 UTC) |
+| Bundle on the Mac | `robinhood-diagnostics/checkpoint7-modeling-20261003/bundle/`; every file checked against its sha256 |
+| Overlay before | the four existing files equal the Checkpoint 6 source (`b092f1ea…`, `54449760…`, `3aaa9193…`, `cf317b14…`); backed up to `overlay-backup/` with their sums |
+| Six overlay files | installed; each equals the sha256 in the table below. `firm_lab/modeling/` and `firm_lab/modeling_capability.py` are not in the overlay |
+| Laboratory file | `robinhood-diagnostics/firm_lab/firm_lab_modeling_lab.db`, sha256 `2d383629a582a0a782a4969533f1c7ae17720471a603961c5275598ee83bc6ce` |
+| Research database backup | `research-db-backup/firm_lab.db.before-checkpoint7`, sha256 `8611da11beda1d97012c9ea773a3c86777805ce28a526e4785148365eaa27b14` (unchanged since the modeling snapshot was taken) |
+| Capability rows | written on a copy by `firm_lab.modeling_capability.record` from the stored report `de322bfd…`, then put in place. Table-by-table comparison of all 31 tables and the schema: only `data_capabilities` (40 → 44 rows) and `events` (52 → 57) differ. The 52 earlier events are preserved as a prefix; the 5 appended are capability-status events. New rows: `research_modeling`, `deep_learning`, `transformer_models`, `rl_policy`. Changed rows: `ml_ranker` (NOT_STARTED → RESEARCH_ONLY) and the detail text of `macro_regime`, `portfolio_optimizer`, `options_strategy` (still NOT_STARTED) |
+| Research database after | sha256 `f58b1d02910c5e3608a25335392f331c5d5bbfd968f29d07c83a444c4d903015`; integrity check ok; BUILD_OBSERVE; experiment registry empty; no order, fill, position, account or cash table |
+| Live capability states | research_modeling, ml_ranker, deep_learning, transformer_models = RESEARCH_ONLY; macro_regime, portfolio_optimizer, options_strategy, rl_policy = NOT_STARTED |
+| Page from the installed overlay | rendered on the Mac from the overlay's own code against the live files (no server): the laboratory section is present with 106 registry rows, the permanent warning once, "No validated trading model exists", strict point-in-time samples 0, the retrospective count, Fibonacci INCONCLUSIVE, networks insufficient data, the holdout disclosure, ablation, calibration, disagreement and explainability; no action wording; not the degraded notice |
+| Read-only | the research database and the laboratory file have the same sha256 after the page was rendered |
+| Control A after | fingerprint `901f7606…c876`, 240 files, match; no stop file; `daily.log` being written (15:30 UTC). Nothing in the registered runtime was written; `com.openai.robinhood-daily` was not restarted |
+| Source for the native run | `checkpoint7-modeling-20261003/src/`, a plain export of commit `7292a4d` (its overlay files are identical to `35d6656`) |
 
-The end-of-checkpoint Control A check required by the handoff has to be repeated when the Mac is reachable.
+The operator ran the three commands once at 11:27 ET, before the install: the dashboard restarted, the page check
+wrote 0, and the test command had no `src/` folder. Harmless; they are to be run again now.
 
 ## What deployment consists of
 
@@ -58,11 +59,11 @@ that. `com.openai.robinhood-daily` is not touched.
 
    ```sh
    launchctl kickstart -k gui/$(id -u)/com.openai.robinhood-inbox
-   curl -s http://127.0.0.1:8765/firm-lab | grep -c "MODEL RESEARCH ONLY" | tee ~/LocalProjects/robinhood-diagnostics/checkpoint7-modeling-20261003/page-check.txt
-   cd ~/LocalProjects/robinhood-diagnostics/checkpoint7-modeling-20261003/src && ~/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q -p no:cacheprovider 2>&1 | tee ../native-tests.txt
+   sleep 5; cd ~/LocalProjects/robinhood-diagnostics/checkpoint7-modeling-20261003 && curl -s http://127.0.0.1:8765/firm-lab -o page.html; grep -c "MODEL RESEARCH ONLY" page.html | tee page-check.txt
+   cd ~/LocalProjects/robinhood-diagnostics/checkpoint7-modeling-20261003/src && PY=~/LocalProjects/robinhood-shadow-agent/.venv/bin/python && $PY --version 2>&1 | tee ../native-tests.txt && $PY -m pytest -q -p no:cacheprovider 2>&1 | tee -a ../native-tests.txt
    ```
 
-   `src/` is a plain export of commit `35d6656` placed there at deployment; the suite does not need a git checkout.
+   `src/` is a plain export of commit `7292a4d` placed there at deployment; the suite does not need a git checkout.
    Record the interpreter (`python --version`), the commit, the command, and passes, failures and warnings.
 
    Expected native failures, each independent of Checkpoint 7 and none to be worked around:
