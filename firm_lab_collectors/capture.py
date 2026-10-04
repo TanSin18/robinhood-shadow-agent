@@ -81,11 +81,10 @@ def run(out_dir, *, environ=None, sec_transport=None, plain_transport=None) -> d
 
 
 # ---------------------------------------------------------------------------- macro samples (Checkpoint 5)
-FRED_API_KEY = 'FIRM_LAB_FRED_API_KEY'               # optional; a free research key the operator keeps locally. Never printed or stored.
-MACRO_HOSTS = ('markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'fred.stlouisfed.org', 'alfred.stlouisfed.org',
-               'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov')
-FRED_API_HOST = 'api.stlouisfed.org'
-FRED_SERIES = ('DFEDTARU', 'DFEDTARL', 'DFF', 'DGS2', 'DGS10', 'DGS3MO', 'CPIAUCSL', 'CPILFESL', 'PCEPI', 'PCEPILFE', 'UNRATE', 'PAYEMS', 'GDPC1')
+# FRED and ALFRED are not asked (Checkpoint 8, 2026-10-04). The St. Louis Fed's terms of use prohibit, without the Bank's written
+# consent, storing or archiving FRED content and using it to develop or train machine-learning systems. The same public series are
+# taken from the agencies that publish them. A key in the environment is ignored.
+MACRO_HOSTS = ('markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov')
 BLS_SERIES = ('CUSR0000SA0', 'CUSR0000SA0L1E', 'CUUR0000SA0', 'LNS14000000', 'CES0000000001')
 FED_STATEMENT = re.compile(re.escape('https://www.federalreserve.gov/newsevents/pressreleases/monetary') + r'\d{8}a\.htm')
 MACRO_PUBLIC = (
@@ -104,13 +103,12 @@ MACRO_PUBLIC = (
     ('bls_empsit.rss', 'https://www.bls.gov/feed/empsit.rss'),
     ('bea_schedule.htm', 'https://www.bea.gov/news/schedule'),
     ('bea_rss.xml', 'https://apps.bea.gov/rss/rss.xml'),
-    ('alfred_CPIAUCSL.csv', 'https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=CPIAUCSL&cosd=2025-01-01'),
 )
 
 
 def run_macro(out_dir, *, environ=None, transport=None, keyed_transport=None) -> dict:
-    """Raw macro samples from official public sources, saved as received, with a manifest. Nothing is parsed or stored in the
-    database. The optional FRED key is used only for the FRED API host and never appears in a saved file or the manifest."""
+    """Raw macro samples from the agencies that publish them, saved as received, with a manifest. Nothing is parsed or stored in the
+    database. FRED and ALFRED are not asked. ``keyed_transport`` is accepted for older callers and never used."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     manifest = []
@@ -127,20 +125,6 @@ def run_macro(out_dir, *, environ=None, transport=None, keyed_transport=None) ->
                     break
     for series in BLS_SERIES:
         _save(out, f'bls_{series}.json', net.get(f'https://api.bls.gov/publicAPI/v1/timeseries/data/{series}', accept), manifest)
-    for series in FRED_SERIES:
-        _save(out, f'fred_{series}.csv', net.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd=2025-01-01', accept), manifest)
-    key = config.value(FRED_API_KEY, environ)
-    if key and re.fullmatch(r'[0-9a-z]{32}', key):
-        keyed = keyed_transport or HttpTransport([FRED_API_HOST], user_agent=PLAIN_AGENT, min_interval=1.0, timeout=30)
-        for series in ('CPIAUCSL', 'PAYEMS', 'PCEPI', 'DGS10', 'DFEDTARU'):
-            _save(out, f'fredapi_{series}_vintages.json', keyed.get(
-                f'https://{FRED_API_HOST}/fred/series/observations?series_id={series}&api_key={key}&file_type=json&observation_start=2025-01-01'
-                '&realtime_start=2025-01-01&realtime_end=9999-12-31'), manifest)
-        _save(out, 'fredapi_CPIAUCSL_release.json', keyed.get(f'https://{FRED_API_HOST}/fred/series/release?series_id=CPIAUCSL&api_key={key}&file_type=json'),
-              manifest)
-        _save(out, 'fredapi_release10_dates.json', keyed.get(
-            f'https://{FRED_API_HOST}/fred/release/dates?release_id=10&api_key={key}&file_type=json&realtime_start=2025-01-01&include_release_dates_with_no_data=true'),
-            manifest)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=1))
-    return {'directory': str(out), 'fred_api_key_present': bool(key), 'requested': len(manifest), 'saved': sum(1 for m in manifest if m['file']),
+    return {'directory': str(out), 'requested': len(manifest), 'saved': sum(1 for m in manifest if m['file']),
             'refused': [{'url': m['url'], 'status': m['status'], 'error': m['error']} for m in manifest if not m['file']]}

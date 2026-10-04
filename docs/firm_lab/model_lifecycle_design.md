@@ -131,3 +131,25 @@ an untouched final test set for future model selection. Any later model research
 separately reserved untouched evaluation period, declared before a model is fitted, and strict point-in-time inputs:
 the Checkpoint 7 samples are all retrospective (0 strict point-in-time samples), so nothing learned there is evidence
 of a historical trading edge.
+
+## Data sources after Checkpoint 8 (design only; nothing is automated)
+
+No production model exists and no retraining runs. This section records how the lifecycle would use the historical
+data foundation, so that a later design does not have to rediscover it.
+
+- **Training data has an identity.** A model would name a `pit-dataset-v2` dataset hash. That hash covers the stored
+  bar blocks, the capture files, the universe version, the feature code, the target version and the split version. A
+  refresh of the vendor archive that changes any past block changes the hash, so a retrained model can never be
+  compared with its predecessor as if they had seen the same data.
+- **A vendor revision is an event.** A new capture that changes a past value is stored as a new version and counted
+  (`VALUE_CHANGE`). A future retraining rule should treat a non-zero count as a reason to stop and look, not as a
+  reason to retrain.
+- **Evidence tiers travel with the rows.** A row built from the archive is tier B; a row whose bars Firm Lab stored
+  before the next session opened is tier A. A later monitoring design should report the two separately, because only
+  tier A data has the same provenance as what a live system would see.
+- **The licence bounds the lifecycle.** Raw vendor data must be deleted within 30 days of cancelling. A model, its
+  report and its dataset manifest may be kept; the dataset itself cannot be rebuilt without a subscription.
+- **Holdouts are spent once.** The historical holdout and the forward holdout of `c9-chronology-v1` are sealed. A
+  retraining loop must never read either; a champion-challenger comparison needs its own newly accumulated period.
+- **Forward capture is the missing piece for tier A.** It would need one hand-started or scheduled research job per
+  session. No such job exists, and adding one is an operator decision outside this checkpoint.

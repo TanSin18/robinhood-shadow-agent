@@ -17,24 +17,26 @@ from .store import FirmLabStore, canonical
 
 
 # Identity, units and broad plausibility bounds, not a macro scoring rubric.
+# FRED is not an accepted source (2026-10-04): its terms prohibit storing the data and using it to train models without
+# written consent. Every series names the agency that publishes it.
 # The percent ranges allow negative rates; payroll change is not payroll level.
 SERIES = {
     "cpi_headline_nsa": ("index_1982_84_100_nsa", 0, 10000, ("BLS",)),
     "cpi_core_nsa": ("index_1982_84_100_nsa", 0, 10000, ("BLS",)),
     "pce_headline_mom_sa": ("percent_change_mom_sa", -100, 100, ("BEA",)),
     "pce_core_mom_sa": ("percent_change_mom_sa", -100, 100, ("BEA",)),
-    "fed_target_lower": ("percent", -10, 100, ("Federal Reserve", "FRED")),
-    "fed_target_upper": ("percent", -10, 100, ("Federal Reserve", "FRED")),
-    "effective_federal_funds": ("percent", -10, 100, ("New York Fed", "FRED")),
-    "treasury_2y": ("percent", -10, 100, ("US Treasury", "FRED")),
-    "treasury_10y": ("percent", -10, 100, ("US Treasury", "FRED")),
-    "treasury_3m": ("percent", -10, 100, ("US Treasury", "FRED")),
-    "cpi_headline": ("index_1982_84_100_sa", 0, 10000, ("BLS", "FRED")),
-    "cpi_core": ("index_1982_84_100_sa", 0, 10000, ("BLS", "FRED")),
-    "pce_headline": ("index_2017_100_sa", 0, 10000, ("BEA", "FRED")),
-    "pce_core": ("index_2017_100_sa", 0, 10000, ("BEA", "FRED")),
-    "unemployment_rate": ("percent", 0, 100, ("BLS", "FRED")),
-    "nonfarm_payroll_change": ("thousand_persons_sa", -100000, 100000, ("BLS", "FRED")),
+    "fed_target_lower": ("percent", -10, 100, ("Federal Reserve",)),
+    "fed_target_upper": ("percent", -10, 100, ("Federal Reserve",)),
+    "effective_federal_funds": ("percent", -10, 100, ("New York Fed",)),
+    "treasury_2y": ("percent", -10, 100, ("US Treasury",)),
+    "treasury_10y": ("percent", -10, 100, ("US Treasury",)),
+    "treasury_3m": ("percent", -10, 100, ("US Treasury",)),
+    "cpi_headline": ("index_1982_84_100_sa", 0, 10000, ("BLS",)),
+    "cpi_core": ("index_1982_84_100_sa", 0, 10000, ("BLS",)),
+    "pce_headline": ("index_2017_100_sa", 0, 10000, ("BEA",)),
+    "pce_core": ("index_2017_100_sa", 0, 10000, ("BEA",)),
+    "unemployment_rate": ("percent", 0, 100, ("BLS",)),
+    "nonfarm_payroll_change": ("thousand_persons_sa", -100000, 100000, ("BLS",)),
 }
 SOURCE_HOSTS = {
     "Federal Reserve": ("www.federalreserve.gov", "federalreserve.gov"),
@@ -42,7 +44,6 @@ SOURCE_HOSTS = {
     "US Treasury": ("home.treasury.gov", "www.treasury.gov"),
     "BLS": ("www.bls.gov", "api.bls.gov"),
     "BEA": ("www.bea.gov", "apps.bea.gov"),
-    "FRED": ("api.stlouisfed.org", "fred.stlouisfed.org", "alfred.stlouisfed.org"),
 }
 EVENT_SERIES = {
     "fomc_rate_decision": ("fed_target_lower", "fed_target_upper"),

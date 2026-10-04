@@ -1,5 +1,11 @@
 # Firm Lab — provider evaluation matrix
 
+> **2026-10-04, Checkpoint 8.** For daily historical research data this matrix is superseded by
+> `CHECKPOINT8_PROVIDER_DECISION.md`, which was read from current vendor terms: Sharadar Prices (Full History) is
+> recommended and awaits an operator purchase decision; Massive's individual plans are display-use only; FRED and
+> ALFRED are not used (their terms prohibit storage and model training without written consent). The rows below are
+> kept as they were written on 2026-10-01.
+
 Checked 2026-10-01. Nothing here is connected or purchased, and no provider is selected. Fit labels are for the
 stated domain only and rest on the evidence in the row; where the evidence does not support a choice, none is made.
 

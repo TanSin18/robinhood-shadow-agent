@@ -889,9 +889,9 @@ def test_collectors_import_only_the_standard_library_and_the_research_package():
 
 
 PUBLIC_SAMPLE_HOSTS = {'investor.vanguard.com', 'api.nasdaq.com'}       # public pages a hand-started capture or collector may ask
-# Checkpoint 5: official public macro sources (central bank, Treasury, statistical agencies, FRED). Research data only.
-MACRO_OFFICIAL_HOSTS = {'markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'fred.stlouisfed.org', 'alfred.stlouisfed.org',
-                        'api.stlouisfed.org', 'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov'}
+# Checkpoint 5: official public macro sources (central bank, Treasury, statistical agencies). Research data only.
+# Checkpoint 8: FRED and ALFRED were removed; their terms prohibit storing the data and using it to train models without written consent.
+MACRO_OFFICIAL_HOSTS = {'markets.newyorkfed.org', 'home.treasury.gov', 'api.bls.gov', 'www.bls.gov', 'www.federalreserve.gov', 'www.bea.gov', 'apps.bea.gov'}
 
 
 def test_collectors_name_only_research_hosts_and_post_nothing():

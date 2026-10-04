@@ -231,3 +231,31 @@ In short:
 - Capital readiness, retraining, drift, promotion and rollback are documents, not code. Automatic external funding
   enabled: NO.
 - The result of Checkpoint 7 is that nothing is established on this data. No model produced there may cause a trade.
+
+## Historical data foundation (Checkpoint 8, 2026-10-04)
+
+**DATA READINESS ONLY — NO TRADING MODEL IS ACTIVE.** A separate package, `firm_lab/history/`, and a separate
+database file, `firm_lab_history.db`, beside the research database. Nothing in the trading runtime imports it, it
+imports nothing from the trading runtime, it has no network code, and no schedule starts it.
+
+| Part | What it does |
+|---|---|
+| `store` | The historical database: append-only, versioned per security and year, refused inside a repository or beside the registered database |
+| `validate`, `ingest`, `sharadar_files` | Reads files the operator downloaded; checks every row; rejects with reasons; one receipt per file |
+| `calendar` | Exchange sessions from 1990 and the availability bound of a daily bar (the next session's open) |
+| `adjust` | Split consistency and the sessions prices cannot be compared across (spin-off, large distribution, unexplained factor step) |
+| `universe` | Monthly liquidity screen formed from past bars only; delisted securities included |
+| `features`, `pivots` | New feature versions on validated OHLCV; a 3x3 swing engine on highs and lows; high/low Fibonacci. The Checkpoint 6 close-only versions are unchanged |
+| `targets`, `splits`, `dataset` | Open-to-open labels after the decision time; the reserved chronology with two sealed holdouts; dataset contract v2 and the strict sample count |
+| `sufficiency`, `regimes`, `readiness` | The bars written before collection; descriptive regime coverage; the readiness report |
+| `firm_lab/history_view.py`, `agents/desk/history_readiness.py` | Standard-library projection of a small summary file, and the read-only page section |
+| `firm_lab/history_capability.py` | Capability rows read off the readiness report |
+
+Data flow: operator-downloaded files → `ingest` (receipts, rejections) → `firm_lab_history.db` → `universe` →
+`dataset.count` → `readiness` → `firm_lab_history_readiness.json` (counts and hashes, no price) → the Firm Lab page.
+
+The modeling laboratory of Checkpoint 7 is not wired to this data. No tournament can start from here.
+
+Documents: `CHECKPOINT8_DATA_SUFFICIENCY_SPEC.md` (written first), `historical_market_data_policy.md`,
+`historical_universe.md`, `CHECKPOINT8_HOLDOUT_DESIGN.md`, `CHECKPOINT8_SOURCES_PIT.md`,
+`CHECKPOINT8_PROVIDER_DECISION.md`, `CHECKPOINT8_REVIEW.md`, `CHECKPOINT8_STATUS.md`.
