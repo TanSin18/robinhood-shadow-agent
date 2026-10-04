@@ -277,6 +277,12 @@ def test_no_calculator_reads_a_field_that_was_linked_from_a_later_filing_and_the
     page = (ROOT / 'agents' / 'desk' / 'modeling_lab.py').read_text()
     assert 'STATUS_NOTE' in page.split('def _render')[1]                                            # what a status means is shown, not left as dead text
     assert modeling.WARNING == 'MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE'
+    closure = (ROOT / 'docs' / 'firm_lab' / 'CHECKPOINT7_CLOSURE.md').read_text()                  # the report the plan and the page point to exists
+    for row in ('20-session CatBoost', 'Future volatility: ridge, LightGBM', '10-session LightGBM, CatBoost', '10-session GRU, both multi-task heads, gating, family rank average',
+                'coin_flip', 'FIBONACCI ADDS INCREMENTAL OOS VALUE = INCONCLUSIVE', 'Firm Lab fills: 0', 'Firm trading trial: NOT REGISTERED',
+                'October research stop superseded: NO', 'Control A: UNCHANGED', 'Official Lane B: PAUSED', 'Real execution: DISABLED', 'Automatic external funding enabled: NO'):
+        assert row in closure, row                                                                  # every status that moved between runs is named, and the state lines are exact
+    assert 'Trial 18' not in closure and 'PRODUCTION' not in closure
 
 
 # ====================================================================================================== the verification review (plan v3)

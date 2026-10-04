@@ -81,6 +81,14 @@ series, 377 completed daily bars per ticker and 534 retained option quotes.
 Some invalid option records were excluded and some after-hours prices were stale.
 It did not invoke models, create cards/fills or mutate official results.
 
+## Firm Lab Checkpoint 7 (October 4, 2026) — modeling research, no trading change
+
+Branch `claude/checkpoint7-modeling` (on `codex/checkpoint6-features`). A modeling laboratory and validation
+tournament, research only: `docs/firm_lab/CHECKPOINT7_CLOSURE.md`. Result: no feature family or model architecture is
+established on this data; no model has more than a research status; Fibonacci is INCONCLUSIVE. Control A is unchanged
+and was not restarted. The Firm trading trial is NOT REGISTERED and the October research stop is not superseded.
+Current state and anything left for the operator: `docs/review/CLAUDE_STATUS.md`. Checkpoint 8 is not started.
+
 ## Important unfinished items
 
 - The approved design retires the 14-symbol primary universe, but runtime still

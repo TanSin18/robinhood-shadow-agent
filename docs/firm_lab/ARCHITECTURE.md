@@ -211,3 +211,23 @@ it cannot import trading code, and it is started by hand. Raw answers are valida
 provenance or refused whole. A capability becomes `AVAILABLE` only from stored, validated rows. The Treasury-bill
 leg of the 70/30 ruler has a written draft methodology (`treasury_bill_total_return_methodology.md`) and no
 computation.
+
+## Modeling laboratory (Checkpoint 7, 2026-10-04)
+
+See `CHECKPOINT7_CLOSURE.md`, `CHECKPOINT7_TOURNAMENT_PLAN.md`, `CHECKPOINT7_REVIEW.md` and `model_lifecycle_design.md`.
+In short:
+
+- `firm_lab/modeling/` is an offline research package. It imports only the accepted Checkpoint 6 calculators, cannot
+  import a broker, the network or the trading side, and is started by hand. Nothing schedules it and nothing on the
+  trading side imports it. Tests hold each of these.
+- It works in a **separate modeling database**: a session-time copy of the research sources with every relabelled
+  known-at recorded, a feature history from the unchanged calculators, datasets with hashes, an append-only model
+  registry, out-of-sample predictions and one report per run. It can hold no order, fill, position, account or cash
+  table. The live research database is read once, read-only, to make the copy.
+- A model has a research status only: EXPERIMENTAL, CHALLENGER, REJECTED or ELIGIBLE_FOR_FUTURE_REVIEW. There is no
+  production or live status, no promotion step, no stored weights, and no output that says what to do with a security.
+- The dashboard reads one small exported file through `firm_lab/modeling_view.py` (standard library only) and renders
+  it with `agents/desk/modeling_lab.py`. The page loads no model code.
+- Capital readiness, retraining, drift, promotion and rollback are documents, not code. Automatic external funding
+  enabled: NO.
+- The result of Checkpoint 7 is that nothing is established on this data. No model produced there may cause a trade.

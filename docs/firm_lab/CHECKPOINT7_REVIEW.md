@@ -9,8 +9,10 @@ and the claims in the documents. They worked on a read-only copy, ran their own 
 
 Every important finding below got a regression test that fails on `3abb5dd` (recorded run: 25 failed, 16 errors) and a
 repair (commits `4cad8b2`, `1ac2b17`). The tournament was then rerun under plan v2. A third fresh reviewer then verified
-the repairs against the stored v2 report (last section); its findings were repaired in `1e57231` under plan v3 and the
-tournament was run a final time with no prediction changed. No critical finding is deferred.
+the repairs against the stored v2 report; its findings were repaired in `1e57231` under plan v3 and the tournament was
+run again with no prediction changed. A fourth fresh reviewer read only the v3 changes; its six minor points were
+repaired in `7792a2f` under plan v3.1 and the closing run (`de322bfd…`) again changed no prediction and no status. No
+critical or important finding is deferred.
 
 What "fails on `3abb5dd`" means, exactly. Seven of the regressions fail there on behaviour: the old code runs and gives
 the wrong answer (A1 the zero count, A3, B13, B14/B15, A7/B16, B7, B8). The others fail because the old code has no
@@ -109,6 +111,40 @@ sufficiency records and all 84 model-blocks checked were bit-identical. The page
 means all positive; Holm-adjusted p 0.054 and 0.060 in a family of 16, below the plan's 10% level. The reviewer's
 fixed-identity permutation test agrees in size (0.28% and 0.53% unadjusted). It is one result, not two: the two series
 correlate 0.92. On development sessions neither clears the gates (LightGBM's interval includes zero and its
-identity-shuffle p is 0.051; XGBoost is below the strongest baseline), so the statuses are EXPERIMENTAL and REJECTED.
+identity-shuffle p is 0.053; XGBoost is below the strongest baseline), so the statuses are EXPERIMENTAL and REJECTED.
 The holdout is 11 non-overlapping windows and has been read by every run. It is recorded as the one observation worth
 looking at again when more sessions exist, and as nothing more.
+
+
+## Delta review of plan v3 (commit `f6f605c`, stored v3 report `5a1c9af9…`)
+
+A fourth fresh reviewer read only the v3 changes. **No critical or important finding.**
+
+**Confirmed.** The identity-shuffle shortcut is exact: re-ranking the permuted predictions from scratch for every draw
+differed by at most 7.5e-17, ties and zero sessions included. All 43 stored p-values reproduced bit for bit. The
+direction of the permutation is valid and the p-value formula is right. Against real development labels with random
+fixed rankings, the pair of gates rejects 5.3%, 4.0% and 1.8% for the 5-, 10- and 20-session labels at nominal 5%
+(the interval alone: 12.1%, 7.1%, 4.2%). The gate fails closed and cannot promote. Between the v2 and v3 reports no
+mean, fold result or status moved in any of the 66 table rows; what moved was the spread of the seven rows that do not
+rank every session, the 10-session family size (55 to 51), reason strings, and new fields. All 212 stored prediction
+sets are identical. The four merged Holm rows have bit-identical predictions. `verify` leaves the file byte-identical;
+an exported file refuses every write to a stored identity. 43,320 hostile single-leaf mutations of the real report:
+no exception escaped the page.
+
+| # | Finding (all minor) | Repair (plan v3.1) | Regression |
+|---|---|---|---|
+| D1 | A part in which a model predicted nothing made report assembly raise (not reachable with this data). | A part of zeros, with no error or loss; a classifier without a loss has not passed the loss gate. | `test_a_part_with_nothing_predicted_is_a_part_of_zeros_not_a_crash` |
+| D2 | The identity gate was decided inside its own Monte Carlo error: with 2,000 shuffles four rows changed sides across 20 seeds. | 100,000 shuffles. | `test_the_identity_gate_does_not_turn_on_the_luck_of_the_shuffles` |
+| D3 | The gate accepted values that are not p-values (a negative number, a boolean). | Only a real number above 0 and at most 1. | `test_the_identity_gate_accepts_only_a_p_value_and_a_partly_predicted_session_gets_none` |
+| D4 | The Holm level printed and the level used were two constants. | One. | `test_the_holm_level_shown_is_the_level_used_and_a_dataset_row_cannot_be_quietly_replaced` |
+| D5 | A different dataset row under a stored identity was silently ignored. | It is an error; the same row again is ignored. | same |
+| D6 | A partly predicted session was zeroed by the shuffle test and scored on its finite pairs by the mean. | Such a model gets no p-value. | D3's test |
+
+What the reviewer says the identity shuffle does **not** protect against, recorded here as a limit of the method: it is
+conditional on the one realised history and draws its power from 22 instruments, not from time; it treats instruments
+as exchangeable; it is not adjusted for the 43 candidates tried; it does not cover choices made across the runs.
+
+The v3.1 repairs were not themselves read by a further reviewer. They are six small changes, each held by a regression
+that failed on `f6f605c` (`delta_regressions_on_f6f605c.txt`: 4 failed), and the closing run was compared with the v3
+run row by row: 106 of 106 prediction hashes identical, no status changed, no number moved other than the
+identity-shuffle p-values (now on 100,000 shuffles; no row changed sides of the 0.05 level).
