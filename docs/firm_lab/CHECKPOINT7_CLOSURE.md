@@ -39,6 +39,20 @@ the stacker and gating combinations (no learned weight for a member that was con
 runs 2, 3 and 4 no prediction changed. The rules changed as recorded in plan sections 12 and 13, each change for a
 stated defect with a failing regression first.
 
+### Holdout disclosure
+
+**The current holdout is no longer an untouched final test set for future model selection.** The tournament was run
+four times and the holdout (2026-06-09 to 2026-09-01) was read after defects were found, each time. Its numbers in
+this report describe what happened on those sessions; they must not be presented as an untouched test in any future
+scientific claim, and no configuration may be chosen because of them. **Future model research needs a newly
+accumulated or separately reserved untouched evaluation period.**
+
+### The primary limitation
+
+Strict point-in-time usable samples: **0**. Retrospective samples: **6,490**. All current feature inputs were captured
+on October 1–3, 2026. The historical feature modeling here is therefore retrospective and cannot establish a genuine
+historical point-in-time trading edge, whatever a model scored.
+
 Statuses that differ between run 1 and the closing run, and the change that moved them:
 
 | Row | Run 1 | Closing run | Change |

@@ -197,12 +197,19 @@ def test_the_page_shows_research_measurements_with_provenance_and_no_instruction
     _lab_file(tmp_path, _report())
     html = modeling_lab.render_modeling({'modeling': modeling_view.summary(tmp_path / 'firm_lab.db')})
     assert html.count(modeling.WARNING) == 1 and html.startswith('<p class="fl-stamp">MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE</p>')
+    assert html.index('No validated trading model exists.') < html.index('Highest development scores') < html.index('Feature-family ablation')      # the conclusion comes before any score
     for text in ('SESSION_TIME_RETROSPECTIVE', 'Strict point-in-time samples', '<b>0</b> under the strict known-at rule', 'FIBONACCI ADDS INCREMENTAL OOS VALUE = INCONCLUSIVE',
                  'expanding-walk-forward-purged-v1', '20 sessions before every predicted block', 'final_holdout', 'Strongest naive baseline on development sessions',
                  'EXPERIMENTAL_INSUFFICIENT_DATA', 'dependency unavailable: catboost', 'Feature-family ablation', 'technical+fibonacci', 'Specialist models and combinations',
                  'Neural models: is there enough data?', 'Return distribution', 'Calibration', 'Model disagreement', 'Uncertainty', 'Meta-label research',
                  'Results by factual context', 'Prediction examples — research only', 'RESEARCH ONLY — NOT A RECOMMENDATION', 'checkpoint7-tournament-plan-v2',
                  'It is not a selection for use', 'Not net strategy P&amp;L',
+                 # what the operator asked the page to say first
+                 'No validated trading model exists.', 'Strict point-in-time samples: 0.', 'All 6,468 samples are retrospective',
+                 'This cannot establish a genuine historical point-in-time trading edge', 'Deep learning and transformers: insufficient data.',
+                 'The current holdout is no longer an untouched final test set for future model selection.',
+                 'Future model research needs a newly accumulated or separately reserved untouched evaluation period.',
+                 'research measurements, not recommended models', 'None of the rows below is a validated or recommended trading model.',
                  # what the review asked the page to show
                  '131 development, 59 holdout', 'development: 26 of 5 sessions, 13 of 10, 6 of 20; holdout: 11, 5, 2', 'Non-overlapping is not the same as independent',
                  '6 batches', 'ranked 104 of 131 sessions', 'highest of 25 compared', 'What a research status means', 'Student t on the means of consecutive batches',
@@ -251,6 +258,7 @@ def test_research_only_capabilities_are_never_available_to_a_strategy(tmp_path):
     details = {c['capability']: c['detail'] for c in lab.capabilities()}
     assert 'no production or live status' in details['ml_ranker'] and 'EXPERIMENTAL_INSUFFICIENT_DATA' in details['deep_learning']
     assert 'INCONCLUSIVE' in details['research_modeling'] and 'retrospective' in details['research_modeling'].lower()
+    assert 'No validated trading model exists' in details['research_modeling'] and 'no longer an untouched test set' in details['research_modeling']
     for name in ('research_modeling', 'ml_ranker', 'deep_learning', 'transformer_models'):
         with pytest.raises(CapabilityUnavailable):
             capabilities.require(lab, name)                                                         # research-only is not "available" to anything

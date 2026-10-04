@@ -544,6 +544,8 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
   .agent-desk table.fl-board th:nth-child(4){width:13%}.agent-desk table.fl-board th:nth-child(5){width:12%}.agent-desk table.fl-board th:nth-child(6){width:12%}
   .agent-desk table.fl-board th:nth-child(7){width:9%}.agent-desk table.fl-board th:nth-child(8){width:9%}
   .agent-desk table.fl-board td:first-child{overflow-wrap:normal;word-break:break-word}}
+.agent-desk ul.fl-stands{margin:8px 0 18px;padding:12px 16px 12px 32px;border:1px solid var(--hair-2);border-radius:10px}
+.agent-desk ul.fl-stands li{margin:6px 0;color:var(--text-2);line-height:1.5}.agent-desk ul.fl-stands b{color:var(--text-1,#fff)}
 .agent-desk details.fl-fold{border-top:1px solid var(--hair-2);padding:10px 0}
 .agent-desk details.fl-fold>summary{cursor:pointer;font-weight:600;font-size:var(--fs-sm,14px);color:var(--text-2)}
 .agent-desk details.fl-fold>summary span{font-weight:400;color:var(--text-4);margin-left:8px}

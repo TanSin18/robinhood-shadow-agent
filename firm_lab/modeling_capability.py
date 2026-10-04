@@ -37,7 +37,9 @@ def record(store, report, *, models, now=None) -> dict:
                               f'({data["usable_sessions"]} sessions; {windows["development"]["non_overlapping_windows"].get("10")} development and '
                               f'{windows["holdout"]["non_overlapping_windows"].get("10")} holdout non-overlapping 10-session windows are predicted; '
                               f'{data.get("strict_point_in_time_samples")} strict point-in-time samples). '
-                              f'Purged walk-forward with a final holdout. {fib["statement"]}. No model is in use and no output reaches a trading path.'),
+                              f'Purged walk-forward with a final holdout. {fib["statement"]}. No validated trading model exists. '
+                              + ('The holdout was read by more than one run and is no longer an untouched test set for future model selection. ' if report.get('supersedes') else '')
+                              + 'No model is in use and no output reaches a trading path.'),
         'ml_ranker': (RESEARCH_ONLY, 'Firm Lab modeling laboratory',
                       'Rank models were evaluated offline. Highest development score on the 10-session target: ' + _best(report, 'best_10d')
                       + '; strongest advanced candidate: ' + _best(report, 'strongest_advanced_candidate')

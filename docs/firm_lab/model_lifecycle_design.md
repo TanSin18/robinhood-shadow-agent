@@ -123,3 +123,11 @@ number of trades.
 
 Control A is frozen and separate. Firm Lab stays `BUILD_OBSERVE`, with no order, fill, position, account or cash
 table. No model output is a buy, sell, entry or exit instruction.
+
+## Evaluation data after Checkpoint 7
+
+The Checkpoint 7 holdout (2026-06-09 to 2026-09-01) was read by four runs while defects were repaired. It is no longer
+an untouched final test set for future model selection. Any later model research needs a newly accumulated or
+separately reserved untouched evaluation period, declared before a model is fitted, and strict point-in-time inputs:
+the Checkpoint 7 samples are all retrospective (0 strict point-in-time samples), so nothing learned there is evidence
+of a historical trading edge.

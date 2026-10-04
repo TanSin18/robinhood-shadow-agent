@@ -123,6 +123,28 @@ def _render(lab, report):
     windows = data['evaluation_windows']
     dev_w, hold_w = windows['development']['non_overlapping_windows'], windows['holdout']['non_overlapping_windows']
     strict = data.get('strict_point_in_time_samples')
+    counts = champions.get('candidate_status_counts') or {}
+    judged = sum(counts.values())
+    established = counts.get('ELIGIBLE_FOR_FUTURE_REVIEW', 0)
+    gates = report.get('sufficiency') or {}
+    failed = sum(1 for v in gates.values() if isinstance(v, dict) and v.get('label') != 'sufficient')
+    stands = [
+        '<b>No validated trading model exists.</b> ' + esc(
+            f'{judged} candidates were judged: ' + ', '.join(f'{v} {k}' for k, v in sorted(counts.items())) + '. '
+            + ('None passed every research gate. ' if not established else f'{established} passed the research gates, which is eligibility for a later human review and not a validation for trading. ')
+            + 'A research status is never a recommendation.'),
+        (f'<b>Strict point-in-time samples: {esc(str(strict))}.</b> ' if strict is not None else '<b>Strict point-in-time samples: not measured.</b> ')
+        + esc(f'All {data["usable_samples"]:,} samples are retrospective: every input was captured on 2026-10-01 to 2026-10-03. '
+              'This cannot establish a genuine historical point-in-time trading edge.'),
+        f'<b>{esc(fib["statement"])}.</b> ' + esc('Fibonacci is neither favoured nor dropped on this evidence.'),
+        '<b>Deep learning and transformers: insufficient data.</b> ' + esc(
+            f'{failed} of {len(gates)} network results fail the data-sufficiency gate (EXPERIMENTAL_INSUFFICIENT_DATA); their scores are not evidence for or against them.'),
+    ]
+    if report.get('supersedes'):
+        stands.append('<b>The current holdout is no longer an untouched final test set for future model selection.</b> '
+                      + esc('The tournament was rerun after defects were found, and the holdout was read each time. Future model research needs a newly '
+                            'accumulated or separately reserved untouched evaluation period.'))
+    standing = '<h3>What stands</h3><ul class="fl-stands">' + ''.join(f'<li>{item}</li>' for item in stands) + '</ul>'
     summary = _facts((
         ('Time rule', f'<b>{esc(report["time_policy"])}</b> every input was captured on 2026-10-01 to 2026-10-03; nothing here proves it was held earlier'),
         ('Strict point-in-time samples', (f'<b>{esc(str(strict))}</b> under the strict known-at rule' if strict is not None else 'not measured')
@@ -263,7 +285,7 @@ def _render(lab, report):
                           + f'<span class="small fl-sub">{"lowest loss" if loss else "highest"} of {esc(str(row.get("highest_of", "—")))} compared</span>',
                           _status(row.get('status')) + (f'<span class="small fl-sub">{esc(row["sufficiency"])}</span>' if row.get('sufficiency') not in (None, 'sufficient') else ''),
                           _n(row.get(a), 4, not loss), _n(row.get(b), 4, not loss)])
-    best = _table(('Question', 'Best development score', 'Research status', 'Development', 'Holdout'), best_rows)
+    best = _table(('Question', 'Highest development score (not a recommendation)', 'Research status', 'Development', 'Holdout'), best_rows)
     examples = ''
     for e in report.get('examples') or []:
         contributions = ', '.join(f'{k} {_n(v, 4)}' for k, v in list(e['family_contributions'].items())[:5])
@@ -277,9 +299,10 @@ def _render(lab, report):
                                ('Contribution by descriptor family', esc(contributions)), ('Largest single descriptors', esc(features)),
                                ('How the contributions were computed', esc(e['explanation_model'])),
                                ('Feature snapshot', f'<code>{esc(e["feature_snapshot_id"][:16])}</code> · calculation <code>{esc(e["calculation_hash"][:16])}</code>'))) + '</details>')
-    return (stamp + intro + summary
+    return (stamp + intro + standing + summary
             + '<h3>What this data cannot support</h3>' + limits
-            + '<h3>Best development scores, with what the holdout said</h3><p class="v10-note">' + esc(champions['note']) + '</p>' + best
+            + '<h3>Highest development scores — research measurements, not recommended models</h3><p class="v10-note">None of the rows below is a validated or '
+              'recommended trading model. ' + esc(champions['note']) + '</p>' + best
             + boards
             + '<h3>Feature-family ablation</h3><p class="v10-note">Each family is added to the technical baseline (trend, momentum, volatility) and compared with it per session. '
             + f'<b>{esc(fib["statement"])}</b>: {esc(fib["why"])}. {esc(fib_detail)}. {esc(report["ablation"].get("note", ""))}</p>' + ablation

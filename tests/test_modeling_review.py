@@ -283,6 +283,11 @@ def test_no_calculator_reads_a_field_that_was_linked_from_a_later_filing_and_the
                 'October research stop superseded: NO', 'Control A: UNCHANGED', 'Official Lane B: PAUSED', 'Real execution: DISABLED', 'Automatic external funding enabled: NO'):
         assert row in closure, row                                                                  # every status that moved between runs is named, and the state lines are exact
     assert 'Trial 18' not in closure and 'PRODUCTION' not in closure
+    for text in (closure, (ROOT / 'docs' / 'firm_lab' / 'model_lifecycle_design.md').read_text()):
+        flat = ' '.join(text.split())
+        assert 'no longer an untouched final test set for future model selection' in flat          # the holdout disclosure stays in the scientific record
+        assert 'newly accumulated or separately reserved untouched evaluation period' in flat
+    assert 'Strict point-in-time usable samples: **0**' in closure and 'cannot establish a genuine historical point-in-time trading edge' in ' '.join(closure.split())
 
 
 # ====================================================================================================== the verification review (plan v3)
