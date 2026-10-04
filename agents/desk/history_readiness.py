@@ -60,8 +60,9 @@ SEGMENT_NAMES = (('DEVELOPMENT', 'development'), ('HISTORICAL_HOLDOUT', 'histori
 
 def _stands(r):
     market, strict, holdout, decision = r['market_data'], r['strict_training'], r['holdout'], r['provider_decision']
-    tiers = strict.get('by_tier') or {}
+    tiers = (strict.get('strict_samples_by_tier') or {}).get('20') or {}
     samples = strict.get('strict_samples') or {}
+    revised = strict.get('rows_not_strict_because_a_bar_was_revised') or 0
     parts = (strict.get('strict_samples_by_segment') or {}).get('20') or {}
     verdicts = [v.get('verdict') for families in (r['sufficiency'].get('verdicts') or {}).values() for v in families.values()]
     unmet = sum(1 for b in r['specification_bars'] if b.get('status') != 'MET')
@@ -79,11 +80,13 @@ def _stands(r):
                      f'{esc(decision.get("price", ""))}. {esc(str(decision.get("statement", "")))}')
     split = '; '.join(f'{esc(label)} {_count(parts.get(key))}' for key, label in SEGMENT_NAMES)
     items.append(f'<b>Strict point-in-time samples:</b> {_count(samples.get("20"))} with a 20-session label ({_count(samples.get("10"))} at 10, {_count(samples.get("5"))} at 5). '
-                 f'By segment: {split}. Held at the time: {_count(tiers.get("HELD_AT_THE_TIME"))}. Publisher-dated historical: {_count(tiers.get("PUBLISHER_DATED_HISTORICAL"))}. '
-                 f'The {_count(strict.get("checkpoint7_retrospective_samples"))} retrospective samples of the Modeling Laboratory (its closing report) are a separate '
+                 f'By segment: {split}. Of these, held at the time: {_count(tiers.get("HELD_AT_THE_TIME"))}; publisher-dated historical: '
+                 f'{_count(tiers.get("PUBLISHER_DATED_HISTORICAL"))}. '
+                 + (f'{_count(revised)} further rows read a bar the vendor changed after it was first stored and are not counted. ' if revised else '')
+                 + f'The {_count(strict.get("checkpoint7_retrospective_samples"))} retrospective samples of the Modeling Laboratory (its closing report) are a separate '
                  'dataset and are not counted here.')
     first = esc(str(((holdout.get("segments") or {}).get("FORWARD_HOLDOUT") or [""])[0]))
-    state = ('are sealed: label values of both are removed before any row leaves the dataset builder, and no model has been measured on either' if stored
+    state = ('are sealed: label and feature values of both are removed before any row leaves the dataset builder, and no model has been measured on either' if stored
              else 'are reserved; no data exists for either yet')
     items.append('<b>Fresh holdout:</b> the Checkpoint 7 holdout is not reused. Historical holdout '
                  f'{_span((holdout.get("segments") or {}).get("HISTORICAL_HOLDOUT"))} and forward holdout from {first} {state}.')
@@ -109,7 +112,8 @@ def _coverage(r):
         ('OHLCV coverage', f'{_count(market.get("bars"))} bars, {_count(market.get("securities_with_bars"))} securities; {_count(market.get("rows_rejected"))} rows rejected of '
                            f'{_count(market.get("rows_read"))} read'),
         ('Corporate actions', ('; '.join(f'{esc(k.replace("_", " "))} {_count(v)}' for k, v in sorted((actions.get('historical_by_type') or {}).items())) or 'none stored')
-         + f'. Held today: {_count(actions.get("held_rows"))} rows ({esc(actions.get("held_note", ""))}).'),
+         + f'. In the research database: {_count(actions.get("held_rows"))} rows for {_count(actions.get("held_instruments"))} instruments, '
+           f'{_count(actions.get("held_benchmark_only_rows"))} of them benchmark-only.'),
         ('Delisted coverage', f'{_count(market.get("delisted_with_bars"))} delisted securities with bars; '
                               f'{_count((r["strict_training"] or {}).get("members_whose_bars_end_without_a_delisting_record"))} members whose bars end with no delisting record'),
         ('Stored versions', '; '.join(f'{esc(k.replace("_", " ").lower())} {_count(v)}' for k, v in sorted((market.get('block_versions') or {}).items())) or 'none'),

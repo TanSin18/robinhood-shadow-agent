@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from firm_lab import history
-from firm_lab.history import calendar, regimes, splits, store, sufficiency, targets, universe, validate
+from firm_lab.history import calendar, dataset, features, regimes, splits, store, sufficiency, targets, universe, validate
 
 DOCS = Path(__file__).resolve().parents[1] / 'docs' / 'firm_lab'
 POLICY = (DOCS / 'historical_market_data_policy.md').read_text()
@@ -35,6 +35,8 @@ def test_the_holdout_document_states_the_reserved_chronology():
             if splits.labels_allowed(name)] == r['label_values_readable_in'] == [splits.DEVELOPMENT, splits.BURNED]
     assert f'at least {splits.MINIMUM_FOLDS} folds, each validated on at least {splits.MINIMUM_FOLD_SESSIONS} sessions' in HOLDOUT
     assert 'No model metric of any kind was computed in Checkpoint 8, on any segment.' in HOLDOUT
+    assert dataset.FEATURES_FROM == splits.BURNED_FIRST and f'computed only\nfrom bars on or after {splits.BURNED_FIRST}' in HOLDOUT
+    assert 'blanks the label value **and every feature value**' in HOLDOUT and 'it is a rule with tests, not a lock' in HOLDOUT
     assert '`SEALED_SEGMENT`' in HOLDOUT
 
 
@@ -45,8 +47,11 @@ def test_the_policy_document_lists_every_rejection_reason_and_every_change_class
     assert classes <= set(table)
     assert f'Policy version `{history.POLICY_VERSION}`' in POLICY and f'`{history.FILE_NAME}`' in POLICY and f'`{history.DATABASE_ROLE}`' in POLICY
     for name in ('INVALID_BAR_BLOCK', 'INVALID_CAPTURE_TIME', 'CAPTURE_TIME_NOT_MONOTONIC', 'SOURCE_REQUIRED', 'CONFLICTING_SECURITY_IDENTITY', 'MALFORMED_SECURITY',
-                 'UNEXPECTED_FILE_LAYOUT', 'VENDOR_FILE_INSIDE_A_REPOSITORY', 'SURVIVOR_ONLY_SOURCE', 'UNIVERSE_IS_STALE', 'DELISTED_EXIT', 'PAST_HISTORY'):
+                 'UNEXPECTED_FILE_LAYOUT', 'VENDOR_FILE_INSIDE_A_REPOSITORY', 'SURVIVOR_ONLY_SOURCE', 'UNIVERSE_IS_STALE', 'CAPTURE_TIME_IN_THE_FUTURE',
+                 targets.REASONS[targets.DELISTED_EXIT], targets.REASONS[targets.PAST_HISTORY], targets.REASONS[targets.HAS_BREAK], 'SYSTEM', 'SUPPLIED', 'sparse'):
         assert f'`{name}`' in POLICY, name
+    assert f'read its last {dataset.INPUT_WINDOW_BARS} bars' in POLICY and dataset.INPUT_WINDOW_BARS == features.LONGEST_FIXED_LOOKBACK == 253
+    assert 'are used for every row of a dataset or for none' in POLICY and 'is tier C and is not a strict sample' in POLICY
     assert 'within five sessions of the security\'s last bar' in POLICY and targets.DELISTING_WINDOW == 5
     assert 'It is not a\n  stored column.' in POLICY                                         # eligible_from is computed from the calendar
     assert 'These hashes are integrity checks, not authentication.' in POLICY
@@ -61,12 +66,16 @@ def test_the_universe_document_states_the_rule_in_code():
     assert f'at least {rule["minimum_bars_in_window"]} of the last {rule["liquidity_window_sessions"]} exchange sessions' in UNIVERSE
     assert f'The first {rule["size"]:,} are members.' in UNIVERSE and rule['price_table'] == 'stocks'
     assert 'the present-day security master does\nnot decide who is screened' in UNIVERSE
-    for name in ('SURVIVOR_ONLY_SOURCE', 'UNIVERSE_IS_STALE', 'UNIVERSE_HASH_REQUIRED', 'UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST'):
+    for name in ('SURVIVOR_ONLY_SOURCE', 'UNIVERSE_IS_STALE', 'UNIVERSE_HASH_REQUIRED', 'UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST', 'RULE_NEEDS_ITS_OWN_VERSION'):
         assert f'`{name}`' in UNIVERSE, name
 
 
 def test_the_second_amendment_states_the_measurement_rules_in_code_and_lowers_no_bar():
-    amendment = SPEC[SPEC.index('**Amendment 2'):]
+    amendment = SPEC[SPEC.index('**Amendment 2'):SPEC.index('**Amendment 3')]
+    third = SPEC[SPEC.index('**Amendment 3'):]
+    assert 'No bar was\nlowered and none was added.' in third and 'for every row of a dataset or for none' in third
+    assert 'A restated bar is tier C' in third and f'({splits.MINIMUM_FOLDS} x {splits.MINIMUM_FOLD_SESSIONS})' in third and 'reads 253 bars' in third
+    assert len(set(re.findall(r'^\| ([HPEFO][0-9]) ', SPEC, re.M))) == 25 and 'lists all 25 bars' in third
     assert 'No bar was\nlowered and none was added.' in amendment
     assert f'at least {sufficiency.MINIMUM_SHARED_WINDOWS} non-overlapping windows' in amendment
     assert 'at least half of all pairs' in amendment and sufficiency.MINIMUM_PAIR_COVERAGE == 0.5

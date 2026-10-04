@@ -134,3 +134,13 @@ def provider(folder, *, through=LAST, rescale=None):
     """Writes the four vendor files into ``folder`` and returns their paths."""
     return {'tickers': write_tickers(folder / 'TICKERS.csv'), 'prices': write_prices(folder / 'SEP.csv', price_rows(through=through, rescale=rescale)),
             'actions': write_actions(folder / 'ACTIONS.csv'), 'sp500': write_sp500(folder / 'SP500.csv')}
+
+
+VERSION = 'liquid-top6-test'                 # a rule other than the registered one needs a version name of its own
+CLOCK = '2026-12-01T00:00:00+00:00'          # what the machine's clock shows in these tests: after every capture time they supply
+
+
+def set_clock(monkeypatch, time=CLOCK):
+    """Sets the clock the store stamps captures with. A capture made without a supplied time is stamped SYSTEM at this time."""
+    from firm_lab.history import store
+    monkeypatch.setattr(store, 'now_utc', lambda: time)

@@ -97,6 +97,12 @@ eodhd.com (pricing, terms-conditions, delisted data); sharadar.com (subscribe, p
 * **Announcement times of corporate actions.** The vendor gives an effective date only.
 * **Whether the vendor's bulk file layout matches its documentation.** The reader refuses a file whose columns are
   not the documented ones; the validation sample is where this is found out.
+* **How finely the vendor prints adjusted prices.** Open, high and low come only split-adjusted. For a stock that
+  later split many times, the reprinted early prices are small numbers; if they are printed coarsely, the features
+  that read a high, low or open are withheld from every row of the dataset (`historical_market_data_policy.md` §4),
+  and only the close-based features remain for that period. This cannot be known before a file is read. It is the
+  first thing the validation sample measures (bar O7), and a reason to take one month before the annual plan. If it
+  fails, the remedy is a second source of unadjusted open, high and low, which is a new provider decision.
 
 ## A second licensing finding: FRED and ALFRED
 

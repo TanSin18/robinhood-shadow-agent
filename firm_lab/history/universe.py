@@ -23,6 +23,9 @@ stale: it is refused, and a new one is built with its own hash. Both stay in the
 """
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 import numpy as np
 
 from . import PUBLISHER_DATED_HISTORICAL, adjust, calendar, panel as panels
@@ -78,9 +81,17 @@ def actions_hash(store, source=None) -> str:
     return content_hash(sorted(identity for identity, payload, _ in store.rows('history_actions') if source is None or payload['source'] == source))
 
 
-def build(store, start, end, *, rule=RULE, source=None, progress=None) -> dict:
+def code_hash() -> str:
+    """The hash of this module's source: a universe formed by other code is another universe."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None, progress=None) -> dict:
     """Forms the universe for every month-end in [start, end] and stores one record per formation session, plus a
-    manifest. Refuses a source in which no delisted security has bars: a universe drawn from survivors is not historical."""
+    manifest. Refuses a source in which no delisted security has bars: a universe drawn from survivors is not historical.
+    A rule other than the registered one must be given a version name of its own."""
+    if content_hash(rule) != content_hash(RULE) and version == UNIVERSE_VERSION:
+        raise ValueError('RULE_NEEDS_ITS_OWN_VERSION')
     screened = store.security_ids(price_table=rule['price_table'])      # decided by where the bars came from, not by today's master row
     master = current_securities(store, source=source)
     if not any(master.get(sid, {}).get('is_delisted') for sid in screened):
@@ -103,7 +114,6 @@ def build(store, start, end, *, rule=RULE, source=None, progress=None) -> dict:
             progress(n, len(screened))
     rule_hash = content_hash(rule)
     blocks, acts = store.current_blocks_hash(price_table=rule['price_table']), actions_hash(store, source)
-    build_id = content_hash([UNIVERSE_VERSION, rule_hash, start, end, blocks, acts])
     records, ever = [], set()
     for k, r in enumerate(formations):
         ranked = sorted(eligible[r])
@@ -112,61 +122,75 @@ def build(store, start, end, *, rule=RULE, source=None, progress=None) -> dict:
         if below:
             screened_out[r]['RANKED_BELOW_SIZE'] = below
         effective_from = calendar.offset(r, 1)
-        record = {'universe_version': UNIVERSE_VERSION, 'build_id': build_id, 'rule_hash': rule_hash, 'formation_session': r, 'effective_from': effective_from,
-                  'effective_to': formations[k + 1] if k + 1 < len(formations) else calendar.month_ends(effective_from, calendar.offset(effective_from, 30))[0],
-                  'known_at': calendar.eligible_from(r), 'known_at_basis': 'every input is a bar on or before the formation session (bar-known-at-v1)',
-                  'tier': PUBLISHER_DATED_HISTORICAL, 'members': members, 'member_count': len(members), 'eligible_count': len(ranked),
-                  'screened_out': screened_out[r],
-                  'smallest_member_median_dollar_volume': -ranked[len(members) - 1][0] if members else None}
-        store.put('history_universe', record)
-        records.append(record)
+        records.append({'universe_version': version, 'rule_hash': rule_hash, 'formation_session': r, 'effective_from': effective_from,
+                        'effective_to': formations[k + 1] if k + 1 < len(formations) else calendar.month_ends(effective_from, calendar.offset(effective_from, 30))[0],
+                        'known_at': calendar.eligible_from(r), 'known_at_basis': 'every input is a bar on or before the formation session (bar-known-at-v1)',
+                        'tier': PUBLISHER_DATED_HISTORICAL, 'members': members, 'member_count': len(members), 'eligible_count': len(ranked),
+                        'screened_out': screened_out[r],
+                        'smallest_member_median_dollar_volume': -ranked[len(members) - 1][0] if members else None})
         ever.update(members)
     delisted = sum(1 for sid in ever if master.get(sid, {}).get('is_delisted'))
-    manifest = {'kind': 'universe_manifest', 'universe_version': UNIVERSE_VERSION, 'build_id': build_id, 'rule': rule, 'rule_hash': rule_hash, 'start': start, 'end': end,
+    by_year = {}
+    for r in records:
+        by_year[r['formation_session'][:4]] = min(by_year.get(r['formation_session'][:4], r['member_count']), r['member_count'])
+    manifest = {'kind': 'universe_manifest', 'universe_version': version, 'rule': rule, 'rule_hash': rule_hash, 'builder_code_hash': code_hash(), 'start': start, 'end': end,
                 'formation_sessions': len(formations), 'first_formation': formations[0] if formations else None, 'last_formation': formations[-1] if formations else None,
                 'securities_screened': len(screened), 'distinct_members': len(ever), 'members_later_delisted': delisted,
                 'member_count_min': min((r['member_count'] for r in records), default=0), 'member_count_max': max((r['member_count'] for r in records), default=0),
+                'member_count_min_by_year': by_year,
+                'first_formation_with_members': {str(n): next((r['formation_session'] for r in records if r['member_count'] >= n), None) for n in (500, 1000)},
                 'source_blocks_hash': blocks, 'actions_hash': acts, 'records_hash': content_hash([content_hash(r) for r in records]),
                 'survivorship': 'formed from every stored stock-file security including delisted ones; no present-day list, classification, master row or market '
                                 'value is read',
                 'tier': PUBLISHER_DATED_HISTORICAL}
-    manifest['universe_hash'] = content_hash({k: manifest[k] for k in ('universe_version', 'rule_hash', 'start', 'end', 'source_blocks_hash', 'actions_hash', 'records_hash')})
-    store.put('history_universe', manifest)
+    manifest['universe_hash'] = content_hash({k: manifest[k] for k in ('universe_version', 'rule_hash', 'builder_code_hash', 'start', 'end', 'source_blocks_hash', 'actions_hash',
+                                                                       'records_hash')})
+    with store.transaction():                                           # the records and their manifest are stored together or not at all
+        for record in records:
+            store.put('history_universe', {**record, 'universe_hash': manifest['universe_hash']})
+        store.put('history_universe', manifest)
     return manifest
 
 
 def is_current(store, manifest) -> bool:
-    """Whether the bars and actions a universe was built from are the ones stored now."""
+    """Whether the bars and actions a universe was built from are the ones stored now. The bars are every current block
+    of every screened security, from whichever price table each block came."""
     return (manifest['source_blocks_hash'] == store.current_blocks_hash(price_table=manifest['rule']['price_table'])
             and manifest['actions_hash'] == actions_hash(store))
 
 
+def manifests(store) -> list:
+    """Every stored universe manifest, oldest first."""
+    return [payload for _, payload, _ in store.rows('history_universe') if payload.get('kind') == 'universe_manifest']
+
+
 def load(store, universe_hash=None, *, require_current=False) -> dict:
-    """{'manifest': ..., 'records': [formation records in order]}. Without a hash: the stored universe that was built from
-    the bars and actions stored now. A universe built from other bars is stale and is never chosen by default; it stays in
-    the database and loads intact when it is named."""
-    manifests, records = [], {}
+    """{'manifest': ..., 'records': [formation records in order]}. Without a hash: the one stored universe that was built
+    from the bars and actions stored now. A universe built from other bars is stale and is never chosen by default; it
+    stays in the database and loads intact when it is named. Records belong to a universe by its hash, so two builds can
+    never be mistaken for each other."""
+    found, records = [], {}
     for _, payload, _ in store.rows('history_universe'):
         if payload.get('kind') == 'universe_manifest':
-            manifests.append(payload)
+            found.append(payload)
         else:
-            records.setdefault(payload.get('build_id'), []).append(payload)
-    if not manifests:
+            records.setdefault(payload.get('universe_hash'), []).append(payload)
+    if not found:
         return {'manifest': None, 'records': []}
     if universe_hash:
-        chosen = next((m for m in manifests if m['universe_hash'] == universe_hash), None)
+        chosen = next((m for m in found if m['universe_hash'] == universe_hash), None)
         if chosen is None:
             raise ValueError('UNKNOWN_UNIVERSE')
         if require_current and not is_current(store, chosen):
             raise ValueError('UNIVERSE_IS_STALE')
     else:
-        current = [m for m in manifests if is_current(store, m)]
+        current = [m for m in found if is_current(store, m)]
         if not current:
             raise ValueError('UNIVERSE_IS_STALE')                       # the stored bars or actions changed since every stored universe was built
         if len({m['universe_hash'] for m in current}) > 1:
             raise ValueError('UNIVERSE_HASH_REQUIRED')                  # more than one rule or period fits the stored bars: say which
         chosen = current[0]
-    mine = sorted(records.get(chosen['build_id'], []), key=lambda r: r['formation_session'])
+    mine = sorted(({k: v for k, v in r.items() if k != 'universe_hash'} for r in records.get(chosen['universe_hash'], [])), key=lambda r: r['formation_session'])
     if content_hash([content_hash(r) for r in mine]) != chosen['records_hash']:
         raise ValueError('UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST')
     return {'manifest': chosen, 'records': mine}

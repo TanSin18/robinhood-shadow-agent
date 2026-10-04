@@ -17,34 +17,46 @@ a timestamp for each fact. A daily bar has no publication timestamp, so its avai
   a review file or the dashboard overlay. The readiness page reads a small summary file that holds counts and
   hashes, not prices.
 * If the licence ends, the vendor's terms require the raw data to be deleted within 30 days. Deleting that one file
-  does it. Derived research outputs that cannot reproduce the data (reports, counts, model files) may be kept.
+  (and the files the operator downloaded) does it. Ingestion keeps its working rows in a private temporary database
+  that the operating system removes when it is closed or when the process dies, so a run that was cut short leaves
+  no vendor row beside the database. Derived research outputs that cannot reproduce the data (reports, counts, model
+  files) may be kept.
 
 ## 2. Raw observations are append-only and versioned
 
 * Every ingested file is recorded as a **capture**: file name, SHA-256, size, table kind, rows read, stored,
   duplicate and rejected, the adapter version and the capture time. That record is the validation receipt.
 * **A capture is stored whole or not at all.** One file is one database transaction; a failure part-way leaves
-  nothing behind. A capture time must be a real UTC time and may not be earlier than the latest capture already
-  stored (`INVALID_CAPTURE_TIME`, `CAPTURE_TIME_NOT_MONOTONIC`); times are compared as times, never as text.
+  nothing behind.
+* **Two clocks.** A capture made without a supplied time is stamped by the machine's clock and marked `SYSTEM`. A
+  capture made with a supplied time is marked `SUPPLIED`: the time orders the versions and proves nothing, so a bar
+  stored under it never counts as held at the time. A supplied time must be a real time with an offset
+  (`INVALID_CAPTURE_TIME`), may not lie in the future (`CAPTURE_TIME_IN_THE_FUTURE`) and, like every capture time,
+  may not be earlier than a capture already stored (`CAPTURE_TIME_NOT_MONOTONIC`). Times are compared as times,
+  never as text. The commands always use the machine's clock.
 * Bars are stored per security and calendar year as one block of the provider's own text values. A new capture for
   a security and year is compared with the **current** version. The same content adds nothing. Anything else becomes
   the **next version**, and the earlier one stays, also when the vendor returns to content it supplied before.
-  A capture that holds only some sessions of a year extends that year; it never removes the sessions it does not
-  mention.
-* Every block is validated again at the point of storage (`INVALID_BAR_BLOCK`), so no code path can store a bar the
-  row checks would have rejected.
+* **Extending and removing.** A capture that holds only some sessions of a year extends that year. Inside the span
+  of sessions the capture does hold, a stored session it no longer mentions is **removed** from the new version: the
+  vendor took the bar out, and that is a `VALUE_CHANGE`. Outside that span nothing is removed. A file that lists only
+  scattered rows (for example the rows changed since a date) must be ingested as `sparse`; then nothing is removed.
+* Every block is validated again at the point of storage, the capture-time check included (`INVALID_BAR_BLOCK`), so
+  no code path can store a bar the row checks would have rejected or a bar "captured" before its session closed.
 * A new version records what changed:
 
   | Class | Meaning |
   |---|---|
   | `EXTENDED` | only sessions after the previous last session were added |
-  | `SCALE_ONLY` | every session before some date moved by one common factor (prices times k, volume divided by k) and the printed price did not move: the vendor re-adjusting for a later split |
+  | `SCALE_ONLY` | every session before some date moved by one common factor (prices times k, volume divided by k) and the printed price did not move: the vendor re-adjusting for a later split. All four prices and the volume of every changed row must agree on one factor, within what the printing of both versions can explain |
   | `TOTAL_RETURN_READJUSTED` | only the total-return close differs: a later dividend |
   | `METADATA_ONLY` | only the provider's update stamp differs |
-  | `VALUE_CHANGE` | anything else: one corrected print, a session that appeared in the past, a session that disappeared |
+  | `VALUE_CHANGE` | anything else: one corrected print, a session that appeared in the past, a session that disappeared, a "rescale" that only some rows or some columns show, the same numbers printed otherwise |
 
-  A `VALUE_CHANGE` is a vendor revision of history. It is counted on the readiness page ("Stored versions"), and
-  the revised bar is dated to the capture that revised it: it was not held before then.
+  A `VALUE_CHANGE` is a vendor revision of history. It is counted on the readiness page ("Stored versions"). Every
+  row of that version whose values differ from the version before is a **revised bar**: it is dated to the capture
+  that revised it, and it is a restated value. A training row that reads a revised bar, in a feature or in its
+  label, is tier C and is not a strict sample (§5); such rows are counted, not hidden.
 * Security-master rows, corporate actions and index-membership events are stored content-addressed with the capture
   they came from. A security-master row that returns to an earlier state is stored as a new row, so "the current row"
   is always the latest stored. Two securities claiming one identifier with different names is refused
@@ -64,7 +76,7 @@ reason that applies, and the capture counts it.
 | Reason | Check |
 |---|---|
 | `MISSING_FIELD` | open, high, low, close, volume, unadjusted close and session date are all present |
-| `NOT_FINITE` | every number is a plain decimal number and finite; anything else (`nan`, `inf`, hexadecimal, digits of another script, underscores) is refused |
+| `NOT_FINITE` | every number is written in ASCII digits as a decimal, with or without an exponent, and is finite; anything else (`nan`, `inf`, a plus sign, hexadecimal, digits of another script, underscores, spaces) is refused |
 | `NON_POSITIVE_PRICE` | open, high, low, close and unadjusted close are above zero |
 | `LOW_ABOVE_OPEN_OR_CLOSE` | `low <= min(open, close)` |
 | `HIGH_BELOW_OPEN_OR_CLOSE` | `high >= max(open, close)` |
@@ -117,10 +129,16 @@ depends on the future. Two rules close that channel:
   and the confirmed split ratios. The vendor's adjusted prints are used only within one bar: its open, high and low
   relative to its own close. A test reprints a history at three decimals after a large later split and shows that no
   close-based feature before the split moves.
-* **Print precision.** Where the adjusted close is printed more coarsely than 0.05% of its value, the shape of the
-  bar cannot be trusted, and every feature that reads a high, low or open is unavailable there. If more than 5% of a
-  dataset's rows are affected, those feature families are withheld from every row (sufficiency bar O7), because
-  withholding them row by row would itself mark the rows of future splitters.
+* **Print precision: all rows or none.** Where the adjusted close is printed more coarsely than 0.05% of its value,
+  the shape of the bar cannot be trusted. Withholding the features that read a high, low or open only on those rows
+  would mark exactly the stocks that split later, which is information from the future. So those feature families
+  are used for every row of a dataset or for none: as soon as one row of the dataset would read a coarsely printed
+  bar, they are withheld from every row. The share of coarse rows is reported (sufficiency bar O7); the decision
+  does not wait for a threshold. A test prints one stock as after a 40-for-1 split six years later and shows that
+  the rows of that stock cannot be told from the others by what is missing.
+
+What remains is bounded and stated: on rows that are used, a reprinted high, low or open can be off by up to 0.05%
+of the price, and how far depends on later splits.
 
 The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 
@@ -147,10 +165,15 @@ Checkpoint 7. Cash dividends are not added back. Known effects, stated rather th
   the exchange calendar (`eligible_from`), with the basis `EXCHANGE_SESSION_COMPLETE_NEXT_OPEN_BOUND`. It is not a
   stored column.
 * The time Firm Lab actually received a bar is the creation time of the stored version it sits in, and is never used
-  as a historical known-at for a publisher-dated bar. A bar is tier A only when the value **read today** was already
-  stored before `eligible_from`. A pure rescale for a later split does not change that date; a revision does: a bar
-  the vendor later changed is tier B from the revision, whatever was held before. A historical bar from a licensed
-  archive is tier B.
+  as a historical known-at for a publisher-dated bar. A bar is held at the time only when the value **read today**
+  was stored, by the machine's own clock, before `eligible_from`. A pure rescale for a later split does not change
+  that; a revision does. A historical bar from a licensed archive is tier B.
+* **What a row reads, and its tier.** A row's features read its last 253 bars (the 252-session return needs both
+  ends), and further back where the pivot or leg it stands on began earlier. Its label reads the bars from T+1 to its
+  exit. The row is tier A only if every bar its features read was held at the time; it is tier C, and not a strict
+  sample, if any bar its features or its longest label read was revised by the vendor after it was first stored;
+  otherwise tier B. (Wilder's smoothing carries a weight below one part in a hundred million from bars older than
+  that window; it is not followed further.)
 * Consequence for a training row: features use bars up to and including session T; the decision time is the open
   of session T+1; the label starts at the open of T+1. No label uses a price at or before the last feature bar.
 
@@ -184,18 +207,21 @@ effective date and no announcement time; `announcement_timestamp` is stored as `
   another company) within five sessions of the security's last bar. The present-day delisted flag of the master is
   not used: it says nothing about when, and it would turn the mere end of the stored data into an exit. With such a
   record, a label whose window runs past the last bar uses the last close as the exit and has the state
-  `DELISTED_EXIT` with the provider's reason. These rows are kept; dropping them would remove exactly the failures
+  `EXIT_AT_LAST_PRICE_BEFORE_DELISTING` with the provider's reason. Bars that stop on the last session stored for
+  any security have not been shown to stop at all, and a record dated after that session describes something the
+  stored data cannot show: neither makes an exit. These rows are kept; dropping them would remove exactly the failures
   and takeovers. Such a label covers fewer sessions than its horizon (down to a single session); it is flagged so
   that a later plan can treat it apart.
 * **Bars that end without a record.** A member whose bars stop before the end of the stored data with no such record
-  gets no label there (`PAST_HISTORY`) and is counted (`members_whose_bars_end_without_a_delisting_record`). A large
+  gets no label there (`WINDOW_PAST_STORED_HISTORY`) and is counted (`members_whose_bars_end_without_a_delisting_record`). A large
   count is evidence that the vendor's action table is incomplete.
 * **Stated limitation.** No free or individually licensed source found gives a post-delisting return. For an
   acquisition the last price is close to the deal value. For a bankruptcy or a regulatory delisting the last price
   overstates what a holder recovered, so such labels are biased upward. The count of such rows per year and per
   reason is reported (`delisting_exits_by_year`), and the limitation is shown on the readiness page.
-* Coverage is the provider's claim until measured. The check that is possible is made: the number of securities
-  with a last bar in each year, against the delisting actions recorded for that year.
+* Coverage is the provider's claim until measured. What is reported: the number of delisted securities by the year
+  of their last bar, the delisting exits by year and reason, and the members whose bars end with no record. A
+  comparison against an independent count of delistings per year is not made; no such count is held.
 
 ## 8. Reproducibility
 

@@ -66,15 +66,17 @@ def statuses(report) -> dict:
                         ('First-published values with official release times for: ' + ', '.join(sorted(series)) + '. CPI, labor and Treasury yields are not stored. '
                          'FRED and ALFRED are not used: their terms prohibit storing the data and using it to train models without written consent.') if series
                         else 'No macro release is stored.', None)
-    tiers = strict.get('by_tier') or {}
+    tiers = (strict.get('strict_samples_by_tier') or {}).get('20') or {}
+    every = (strict.get('strict_samples') or {}).get('20') or 0
     if samples and out['historical_ohlcv'][0] == AVAILABLE and out['historical_universe'][0] == AVAILABLE:
         state = AVAILABLE
     else:
         state = PARTIAL_EXISTING if samples else UNAVAILABLE
     out['strict_pit_training_data'] = (state, HISTORY_PROVIDER if samples else None,
-                                       (f'{samples:,} strict point-in-time samples in the development period with a 20-session label (rows held at the time '
-                                        f'{tiers.get("HELD_AT_THE_TIME", 0):,}; publisher-dated historical {tiers.get("PUBLISHER_DATED_HISTORICAL", 0):,}). '
-                                        'Both holdouts are sealed and are not part of this number. Sufficiency per model family is reported separately; a count is not sufficiency. ')
+                                       (f'{samples:,} strict point-in-time samples in the development period with a 20-session label. Across all four sample '
+                                        f'segments there are {every:,}: held at the time {tiers.get("HELD_AT_THE_TIME", 0):,}; publisher-dated historical '
+                                        f'{tiers.get("PUBLISHER_DATED_HISTORICAL", 0):,}. Both holdouts are sealed: their rows are counted, never read. '
+                                        'Sufficiency per model family is reported separately; a count is not sufficiency. ')
                                        if samples else '0 strict point-in-time samples. The 6,490 retrospective samples of the modeling laboratory are a separate dataset and are '
                                                        'not counted. Both holdouts are reserved and sealed.',
                                        {'provider': HISTORY_PROVIDER, 'records': samples, 'validation_passed': True, 'validated_at': at} if state == AVAILABLE else None)

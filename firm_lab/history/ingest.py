@@ -6,10 +6,14 @@ and never as a bar. Two rows for one security and session that differ are both r
 security and year as the vendor printed them (surrounding white space removed, nothing else).
 
 Capture times are UTC, must carry an offset, and never go backwards: a capture cannot be dated before one already stored.
+Without a supplied time the capture is stamped by this machine's clock (SYSTEM). A supplied time (SUPPLIED) may not lie
+in the future, and a bar stored under it never counts as held at the time: a time someone typed is a claim, not a clock.
+
+Rows wait in a private temporary database that the operating system removes when it is closed or when the process
+dies; nothing licensed is left beside the history database by a run that was cut short.
 """
 from __future__ import annotations
 
-import os
 import sqlite3
 from pathlib import Path
 
@@ -37,21 +41,18 @@ def capture_time(at=None) -> str:
     return utc_time(at) if at else now_utc()
 
 
-def _begin(store, at) -> str:
-    at = capture_time(at)
-    latest = store.latest_capture_time()
-    if latest and at < latest:
-        raise ValueError('CAPTURE_TIME_NOT_MONOTONIC')
-    return at
+def _begin(store, at) -> tuple:
+    """(capture time, clock). See ``HistoryStore.capture_clock``."""
+    return store.capture_clock(at)
 
 
 def _capture_id(store, kind, source, file, adapter, at) -> str:
     return content_hash([kind, source, file['sha256'], adapter, at, store.count('history_captures')])
 
 
-def _receipt(store, capture_id, kind, source, file, adapter, counts, at):
+def _receipt(store, capture_id, kind, source, file, adapter, counts, at, clock):
     """One capture record per ingestion run: the validation receipt. Every run leaves its own."""
-    store.put('history_captures', {'capture_id': capture_id, 'kind': kind, 'source': source, **file, 'adapter': adapter, 'captured_at': at,
+    store.put('history_captures', {'capture_id': capture_id, 'kind': kind, 'source': source, **file, 'adapter': adapter, 'captured_at': at, 'clock': clock,
                                    'policy_version': POLICY_VERSION, **counts}, identity=capture_id, at=at)
 
 
@@ -65,7 +66,7 @@ def current_securities(store, *, source=None) -> dict:
 
 
 def ingest_securities(store, rows, *, source, file, adapter, at=None) -> dict:
-    at = _begin(store, at)
+    at, clock = _begin(store, at)
     rows = list(rows)
     seen = {}
     for row in rows:
@@ -96,12 +97,12 @@ def ingest_securities(store, rows, *, source, file, adapter, at=None) -> dict:
                 current[sid] = core
                 versions[sid] = versions.get(sid, 0) + 1
         counts = {'rows_read': read, 'rows_stored': stored, 'rows_duplicate': duplicate, 'rows_rejected': sum(problems.values()), 'rejections_by_reason': problems}
-        _receipt(store, cid, 'securities', source, file, adapter, counts, at)
+        _receipt(store, cid, 'securities', source, file, adapter, counts, at, clock)
     return {'capture_id': cid, **counts}
 
 
 def _ingest_events(store, table, kind, core_fields, rows, *, source, file, adapter, at, allowed=None):
-    at = _begin(store, at)
+    at, clock = _begin(store, at)
     by_symbol = {}
     for sid, sec in current_securities(store, source=source).items():
         by_symbol.setdefault(sec['symbol'], []).append(sid)
@@ -127,7 +128,7 @@ def _ingest_events(store, table, kind, core_fields, rows, *, source, file, adapt
             stored += store.put(table, {**core, 'capture_id': cid}, identity=content_hash(core), at=at)
         counts = {'rows_read': read, 'rows_stored': stored, 'rows_duplicate': read - stored - sum(problems.values()), 'rows_rejected': sum(problems.values()),
                   'rejections_by_reason': problems}
-        _receipt(store, cid, kind, source, file, adapter, counts, at)
+        _receipt(store, cid, kind, source, file, adapter, counts, at, clock)
     return {'capture_id': cid, **counts}
 
 
@@ -143,19 +144,23 @@ def ingest_index_events(store, rows, *, source, file, adapter, at=None) -> dict:
                           rows, source=source, file=file, adapter=adapter, at=at, allowed=('added', 'removed', 'current', 'historical'))
 
 
-def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=None, batch=50_000) -> dict:
-    """Streams bar rows into the store. ``rows`` yields dicts with ``symbol``, ``session`` and the fields in ROW_FIELDS."""
-    at = _begin(store, at)
+def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=None, batch=50_000, sparse=False) -> dict:
+    """Streams bar rows into the store. ``rows`` yields dicts with ``symbol``, ``session`` and the fields in ROW_FIELDS.
+
+    A stored session that lies inside the span of sessions this file holds for a security and year, and that the file
+    does not mention, is removed from the new version: the vendor took the bar out. ``sparse`` says the file lists only
+    scattered rows (for example those changed since a date); then nothing is removed."""
+    at, clock = _begin(store, at)
     securities = current_securities(store, source=source)
     by_symbol = {}
     for sid, sec in securities.items():
         if sec['price_table'] == price_table:
             by_symbol.setdefault(sec['symbol'], []).append(sid)
-    staging = Path(str(store.path) + f'.staging-{os.getpid()}-{content_hash([file["sha256"], at])[:12]}')
-    counts = {'rows_read': 0, 'rows_stored': 0, 'rows_duplicate_identical': 0, 'rows_rejected': 0, 'rows_in_unchanged_blocks': 0, 'blocks_stored': 0, 'blocks_duplicate': 0}
+    counts = {'rows_read': 0, 'rows_stored': 0, 'rows_duplicate_identical': 0, 'rows_rejected': 0, 'rows_in_unchanged_blocks': 0, 'blocks_stored': 0, 'blocks_duplicate': 0,
+              'sessions_removed': 0}
     by_reason, by_change, rejections = {}, {}, []
     span = [None, None]
-    stage = sqlite3.connect(staging)
+    stage = sqlite3.connect('')                                             # a private temporary database; it is gone when closed or when the process dies
     try:
         with store.transaction():
             cid = _capture_id(store, 'bars', source, file, adapter, at)
@@ -200,10 +205,11 @@ def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=
                 block, key = state['block'], state['key']
                 if not block or not block['sessions']:
                     return
-                result = store.put_bars(source, key[0], key[1], block, cid, price_table=price_table, at=at)
+                result = store.put_bars(source, key[0], key[1], block, cid, price_table=price_table, at=at, clock=clock, sparse=sparse)
                 if result['stored']:
                     counts['blocks_stored'] += 1
                     counts['rows_stored'] += len(block['sessions'])
+                    counts['sessions_removed'] += result.get('sessions_removed', 0)
                     by_change[result['change']] = by_change.get(result['change'], 0) + 1
                 else:
                     counts['blocks_duplicate'] += 1
@@ -240,10 +246,8 @@ def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=
             if rejections:
                 store.put_many('history_bar_rejections', rejections, at=at)
             receipt = {**counts, 'rejections_by_reason': by_reason, 'blocks_by_change': by_change, 'first_session': span[0], 'last_session': span[1],
-                       'price_table': price_table, 'basis': BASIS, 'known_at_version': BAR_KNOWN_AT_VERSION, 'known_at_basis': BAR_KNOWN_AT_BASIS}
-            _receipt(store, cid, 'bars', source, file, adapter, receipt, at)
+                       'price_table': price_table, 'sparse': bool(sparse), 'basis': BASIS, 'known_at_version': BAR_KNOWN_AT_VERSION, 'known_at_basis': BAR_KNOWN_AT_BASIS}
+            _receipt(store, cid, 'bars', source, file, adapter, receipt, at, clock)
     finally:
         stage.close()
-        if staging.exists():
-            os.unlink(staging)
     return {'capture_id': cid, **receipt}

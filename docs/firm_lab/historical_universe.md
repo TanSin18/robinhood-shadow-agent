@@ -16,7 +16,9 @@ not decide who is screened.
 4. Ranked by the median daily dollar volume of those 63 sessions, highest first; the security identifier breaks
    ties. The first 1,000 are members. Dollar volume is the **unadjusted** close times the shares traded on the day
    (the vendor's adjusted volume divided by the confirmed split factor). It is not the product of two adjusted
-   numbers, so it does not depend on how the vendor rounded prices it reprinted after a later split.
+   numbers, so for a split that is recorded and confirmed it does not depend on how the vendor rounded the prices it
+   reprinted afterwards. Where a later split is not confirmed by the stored actions, the vendor's own factor is used
+   and the rounding of its reprint remains (measured at up to 0.2% of dollar volume in a test).
 
 Membership takes effect on the session after R and lasts through the next formation session. The 1,000 is the
 sufficiency target; the minimum acceptable is 500.
@@ -59,17 +61,20 @@ to 2021 is identical: later data cannot change earlier membership.
 
 ## Versioning and reproducibility
 
-One record per formation session, plus a manifest with the rule, the period, a hash over every current bar block
-of the screened table, a hash over the stored corporate actions and a hash over the records. The same stored bars,
-the same actions and the same rule give the same universe hash. A different rule is a different version; nothing is
-overwritten.
+One record per formation session, plus a manifest with the rule, the period, a hash over the bar blocks it read, a
+hash over the stored corporate actions and a hash over the records. The same stored bars, the same actions, the same
+rule and the same code give the same universe hash. A rule other than the registered one must be given a version
+name of its own (`RULE_NEEDS_ITS_OWN_VERSION`), so the name `liquid-us-listed-v1` always means the rule above.
+Nothing is overwritten.
 
-**Staleness.** When bars or actions are added or revised after a universe was built, that universe no longer
-describes the stored data. `is_current` says so, and counting or materialising a dataset refuses it
-(`UNIVERSE_IS_STALE`) until the universe is rebuilt. A rebuild stores a second universe beside the first; each is
-read by its own hash, and a read that does not say which is refused when more than one exists
-(`UNIVERSE_HASH_REQUIRED`). Records that do not match their manifest are refused
-(`UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST`).
+**Staleness.** The bars a universe was built from are every current block of every screened security, from
+whichever price table each block came. When any of them, or any action, is added or revised after the universe was
+built, that universe no longer describes the stored data. `is_current` says so, and counting or materialising a
+dataset refuses it (`UNIVERSE_IS_STALE`) until the universe is rebuilt. A rebuild stores another universe beside the
+first. Records belong to a universe by its hash, so two builds can never be read as one. A read that does not say
+which universe is refused when more than one fits the stored bars (`UNIVERSE_HASH_REQUIRED`); the `count` command
+then counts the one built last unless told otherwise, and the readiness report shows the one counted last. Records
+that do not match their manifest are refused (`UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST`).
 
 ## Limitations
 

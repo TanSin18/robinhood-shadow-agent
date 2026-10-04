@@ -60,10 +60,11 @@ def bar_reasons(row, *, captured_at=None) -> list:
     return reasons
 
 
-def block_reasons(columns) -> list:
-    """Every reason any row of a stored block fails the row checks. The store refuses a block unless this is empty."""
+def block_reasons(columns, *, captured_at=None) -> list:
+    """Every reason any row of a block fails the row checks, the capture-time check included when a time is given. The
+    store refuses a block unless this is empty."""
     found = set()
     names = ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted', 'close_total_return')
     for k, session in enumerate(columns['sessions']):
-        found.update(bar_reasons({'session': session, **{name: columns[name][k] for name in names}}))
+        found.update(bar_reasons({'session': session, **{name: columns[name][k] for name in names}}, captured_at=captured_at))
     return sorted(found)

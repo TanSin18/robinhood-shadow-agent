@@ -192,6 +192,11 @@ COMMON = {'source': sf.SOURCE, 'adapter': sf.ADAPTER}
 RULE = {**universe.RULE, 'size': 6}
 
 
+@pytest.fixture(autouse=True)
+def _machine_clock(monkeypatch):
+    fx.set_clock(monkeypatch)                     # the clock a capture is stamped with; later than every time these tests supply
+
+
 def _store(folder, *, at=AT, through=fx.LAST, tickers=None, edit=None, rescale=None, decimals=6, actions=(), ticker_rows=None):
     folder.mkdir(parents=True, exist_ok=True)
     fx.write_tickers(folder / 'T.csv') if ticker_rows is None else ticker_rows(folder / 'T.csv')
@@ -234,7 +239,7 @@ def test_no_readable_label_reaches_a_price_of_a_sealed_segment(tmp_path):
     b = _store(tmp_path / 'b', at=LATER, edit=late_opens)
     try:
         for store in (a, b):
-            universe.build(store, fx.FIRST, fx.LAST, rule=RULE)
+            universe.build(store, fx.FIRST, fx.LAST, rule=RULE, version=fx.VERSION)
         ya, yb = dataset.materialise(a, segments=(splits.BURNED,)), dataset.materialise(b, segments=(splits.BURNED,))
         for h in targets.HORIZONS:
             np.testing.assert_array_equal(ya['y'][h], yb['y'][h])                  # forward-holdout prices cannot move a burned label
@@ -252,7 +257,7 @@ def test_no_readable_label_reaches_a_price_of_a_sealed_segment(tmp_path):
 def test_the_strict_count_is_reported_by_segment_and_purge_rows_are_not_samples(tmp_path):
     store = _store(tmp_path / 's')
     try:
-        universe.build(store, fx.FIRST, '2026-10-02', rule=RULE)
+        universe.build(store, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
         counted = dataset.count(store)
     finally:
         store.close()
@@ -264,31 +269,36 @@ def test_the_strict_count_is_reported_by_segment_and_purge_rows_are_not_samples(
 
 
 # ------------------------------------------------------------------------------------- tiers, revisions and versions
-def test_a_revised_bar_is_not_held_at_the_time_and_a_row_takes_the_lowest_tier(tmp_path):
+def test_a_revised_bar_is_not_held_at_the_time_and_a_row_takes_the_lowest_tier(tmp_path, monkeypatch):
     sessions = list(calendar.sessions('2024-01-02', '2025-03-28'))
+    fx.set_clock(monkeypatch, '2024-01-02T12:00:00+00:00')
     store = _bare(tmp_path)
     try:
         ingest.ingest_securities(store, [{'security_id': '1', 'symbol': 'X', 'name': 'X', 'exchange': 'NYSE', 'category': 'c', 'currency': 'USD', 'is_delisted': False,
                                           'first_price_date': sessions[0], 'last_price_date': sessions[-1], 'price_table': 'stocks'}],
-                                 file={'file': 't', 'sha256': 'a' * 64, 'bytes': 1}, at='2024-01-02T12:00:00+00:00', **COMMON)
+                                 file={'file': 't', 'sha256': 'a' * 64, 'bytes': 1}, **COMMON)
         price = lambda k: f'{50 + 0.01 * k:.2f}'
-        for k, s in enumerate(sessions):                               # stored each evening, before the next session opened
+        for k, s in enumerate(sessions):                               # stored each evening by the machine's own clock, before the next session opened
             rows = [{'symbol': 'X', 'session': s, 'open': price(k), 'high': price(k), 'low': price(k), 'close': price(k), 'volume': '100', 'close_unadjusted': price(k),
                      'close_total_return': price(k), 'provider_updated': ''}]
-            ingest.ingest_bars(store, rows, file={'file': f'd{k}', 'sha256': f'{k:064d}', 'bytes': 1}, at=calendar.session_close(s), **COMMON)
+            fx.set_clock(monkeypatch, calendar.session_close(s))
+            ingest.ingest_bars(store, rows, file={'file': f'd{k}', 'sha256': f'{k:064d}', 'bytes': 1}, **COMMON)
         assert len(store.bars('1')['sessions']) == len(sessions)       # a one-session file extends the year; it does not replace it
-        held = store.held_since('1')
-        assert held[sessions[5]] == calendar.session_close(sessions[5])
-        tiers = dataset.row_tiers(sessions, np.ones(len(sessions), bool), held)
-        assert tiers[251] == 'HELD_AT_THE_TIME' and tiers[250] == 'PUBLISHER_DATED_HISTORICAL'
+        history = store.bar_history('1')
+        assert history['since'][sessions[5]] == calendar.session_close(sessions[5]) and set(history['clock'].values()) == {'SYSTEM'} and not history['revised']
+        tiers = dataset.row_tiers(sessions, np.ones(len(sessions), bool), history)
+        assert tiers[252] == 'HELD_AT_THE_TIME' and tiers[251] == 'PUBLISHER_DATED_HISTORICAL'       # 253 bars: what the 252-session return reads
         revised = [{'symbol': 'X', 'session': sessions[200], 'open': '62.63', 'high': '62.63', 'low': '62.63', 'close': '62.63', 'volume': '100', 'close_unadjusted': '62.63',
                     'close_total_return': '62.63', 'provider_updated': ''}]
-        out = ingest.ingest_bars(store, revised, file={'file': 'rev', 'sha256': 'f' * 64, 'bytes': 1}, at='2026-11-01T12:00:00+00:00', **COMMON)
+        fx.set_clock(monkeypatch, '2026-11-01T12:00:00+00:00')
+        out = ingest.ingest_bars(store, revised, file={'file': 'rev', 'sha256': 'f' * 64, 'bytes': 1}, **COMMON)
         assert out['blocks_by_change'] == {'VALUE_CHANGE': 1}
-        held = store.held_since('1')
-        assert held[sessions[200]] == '2026-11-01T12:00:00+00:00' and held[sessions[199]] == calendar.session_close(sessions[199])
-        tiers = dataset.row_tiers(sessions, np.ones(len(sessions), bool), held)
-        assert set(tiers[200:452]) == {'PUBLISHER_DATED_HISTORICAL'}   # every row whose window holds the revised bar
+        history = store.bar_history('1')
+        assert history['since'][sessions[200]] == '2026-11-01T12:00:00+00:00' and history['since'][sessions[199]] == calendar.session_close(sessions[199])
+        assert history['revised'] == {sessions[200]}
+        tiers = dataset.row_tiers(sessions, np.ones(len(sessions), bool), history)
+        # a restated value: every row whose features or longest label read the revised bar is tier C, and so not a strict sample
+        assert set(tiers[200 - 21:]) == {'RETROSPECTIVE'} and tiers[200 - 22] != 'RETROSPECTIVE' and len(sessions) < 200 + 253
         assert dataset.row_tier('HELD_AT_THE_TIME', 'PUBLISHER_DATED_HISTORICAL') == 'PUBLISHER_DATED_HISTORICAL'       # the universe's tier counts too
     finally:
         store.close()
@@ -339,7 +349,7 @@ def test_two_sources_are_never_mixed_and_replace_is_refused(tmp_path):
         assert store.bars('1', source='Y')['close'][0] == '20.5' and store.bar_summary()['bars'] == 8 and store.bar_summary()['sources'] == ['X', 'Y']
         with pytest.raises(sqlite3.DatabaseError, match='APPEND_ONLY'):
             store.db.execute("INSERT OR REPLACE INTO history_bars SELECT id, source, security_id, year, version, row_count, first_session, last_session, capture_id, "
-                             "'x', content_hash, price_table, payload, created_at FROM history_bars LIMIT 1")
+                             "'x', content_hash, price_table, payload, created_at, clock FROM history_bars LIMIT 1")
     finally:
         store.close()
 
@@ -413,7 +423,7 @@ def test_the_rejected_share_is_the_worst_file_not_an_average_that_re_ingesting_c
 def test_past_membership_ignores_todays_master_row_and_the_vendors_rounding(tmp_path):
     base = _store(tmp_path / 'base', through='2020-06-30')
     try:
-        universe.build(base, fx.FIRST, '2020-06-30', rule=RULE)
+        universe.build(base, fx.FIRST, '2020-06-30', rule=RULE, version=fx.VERSION)
         before = [(r['formation_session'], r['members']) for r in universe.load(base)['records']]
         assert any('100001' in members for _, members in before)
 
@@ -425,7 +435,7 @@ def test_past_membership_ignores_todays_master_row_and_the_vendors_rounding(tmp_
         moved(tmp_path / 'T2.csv')
         ingest.ingest_securities(base, sf.securities(tmp_path / 'T2.csv'), file=ingest.describe_file(tmp_path / 'T2.csv'), at=LATER, **COMMON)
         assert ingest.current_securities(base)['100001']['price_table'] == 'funds'
-        universe.build(base, fx.FIRST, '2020-06-30', rule=RULE)
+        universe.build(base, fx.FIRST, '2020-06-30', rule=RULE, version=fx.VERSION)
         assert [(r['formation_session'], r['members']) for r in universe.load(base)['records']] == before       # the bars came from the stock file
     finally:
         base.close()
@@ -451,7 +461,7 @@ def test_past_membership_ignores_todays_master_row_and_the_vendors_rounding(tmp_
 def test_a_revision_and_a_rebuild_leave_every_universe_loadable_and_a_stale_one_is_refused(tmp_path):
     store = _store(tmp_path / 's', through='2020-06-30')
     try:
-        first = universe.build(store, fx.FIRST, '2020-06-30', rule=RULE)
+        first = universe.build(store, fx.FIRST, '2020-06-30', rule=RULE, version=fx.VERSION)
         assert dataset.count(store)['universe_hash'] == first['universe_hash']
         block = store.bars('100013')                                    # the vendor revises 2019 volume upward for a thinly traded stock
         year = {c: [v for s, v in zip(block['sessions'], block[c]) if s[:4] == '2019'] for c in block if c != 'blocks'}
@@ -459,7 +469,7 @@ def test_a_revision_and_a_rebuild_leave_every_universe_loadable_and_a_stale_one_
         store.put_bars(sf.SOURCE, '100013', 2019, year, 'revision', price_table='stocks', at=LATER)
         with pytest.raises(ValueError, match='UNIVERSE_IS_STALE'):
             dataset.count(store)                                        # counted on a universe built from other bars: refused, not served
-        second = universe.build(store, fx.FIRST, '2020-06-30', rule=RULE)
+        second = universe.build(store, fx.FIRST, '2020-06-30', rule=RULE, version=fx.VERSION)
         assert second['universe_hash'] != first['universe_hash']
         assert universe.load(store)['manifest']['universe_hash'] == second['universe_hash']                     # the one that matches the stored bars
         assert universe.load(store, first['universe_hash'])['manifest']['universe_hash'] == first['universe_hash']       # the earlier one is still there, intact
@@ -476,7 +486,7 @@ def test_survivorship_needs_delisted_securities_with_bars_and_a_delisting_needs_
     ghost = _store(tmp_path / 'ghost', through='2019-12-31', tickers=[t for t, v in fx.SECURITIES.items() if not v[4]], ticker_rows=with_a_ghost)
     try:
         with pytest.raises(ValueError, match='SURVIVOR_ONLY_SOURCE'):
-            universe.build(ghost, fx.FIRST, '2019-12-31', rule=RULE)    # a delisted name with no bars proves nothing
+            universe.build(ghost, fx.FIRST, '2019-12-31', rule=RULE, version=fx.VERSION)    # a delisted name with no bars proves nothing
     finally:
         ghost.close()
     truncated = _store(tmp_path / 'cut', through='2020-06-30')         # CCC really traded for another year; the master already says delisted
@@ -575,7 +585,7 @@ def test_the_page_and_the_report_do_not_say_more_than_is_stored(tmp_path):
     store = _store(tmp_path / 'data' / 's')
     try:
         store.put('history_reservations', splits.reservation())
-        universe.build(store, fx.FIRST, '2026-10-02', rule=RULE)
+        universe.build(store, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
         store.put('history_reports', {'kind': 'strict_count', **dataset.count(store)})
     finally:
         store.close()
@@ -601,3 +611,314 @@ def test_the_page_and_the_report_do_not_say_more_than_is_stored(tmp_path):
         history_capability.statuses(forged)
     with pytest.raises(ValueError, match='READINESS_REPORT'):
         history_capability.statuses({'kind': 'historical_data_readiness', 'report_hash': 'x'})
+
+
+# ------------------------------------------------------ review round 3 (a fourth, fresh reviewer; commit e1a502e)
+SPAN = list(calendar.sessions('2024-03-04', '2024-03-15'))             # ten sessions
+
+
+def _ohlc(sessions, rows, *, volume, unadjusted=None):
+    """A block from (open, high, low, close) rows printed as given."""
+    columns = list(zip(*rows))
+    return {'sessions': list(sessions), 'open': list(columns[0]), 'high': list(columns[1]), 'low': list(columns[2]), 'close': list(columns[3]),
+            'volume': list(volume) if not isinstance(volume, str) else [volume] * len(rows), 'close_unadjusted': list(unadjusted or columns[3]),
+            'close_total_return': list(columns[3]), 'provider_updated': [''] * len(rows)}
+
+
+def _later_split_store(folder, later, through='2020-12-31'):
+    """The same market history twice; in one, AAA is printed as a vendor prints it after a 40-for-1 split in 2026."""
+    folder.mkdir(parents=True)
+    fx.write_tickers(folder / 'T.csv')
+    rows = []
+    for ticker in fx.SECURITIES:
+        extra = {'rescale': ('AAA', 40.0), 'decimals': 2} if later and ticker == 'AAA' else {}
+        rows += [list(r) for r in fx.price_rows([ticker], through=through, **extra)]
+    fx.write_prices(folder / 'P.csv', rows)
+    fx.write_actions(folder / 'A.csv', extra=[('2026-09-01', 'split', 'AAA', 'AAA Corp', '40', '', '')] if later else ())
+    store = HistoryStore(folder / 'firm_lab_history.db', create=True)
+    ingest.ingest_securities(store, sf.securities(folder / 'T.csv'), file=ingest.describe_file(folder / 'T.csv'), at=LATER, **COMMON)
+    ingest.ingest_bars(store, sf.prices(folder / 'P.csv'), file=ingest.describe_file(folder / 'P.csv'), at=LATER, **COMMON)
+    ingest.ingest_actions(store, sf.actions(folder / 'A.csv'), file=ingest.describe_file(folder / 'A.csv'), at=LATER, **COMMON)
+    universe.build(store, fx.FIRST, through, rule={**universe.RULE, 'size': 40}, version='liquid-top40-test')
+    return store
+
+
+def test_whether_a_high_low_open_feature_exists_never_depends_on_a_later_split(tmp_path, monkeypatch):
+    """Withholding those features only on coarsely printed rows marked exactly the stocks that split years later."""
+    from firm_lab.history import features
+    more = {f'Q{k:02d}': (200001 + k, 30.0 + 2 * k, 4.2 + 0.05 * k, None, False) for k in range(30)}       # so that AAA is a small share of the rows
+    monkeypatch.setattr(fx, 'SECURITIES', {**fx.SECURITIES, **more})
+    plain, later = _later_split_store(tmp_path / 'plain', False), _later_split_store(tmp_path / 'later', True)
+    try:
+        a, b = dataset.materialise(plain), dataset.materialise(later)
+        counted = dataset.count(later)
+    finally:
+        plain.close()
+        later.close()
+    assert list(zip(a['security_id'], a['session'])) == list(zip(b['security_id'], b['session'])) and a['manifest']['rows'] > 1000
+    shape = [k for k, d in enumerate(features.DEFINITIONS) if d['uses_high_low_open']]
+    close_only = [k for k, d in enumerate(features.DEFINITIONS) if not d['uses_high_low_open'] and d['family'] != 'volume']
+    aaa = np.array(a['security_id']) == '100001'
+    assert 100 < aaa.sum() < 0.05 * len(aaa)
+    assert a['manifest']['high_low_open_families_usable'] and np.isfinite(a['X'][aaa][:, shape]).any() and a['manifest']['rows_reading_a_coarse_print'] == 0
+    # the later split is in the future of every one of these rows: it may not show in which rows have a value
+    missing = np.isnan(b['X'][:, shape])
+    assert missing[aaa].all() and missing[~aaa].all()                    # all rows or none, never the future splitter alone
+    assert not b['manifest']['high_low_open_families_usable'] and b['manifest']['rows_reading_a_coarse_print'] > 0
+    assert not counted['high_low_open_families_usable'] and counted['rows_reading_a_coarse_print'] > 0
+    assert 0 < counted['coarse_print_share'] < 0.05                      # far below the share at which the earlier rule withheld them from everyone
+    np.testing.assert_allclose(a['X'][aaa][:, close_only], b['X'][aaa][:, close_only], rtol=1e-9, atol=1e-12, equal_nan=True)
+
+
+def test_nothing_of_a_sealed_segment_leaves_the_builder_and_no_readable_row_reads_a_sealed_price(tmp_path):
+    """Burned rows read the holdout through their lookbacks, and rows of sealed sessions left with their features: a
+    20-session return is the label of the row 21 sessions earlier."""
+    def holdout_only(row):                                              # other prices in the holdout's last months; dollar volume and so membership unchanged
+        if '2024-07-01' <= row[1] <= splits.HOLDOUT_LAST:
+            k = 1.0 + 0.3 * (calendar.position(row[1]) - calendar.position('2024-07-01')) / 190.0
+            for c in (2, 3, 4, 5, 7):
+                row[c] = f'{float(row[c]) * k:.6f}'
+            row[8], row[6] = f'{float(row[8]) * k:.4f}', f'{float(row[6]) / k:.1f}'
+        return row
+
+    a, b = _store(tmp_path / 'a', at=LATER), _store(tmp_path / 'b', at=LATER, edit=holdout_only)
+    try:
+        for store in (a, b):
+            universe.build(store, fx.FIRST, fx.LAST, rule=RULE, version=fx.VERSION)
+        xa, xb = dataset.materialise(a, segments=(splits.BURNED,)), dataset.materialise(b, segments=(splits.BURNED,))
+        common = sorted(set(zip(xa['security_id'], xa['session'])) & set(zip(xb['security_id'], xb['session'])))
+        ia, ib = {k: n for n, k in enumerate(zip(xa['security_id'], xa['session']))}, {k: n for n, k in enumerate(zip(xb['security_id'], xb['session']))}
+        assert len(common) > 1000 and len(common) > 0.9 * xa['manifest']['rows']
+        np.testing.assert_array_equal(xa['X'][[ia[k] for k in common]], xb['X'][[ib[k] for k in common]])      # no holdout price reaches a burned feature
+        assert min(xa['session']) >= calendar.offset(splits.BURNED_FIRST, 20)        # a burned row starts from the burned window's own bars
+        assert xa['manifest']['features_of_burned_rows_read_from'] == splits.BURNED_FIRST
+        assert dataset.materialise(a)['manifest']['hashes'] == dataset.materialise(b)['manifest']['hashes']      # development never saw the holdout either
+        rows = dataset.security_rows(a, '100009', None, universe.membership(universe.load(a)['records'])['100009'], [])
+        unreadable = ~np.isin(rows['segment'], [splits.DEVELOPMENT, splits.BURNED])
+        sealed = np.isin(rows['segment'], [splits.HISTORICAL_HOLDOUT, splits.FORWARD_HOLDOUT])
+        assert sealed.sum() > 1000 and rows['eligible'][sealed].sum() > 900          # the rows are counted ...
+        for name, values in rows['features'].items():
+            assert np.all(np.isnan(values[unreadable])), name                        # ... and not one feature value of them is handed out
+        assert np.isfinite(rows['features']['return20'][~unreadable]).sum() > 400
+    finally:
+        a.close()
+        b.close()
+
+
+def test_two_builds_never_share_records_and_every_bar_a_universe_reads_makes_it_stale(tmp_path, monkeypatch):
+    store = _store(tmp_path / 's', through='2019-12-31')
+    try:
+        with pytest.raises(ValueError, match='RULE_NEEDS_ITS_OWN_VERSION'):
+            universe.build(store, fx.FIRST, '2019-12-31', rule=RULE)     # another rule may not carry the registered rule's name
+        first = universe.build(store, fx.FIRST, '2019-12-31', rule=RULE, version=fx.VERSION)
+        original = universe.formation_stats
+
+        def other(panel, formations, rule=universe.RULE, actions=()):   # the screening code changes; the bars do not
+            return {r: (('NO_DOLLAR_VOLUME', None) if panel['security_id'] == '100002' else found) for r, found in original(panel, formations, rule, actions).items()}
+
+        monkeypatch.setattr(universe, 'formation_stats', other)
+        second = universe.build(store, fx.FIRST, '2019-12-31', rule=RULE, version=fx.VERSION)
+        monkeypatch.setattr(universe, 'formation_stats', original)
+        assert first['universe_hash'] != second['universe_hash']
+        loaded = [universe.load(store, m['universe_hash']) for m in (first, second)]            # both stay readable, each with its own records
+        assert all(len(found['records']) == first['formation_sessions'] for found in loaded)
+        assert any('100002' in r['members'] for r in loaded[0]['records']) and not any('100002' in r['members'] for r in loaded[1]['records'])
+        # the vendor moves FFF to its fund table from 2020 on; a universe then reads fund-file bars of a screened security
+        moved = tmp_path / 'T2.csv'
+        fx.write_tickers(moved)
+        moved.write_text(moved.read_text().replace('SEP,100006,FFF', 'SFP,100006,FFF'))
+        ingest.ingest_securities(store, sf.securities(moved), file=ingest.describe_file(moved), at=LATER, **COMMON)
+        assert ingest.current_securities(store)['100006']['price_table'] == 'funds'
+        rows = [list(r) for r in fx.price_rows(['FFF'], through='2020-12-31') if r[1] >= '2020-01-01']
+        fx.write_prices(tmp_path / 'F.csv', rows)
+        ingest.ingest_bars(store, sf.prices(tmp_path / 'F.csv'), file=ingest.describe_file(tmp_path / 'F.csv'), price_table='funds', at=LATER, **COMMON)
+        third = universe.build(store, fx.FIRST, '2020-12-31', rule=RULE, version=fx.VERSION)
+        assert universe.is_current(store, third) and dataset.count(store, universe_hash=third['universe_hash'])['strict_samples']['5'] > 0
+        assert any('100006' in r['members'] for r in universe.load(store, third['universe_hash'])['records'] if r['formation_session'] >= '2020-03-01')
+        for r in rows:
+            r[6] = f'{float(r[6]) / 10000:.1f}'                         # and then revises those fund-file bars
+        fx.write_prices(tmp_path / 'F2.csv', rows)
+        out = ingest.ingest_bars(store, sf.prices(tmp_path / 'F2.csv'), file=ingest.describe_file(tmp_path / 'F2.csv'), price_table='funds', at='2026-10-13T12:00:00+00:00', **COMMON)
+        assert out['blocks_by_change'] == {'VALUE_CHANGE': 1} and not universe.is_current(store, third)
+        with pytest.raises(ValueError, match='UNIVERSE_IS_STALE'):
+            dataset.count(store, universe_hash=third['universe_hash'])
+    finally:
+        store.close()
+
+
+def test_a_bar_rewritten_as_a_rescale_is_a_revised_bar(tmp_path):
+    first, second = '2024-03-15T21:00:00+00:00', '2026-10-01T12:00:00+00:00'
+    flat = lambda price: (price, price, price, price)
+    store = _bare(tmp_path, 'a.db')
+    try:                                                                # one bar in the middle: prices doubled, volume halved, printed price unchanged
+        base = _ohlc(SPAN, [flat(f'{10 + k}.00') for k in range(10)], volume='1000')
+        store.put_bars('X', '1', 2024, base, 'c1', price_table='stocks', at=first)
+        changed = {c: list(v) for c, v in base.items()}
+        for c in ('open', 'high', 'low', 'close'):
+            changed[c][4] = '28.00'
+        changed['volume'][4] = '500'
+        assert store.put_bars('X', '1', 2024, changed, 'c2', price_table='stocks', at=second)['change'] == 'VALUE_CHANGE'
+        history = store.bar_history('1')
+        assert history['since'][SPAN[4]] == second and history['revised'] == {SPAN[4]} and history['since'][SPAN[3]] == first
+    finally:
+        store.close()
+    store = _bare(tmp_path, 'b.db')
+    try:                                                                # a vendor that prints whole numbers: a different bar is not a rescale
+        base = _ohlc(SPAN, [flat('52')] * 10, volume='1000')
+        store.put_bars('X', '1', 2024, base, 'c1', price_table='stocks', at=first)
+        other = {c: list(v) for c, v in base.items()}
+        other['open'][0], other['high'][0], other['low'][0], other['close'][0], other['volume'][0] = '51', '55', '51', '53', '990'
+        assert store.put_bars('X', '1', 2024, other, 'c2', price_table='stocks', at=second)['change'] == 'VALUE_CHANGE'
+        assert store.bar_history('1')['revised'] == {SPAN[0]}
+    finally:
+        store.close()
+    old = _ohlc(SPAN, [flat(f'{10 + k}.00') for k in range(10)], volume='1000')
+    halved = _ohlc(SPAN, [flat(f'{(10 + k) / 2:.2f}') for k in range(10)], volume='2000', unadjusted=old['close'])
+    assert classify_change(old, halved)['change'] == 'SCALE_ONLY' and classify_change(old, halved)['scale_factor'] == 0.5      # a real re-adjustment still is one
+    reprinted = _ohlc(SPAN, [flat(f'{10 + k}.0') for k in range(10)], volume='1000', unadjusted=old['close'])
+    assert classify_change(old, reprinted)['change'] == 'VALUE_CHANGE'  # the same numbers printed otherwise: not a rescale, and never silently equal
+
+
+def test_a_session_the_vendor_removed_is_removed_and_a_sparse_file_removes_nothing(tmp_path):
+    times = [f'2026-10-0{k}T12:00:00+00:00' for k in range(1, 6)]
+    full = _block(SPAN, [f'{10 + k}.25' for k in range(10)])
+    without = {c: [v for j, v in enumerate(column) if j != 4] for c, column in full.items()}
+    store = _bare(tmp_path)
+    try:
+        store.put_bars('X', '1', 2024, full, 'c1', price_table='stocks', at=times[0])
+        out = store.put_bars('X', '1', 2024, without, 'c2', price_table='stocks', at=times[1])       # the vendor's whole-year file no longer has the session
+        assert out['stored'] and out['change'] == 'VALUE_CHANGE' and out['sessions_removed'] == 1
+        assert SPAN[4] not in store.bars('1')['sessions'] and SPAN[4] in store.bars('1', through_capture_time=times[0])['sessions']
+        tail = {c: column[6:] for c, column in full.items()}            # a file that only covers later sessions carries the earlier ones
+        assert store.put_bars('X', '1', 2024, tail, 'c3', price_table='stocks', at=times[2])['stored'] is False and len(store.bars('1')['sessions']) == 9
+        scattered = {c: [column[0], column[9]] for c, column in full.items()}
+        scattered['volume'] = ['1000', '1234']                          # two changed rows, far apart: with "sparse" nothing between them is removed
+        out = store.put_bars('X', '1', 2024, scattered, 'c4', price_table='stocks', at=times[3], sparse=True)
+        assert out['stored'] and out['sessions_removed'] == 0 and len(store.bars('1')['sessions']) == 9
+        store.put_bars('X', '1', 2024, full, 'c5', price_table='stocks', at=times[4])
+        history = store.bar_history('1')                                # the bar that came back, and the one that changed, are revised bars
+        assert len(store.bars('1')['sessions']) == 10 and {SPAN[4], SPAN[9]} <= history['revised'] and history['since'][SPAN[4]] == times[4]
+    finally:
+        store.close()
+
+
+def test_a_supplied_capture_time_orders_versions_and_proves_nothing(tmp_path, monkeypatch):
+    days = list(calendar.sessions('2024-01-02', '2025-03-28'))
+    price = lambda k: f'{50 + 0.01 * k:.2f}'
+    year = lambda y: _block([d for d in days if d[:4] == y], [price(k) for k, d in enumerate(days) if d[:4] == y])
+    fx.set_clock(monkeypatch, '2026-10-04T12:00:00+00:00')
+    store = _bare(tmp_path)
+    try:
+        with pytest.raises(ValueError, match='INVALID_BAR_BLOCK'):      # "captured" before any of its sessions existed
+            store.put_bars('X', '1', 2024, year('2024'), 'c', price_table='stocks', at='2023-12-01T00:00:00+00:00')
+        store.put_bars('X', '1', 2024, year('2024'), 'c', price_table='stocks', at=calendar.session_close('2024-12-31'))
+        store.put_bars('X', '1', 2025, year('2025'), 'c', price_table='stocks', at=calendar.session_close('2025-03-28'))
+        history = store.bar_history('1')
+        assert set(history['clock'].values()) == {'SUPPLIED'}
+        assert set(dataset.row_tiers(days, np.ones(len(days), bool), history)) == {'PUBLISHER_DATED_HISTORICAL'}      # a typed time is a claim, not a clock
+        with pytest.raises(ValueError, match='CAPTURE_TIME_NOT_MONOTONIC'):
+            store.put_bars('X', '2', 2024, _block(SPAN, ['10.00'] * 10), 'c', price_table='stocks', at='2024-06-03T00:00:00+00:00')
+        with pytest.raises(ValueError, match='CAPTURE_TIME_IN_THE_FUTURE'):
+            ingest.ingest_bars(store, [], file={'file': 'f', 'sha256': 'f' * 64, 'bytes': 1}, at='2027-03-02T00:00:00+00:00', **COMMON)
+        assert ingest.ingest_bars(store, [], file={'file': 'g', 'sha256': 'e' * 64, 'bytes': 1}, **COMMON)['rows_read'] == 0      # the machine's own clock still works
+        assert [p['clock'] for _, p, _ in store.rows('history_captures')] == ['SYSTEM']
+    finally:
+        store.close()
+
+
+def test_the_tiers_split_the_strict_samples_and_a_row_that_reads_a_revised_bar_is_not_one(tmp_path):
+    store = _store(tmp_path / 's', through='2020-12-31')
+    try:
+        before = dataset.count(store, universe_hash=universe.build(store, fx.FIRST, '2020-12-31', rule=RULE, version=fx.VERSION)['universe_hash'])
+        for h in ('5', '10', '20'):
+            assert sum(before['strict_samples_by_tier'][h].values()) == before['strict_samples'][h] > 0
+        block = store.bars('100002')                                    # one corrected close in the middle of 2020
+        year = {c: [v for s, v in zip(block['sessions'], block[c]) if s[:4] == '2020'] for c in block if c != 'blocks'}
+        k = 120
+        year['close'][k] = f'{float(year["close"][k]) * 1.0004:.6f}'
+        year['high'][k] = f'{max(float(year["high"][k]), float(year["close"][k])):.6f}'
+        assert store.put_bars(sf.SOURCE, '100002', 2020, year, 'correction', price_table='stocks', at=LATER)['change'] == 'VALUE_CHANGE'
+        chosen = universe.build(store, fx.FIRST, '2020-12-31', rule=RULE, version=fx.VERSION)['universe_hash']
+        after = dataset.count(store, universe_hash=chosen)
+        lost = after['rows_not_strict_because_a_bar_was_revised']
+        assert lost > 20 and after['eligible_feature_rows'] == before['eligible_feature_rows'] - lost
+        assert after['strict_samples']['5'] < before['strict_samples']['5']
+        data = dataset.materialise(store, universe_hash=chosen)
+        assert data['manifest']['rows_left_out_because_a_bar_was_revised'] > 0 and set(data['tier']) == {'PUBLISHER_DATED_HISTORICAL'}
+    finally:
+        store.close()
+
+
+def test_the_end_of_the_store_is_not_a_delisting_and_the_report_can_only_be_written_under_its_own_name(tmp_path):
+    store = _store(tmp_path / 's', through='2026-08-31', actions=[('2026-09-03', 'delisted', 'III', 'III Corp', '', '', '')])
+    try:
+        p = __import__('firm_lab.history.panel', fromlist=['x']).load(store, '100009')
+        actions = [a for _, a, _ in store.rows('history_actions') if a['security_id'] == '100009']
+        end = store.bar_summary()['last_session']
+        assert p['sessions'][-1] == end == '2026-08-31'
+        assert targets.delisted_at_last_bar(p, actions, end) is None     # its bars stop where every security's stop: nothing shows that it stopped trading
+        universe.build(store, fx.FIRST, '2026-08-31', rule=RULE, version=fx.VERSION)
+        assert 'delisted' not in dataset.count(store)['delisting_exits_by_year'].get('2026', {})
+        # a time given with another offset is the same time
+        stored_at = store.db.execute('SELECT MIN(created_at) FROM history_bars').fetchone()[0]
+        assert stored_at == AT and len(list(store.bar_blocks('100009', through_capture_time='2026-10-03T09:00:00-04:00'))) > 0
+        assert not list(store.bar_blocks('100009', through_capture_time='2026-10-03T07:00:00-04:00'))
+        # a second universe over another period: both fit the stored bars, the report shows one and does not call it stale
+        store.put('history_reports', {'kind': 'strict_count', **dataset.count(store)})
+        universe.build(store, fx.FIRST, '2026-06-30', rule=RULE, version=fx.VERSION)
+    finally:
+        store.close()
+    research = _research_db(tmp_path / 'firm_lab')
+    database = tmp_path / 's' / 'firm_lab_history.db'
+    report = readiness.build(research, database)
+    assert report['market_data']['universe_stale'] is False and report['market_data']['universes_current'] == 2 and report['universe']['end'] == '2026-08-31'
+    before = database.read_bytes()
+    for target in (database, tmp_path / 's' / 'notes.json'):
+        with pytest.raises(ValueError, match='NOT_THE_READINESS_FILE'):
+            readiness.write(report, target)
+    assert database.read_bytes() == before
+    from firm_lab.history import cli
+    assert cli.main(['count', '--db', str(database)]) == 0              # with several universes the command counts the one built last
+
+
+def test_an_interrupted_ingestion_leaves_no_vendor_row_beside_the_database(tmp_path):
+    folder = tmp_path / 'private'
+    folder.mkdir()
+    store = HistoryStore(folder / 'firm_lab_history.db', create=True)
+    fx.write_tickers(tmp_path / 'T.csv')
+    ingest.ingest_securities(store, sf.securities(tmp_path / 'T.csv'), file=ingest.describe_file(tmp_path / 'T.csv'), at=AT, **COMMON)
+    seen = []
+
+    def rows():
+        for n, r in enumerate(fx.price_rows(['III'], through='2019-12-31')):
+            if n == 300:
+                seen.append(sorted(p.name for p in folder.iterdir()))   # what a process killed here would leave behind
+            yield dict(zip(('symbol', 'session', 'open', 'high', 'low', 'close', 'volume', 'close_total_return', 'close_unadjusted', 'provider_updated'), r))
+
+    try:
+        ingest.ingest_bars(store, rows(), file={'file': 'p', 'sha256': 'a' * 64, 'bytes': 1}, at=AT, **COMMON)
+    finally:
+        store.close()
+    assert seen and all(name.startswith('firm_lab_history.db') and 'staging' not in name for name in seen[0])
+
+
+def test_the_report_lists_every_bar_of_the_specification_and_a_history_is_not_one_early_bar(tmp_path):
+    import re
+    spec = (ROOT / 'docs' / 'firm_lab' / 'CHECKPOINT8_DATA_SUFFICIENCY_SPEC.md').read_text()
+    named = sorted(set(re.findall(r'^\| ([HPEFO][0-9]) ', spec, re.M)))
+    empty = readiness.build(_research_db(tmp_path / 'firm_lab'), None)
+    assert sorted(b['id'] for b in empty['specification_bars']) == named and len(named) == 25
+    assert all(b['status'] != 'MET' for b in empty['specification_bars'])
+    store = _store(tmp_path / 's', through='2020-12-31')
+    try:
+        early = _block(['2004-03-01'], ['9.50'])                        # one bar of one security, long before the rest
+        store.put_bars(sf.SOURCE, '100009', 2004, early, 'early', price_table='stocks', at=LATER)
+        universe.build(store, fx.FIRST, '2020-12-31', rule=RULE, version=fx.VERSION)
+        store.put('history_reports', {'kind': 'strict_count', **dataset.count(store)})
+    finally:
+        store.close()
+    report = readiness.build(tmp_path / 'firm_lab' / 'firm_lab.db', tmp_path / 's' / 'firm_lab_history.db')
+    bars = {b['id']: b for b in report['specification_bars']}
+    assert report['market_data']['history_range'][0] == '2004-03-01' and bars['H1']['status'] == 'NOT_MET' and bars['H1']['measured'] is None
+    assert bars['O5']['status'] == 'MET' and bars['O2']['status'] == 'NOT_MET' and bars['P7']['status'] == 'NOT_MET'
+    assert report['regimes']['training_alone']['status'] == 'NOT_MEASURABLE'

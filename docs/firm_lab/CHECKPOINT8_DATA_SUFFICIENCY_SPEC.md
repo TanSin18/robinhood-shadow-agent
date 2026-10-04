@@ -217,3 +217,25 @@ lowered and none was added. Four measurement rules that the text left open are f
 
 The verdict code was also brought into line with §5 and §8 as written: a horizon is as testable as the weaker of
 development (P3) and the reserved holdout (P4), and a multi-task network is judged at its longest horizon.
+
+**Amendment 3, 2026-10-04, after the fourth independent review and still before any data was collected.** No bar was
+lowered and none was added. Three rules are tightened and two statements of this document are corrected:
+
+* **O7, how the features are withheld.** Amendment 1 withheld the high, low and open families from every row only
+  above 5% coarse rows, and row by row below that. Row by row is itself a mark of the stocks that split later. The
+  families are now used for every row of a dataset or for none, and for none as soon as one row would read a
+  coarsely printed bar. The bar's numbers (1% and 5% of member rows) stay as the reported measure.
+* **A restated bar is tier C (§1).** A bar whose value the vendor changed after it was first stored is a restated
+  value. A row that reads one, in a feature or in its longest label, is not a strict sample. The code had kept such
+  rows in tier B.
+* **Tier A needs the machine's own clock.** A capture time someone supplied orders the stored versions and proves
+  nothing about when a bar was held.
+* **Correction to §4.** "Longest feature lookback: 252 sessions" means the 252-session return, which reads 253 bars.
+  Pivot and Fibonacci features read back to the start of the pivot or leg they stand on, which can be earlier. The
+  tier of a row follows the oldest bar it reads.
+* **Correction to §8.** "Training alone" (two bear markets, eight calendar years) is measured on development without
+  the sessions the five walk-forward folds need for validation (5 x 252), not on all of development.
+
+The readiness report lists all 25 bars of this specification. A bar whose measurement is not built yet (P7) is shown
+as not met, with that reason. H1 is measured as the first month-end at which the universe holds the minimum number of
+members, so that one early bar of one security cannot meet it.

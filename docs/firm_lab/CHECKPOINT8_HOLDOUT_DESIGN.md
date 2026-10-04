@@ -1,8 +1,8 @@
 # Checkpoint 8 — fresh holdout design
 
 Reserved 2026-10-04, before any Checkpoint 8 market data existed. Split version `c9-chronology-v1`. The dates are
-constants in `firm_lab/history/splits.py`; the reservation record is stored in the historical database when it is
-created; a test fails if this document and the code disagree.
+constants in `firm_lab/history/splits.py`; the `init` command stores the reservation record in the historical
+database; a test fails if this document and the code disagree.
 
 No model metric of any kind was computed in Checkpoint 8, on any segment.
 
@@ -31,7 +31,14 @@ A sample whose longest label would end inside the next segment is dropped, at ev
   2026-09-03 onward would be built from forward-holdout prices, so those sessions yield no sample.
 
 **Label values can be read in two segments only: `DEVELOPMENT` and `BURNED_CHECKPOINT7`.** In both holdouts, in every
-purge and in the burn-in, the dataset builder blanks the value before a row leaves it.
+purge and in the burn-in, the dataset builder blanks the label value **and every feature value** before a row
+leaves it. A price series is its own label: a 20-session return at T+21 is the label of T.
+
+**No readable row reads a sealed price.** A burned row's lookback would reach into the historical holdout that ends
+the session before the burned window begins. So the features of every row on or after 2025-03-31 are computed only
+from bars on or after 2025-03-31: the first burned sample is 20 sessions into the window, and long-lookback features
+of the first burned year are unavailable instead of built from the holdout. A test changes prices in the holdout and
+shows that no feature and no label of a burned row moves.
 
 Only an exchange session has a segment. Asking for the segment of any other date is an error, not a guess.
 
@@ -49,9 +56,14 @@ Chosen from the calendar and from the sufficiency specification, without looking
 
 ## How the seal is enforced
 
-* The dataset builder removes the label values of every segment that is not readable (both holdouts, the purges, the
-  burn-in) before any row leaves it. Only whether a label can be built is counted, which reads dates and the
-  existence of bars.
+* The dataset builder removes the label values and the feature values of every segment that is not readable (both
+  holdouts, the purges, the burn-in) before any row leaves it. Only whether a row and its label can be built is
+  counted, which reads dates and the existence of bars.
+* **What the seal is not.** The raw bars of the holdout sit in the same database as everything else and can be read
+  by anyone who opens it. The seal is on what the dataset builder hands out and on what any model is measured on;
+  it is a rule with tests, not a lock. One thing does cross the boundary: universe membership in the first months of
+  the burned window is formed from the holdout's last bars (63 sessions of dollar volume and the price screen), as
+  one yes-or-no per security and month.
 * `materialise` refuses every segment that is not readable (`SEALED_SEGMENT`).
 * The strict count is reported per segment. The headline number is the sum over the four sample segments; purge and
   burn-in sessions are never in it.

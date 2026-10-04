@@ -25,6 +25,11 @@ PACKAGE = ROOT / 'firm_lab' / 'history'
 SPEC = (ROOT / 'docs' / 'firm_lab' / 'CHECKPOINT8_DATA_SUFFICIENCY_SPEC.md').read_text()
 AT = '2026-10-03T12:00:00+00:00'
 COMMON = {'source': sf.SOURCE, 'adapter': sf.ADAPTER}
+
+
+@pytest.fixture(autouse=True)
+def _machine_clock(monkeypatch):
+    fx.set_clock(monkeypatch)                     # the clock a capture is stamped with; later than every time these tests supply
 BANNED_IMPORTS = ('agents', 'broker', 'broker_proxy', 'risk', 'config', 'data', 'eval', 'prompts', 'scripts', 'research', 'robin_stocks', 'alpaca', 'urllib', 'socket',
                   'http', 'ssl', 'requests', 'subprocess', 'firm_lab_collectors', 'torch', 'sklearn', 'xgboost', 'lightgbm', 'catboost')
 ACTION_WORDS = ('BUY', 'SELL', 'STRONG BUY', 'GO LONG', 'GO SHORT', 'OVERWEIGHT', 'UNDERWEIGHT', 'ENTER NOW', 'TAKE PROFIT', 'PRICE TARGET')
@@ -76,7 +81,7 @@ def stored(tmp_path_factory):
         ingest.ingest_actions(store, sf.actions(files['actions']), file=ingest.describe_file(files['actions']), at=AT, **COMMON)
         ingest.ingest_index_events(store, sf.index_events(files['sp500']), file=ingest.describe_file(files['sp500']), at=AT, **COMMON)
         store.put('history_reservations', splits.reservation())
-        universe.build(store, fx.FIRST, '2026-10-02', rule={**universe.RULE, 'size': 6})
+        universe.build(store, fx.FIRST, '2026-10-02', rule={**universe.RULE, 'size': 6}, version=fx.VERSION)
         store.put('history_reports', {'kind': 'strict_count', **dataset.count(store)})
     research = _research(folder / 'firm_lab')
     return folder, research
@@ -101,7 +106,7 @@ def test_the_bars_in_code_are_the_bars_written_before_any_data_was_collected():
     assert 'O7 Print precision (added by amendment 1) | At most 1% of member rows have an adjusted close printed more coarsely than 0.05% of its value | At most 5%' in SPEC
     assert (sufficiency.COVERAGE['coarse_print_target'], sufficiency.COVERAGE['coarse_print_minimum'], sufficiency.COVERAGE['print_precision_bound']) == (0.01, 0.05, 5e-4)
     from firm_lab.history import adjust
-    assert adjust.PRECISION_BOUND == sufficiency.COVERAGE['print_precision_bound'] and dataset.COARSE_SHARE_MAXIMUM == sufficiency.COVERAGE['coarse_print_minimum']
+    assert adjust.PRECISION_BOUND == sufficiency.COVERAGE['print_precision_bound'] and sufficiency.COVERAGE['coarse_print_minimum'] == 0.05
     assert 'No bar was\nlowered' in SPEC
     history_text = subprocess_free_git_log()
     assert history_text is None or 'data-sufficiency specification, written before any collection' in history_text
@@ -185,7 +190,7 @@ def test_with_nothing_stored_every_market_bar_is_unmet_the_count_is_zero_and_eve
     assert report['warning'] == 'DATA READINESS ONLY — NO TRADING MODEL IS ACTIVE' == history.WARNING == history_view.WARNING == history_readiness.WARNING
     assert report['market_data']['status'] == 'NO_VALIDATED_HISTORICAL_BARS' and report['market_data']['bars'] == 0 and report['universe'] is None
     strict = report['strict_training']
-    assert strict['strict_samples'] == {'5': 0, '10': 0, '20': 0} and strict['by_tier'] == {'HELD_AT_THE_TIME': 0, 'PUBLISHER_DATED_HISTORICAL': 0}
+    assert strict['strict_samples'] == {'5': 0, '10': 0, '20': 0} and strict['strict_samples_by_tier']['20'] == {'HELD_AT_THE_TIME': 0, 'PUBLISHER_DATED_HISTORICAL': 0}
     assert strict['checkpoint7_retrospective_samples'] == 6490 and strict['retrospective_samples_in_this_dataset'] == 0
     assert {v['verdict'] for families in report['sufficiency']['verdicts'].values() for v in families.values()} == {'INSUFFICIENT'}
     bars = {b['id']: b['status'] for b in report['specification_bars']}
@@ -204,8 +209,8 @@ def test_with_stored_history_the_report_counts_and_still_holds_no_price(stored):
     report = readiness.build(research, folder / 'firm_lab_history.db')
     market = report['market_data']
     assert market['status'] == 'STORED' and market['provider'] == 'Sharadar' and market['delisted_with_bars'] == 2 and market['last_bar_of_delisted_by_year'] == {'2020': 1, '2021': 1}
-    assert report['strict_training']['strict_samples']['20'] > 10000 and report['strict_training']['by_tier']['HELD_AT_THE_TIME'] == 0
-    assert report['universe']['universe_version'] == 'liquid-us-listed-v1' and report['holdout']['historical_holdout'] == 'RESERVED_SEALED'
+    assert report['strict_training']['strict_samples']['20'] > 10000 and report['strict_training']['strict_samples_by_tier']['20']['HELD_AT_THE_TIME'] == 0
+    assert report['universe']['universe_version'] == fx.VERSION and report['holdout']['historical_holdout'] == 'RESERVED_SEALED'
     assert report['holdout']['reservation_stored_in_database'] is True
     check = report['cross_check']
     assert check['compared'] == 2 * 378 and check['share_agreeing'] == 1.0 and check['instruments_not_matched'] == ['VTI'] and check['disagreements'] == []
@@ -265,7 +270,7 @@ def test_the_page_shows_the_warning_the_strict_count_provenance_and_limitations_
         readiness.write(report, target.with_name(history.READINESS_FILE))
         html = history_readiness.render_history({'history': history_view.summary(target)})
         assert html.count('DATA READINESS ONLY — NO TRADING MODEL IS ACTIVE') == 1 and '<p class="fl-stamp">' in html
-        assert 'Strict point-in-time samples:' in html and 'Held at the time: 0' in html and '6,490 retrospective samples' in html
+        assert 'Strict point-in-time samples:' in html and 'held at the time: 0' in html and '6,490 retrospective samples' in html
         assert 'the Checkpoint 7 holdout is not reused' in html and 'sealed' in html
         for heading in ('Source provenance', 'Known-at methodology', 'Adjustment basis', 'Point-in-time eligibility', 'Provider / source', 'Date range', 'Version',
                         'Fresh holdout', 'Market regime coverage', 'Data sufficiency by model family', 'Remaining gaps', 'Sufficiency bars'):
@@ -279,7 +284,7 @@ def test_the_page_shows_the_warning_the_strict_count_provenance_and_limitations_
             assert 'No historical market data is stored' in html and 'OPERATOR PURCHASE DECISION REQUIRED' in html and 'Nothing has been purchased by this system' in html
             assert '0 with a 20-session label' in html
         else:
-            assert 'daily bars stored; each passed the row checks. 13 securities' in html and 'liquid-us-listed-v1' in html and 'Tier B — publisher-dated historical' in html
+            assert 'daily bars stored; each passed the row checks. 13 securities' in html and fx.VERSION in html and 'Tier B — publisher-dated historical' in html
     none = history_readiness.render_history({'history': history_view.empty()})
     assert history.WARNING in none and 'No historical data readiness report is stored' in none
     broken = history_readiness.render_history({'history': {'exists': True, 'report': {'market_data': 7}}})
@@ -385,8 +390,8 @@ def test_the_commands_are_manual_and_read_only_what_the_operator_downloaded(stor
     assert cli.main(['init', '--db', str(tmp_path / 'new' / 'firm_lab_history.db')]) == 0
     with HistoryStore(tmp_path / 'new' / 'firm_lab_history.db', read_only=True) as store:
         assert [p['split_version'] for _, p, _ in store.rows('history_reservations')] == ['c9-chronology-v1']       # the holdout is reserved before any data exists
-    assert cli.main(['readiness', '--research-db', str(research), '--out', str(tmp_path / 'r.json')]) == 0
-    assert json.loads((tmp_path / 'r.json').read_text())['market_data']['status'] == 'NO_VALIDATED_HISTORICAL_BARS'
+    assert cli.main(['readiness', '--research-db', str(research), '--out', str(tmp_path / history.READINESS_FILE)]) == 0
+    assert json.loads((tmp_path / history.READINESS_FILE).read_text())['market_data']['status'] == 'NO_VALIDATED_HISTORICAL_BARS'
     out = capsys.readouterr().out
     assert '"strict_samples"' in out and 'api' not in out.lower()
     text = (PACKAGE / 'cli.py').read_text() + (PACKAGE / 'sharadar_files.py').read_text()

@@ -7,14 +7,28 @@
 * every input is tier A (Firm Lab held it before the next session opened) or tier B (a publisher-dated historical bar);
 * its label at the horizon exists (``targets``): entry at the open of T+1, never a price at or before T.
 
-The row's tier is the lowest among its bars, its universe membership and its label. A bar counts as held at the time
-only if the value read today was stored before the next session opened and has not been revised since; a universe
-formed from an archive is tier B; so every row built today is tier B. Tier A needs forward capture of the bars and a
-universe formed from bars held at the time, and nothing does that yet. Retrospective inputs (tier C) are not used by this builder at
-all; the Checkpoint 7 retrospective samples are a different dataset and are never added to these counts.
+Tiers. The row's tier is the lowest among its bars, its universe membership and its label. A bar counts as held at the
+time only if the value read today was stored, by this machine's clock, before the next session opened. A bar whose
+value the vendor changed after it was first stored is a restated value: a row that reads it, in a feature or in its
+label, is tier C and is not a strict sample. A universe formed from an archive is tier B, so every strict row built
+today is tier B. Tier A needs forward capture of the bars and a universe formed from bars held at the time, and nothing
+does that yet. The Checkpoint 7 retrospective samples are a different dataset and are never added to these counts.
 
-Sealed segments (``splits``): label VALUES of the historical holdout and of the forward holdout are never returned,
-averaged or correlated here. Only whether a label can be built is counted, which reads dates and bar existence.
+What a row reads. Its features read its last 253 bars, and further back where the pivot or leg it stands on began
+earlier; its label reads the bars from T+1 to its exit. The tier follows exactly those bars.
+
+Sealed segments (``splits``). Nothing of a segment that may not be read leaves ``security_rows``: no label value and
+no feature value of the historical holdout, the forward holdout, a purge or the burn-in. Only whether a row and its
+label can be built is counted, which reads dates and bar existence. A readable row never reads a sealed price either:
+the features of a row on or after the first burned session are computed from bars on or after that session only, so
+the burned window carries nothing of the historical holdout that ends the session before it. (Universe membership in
+the first months of the burned window does read the holdout's last bars, as one yes-or-no per security and month.)
+The raw store itself is not sealed; the seal is on what this builder hands out.
+
+High, low and open. A vendor reprints adjusted prices after every later split, and the reprint can be too coarse to
+give the shape of a bar. Withholding those features only where the print is coarse would mark the rows of stocks that
+split later, which is information from the future. So the families that read a high, low or open are used for every
+row of a dataset or for none: for none as soon as one row of it would read a coarsely printed bar.
 
 Every dataset names the stored blocks, captures, universe, feature code, target and split it was built from, and has
 one hash over all of that. The same inputs give the same hash.
@@ -25,14 +39,17 @@ import hashlib
 
 import numpy as np
 
-from . import BAR_KNOWN_AT_VERSION, HELD_AT_THE_TIME, POLICY_VERSION, PUBLISHER_DATED_HISTORICAL, RETURN_BASIS, lowest_tier, adjust, calendar, features, panel as panels, splits, sufficiency, targets, universe
+from . import (BAR_KNOWN_AT_VERSION, HELD_AT_THE_TIME, POLICY_VERSION, PUBLISHER_DATED_HISTORICAL, RETROSPECTIVE, RETURN_BASIS, lowest_tier, adjust, calendar, features,
+               panel as panels, splits, sufficiency, targets, universe)
 from .ingest import current_securities
-from .store import content_hash
+from .store import content_hash, when
 
 DATASET_VERSION = 'pit-dataset-v2'
 MINIMUM_HISTORY_BARS = 252
 CORE_FEATURES = ('return20', 'realized_vol20', 'rvol20')      # close and volume only: eligibility must not depend on how coarsely a price was printed
-COARSE_SHARE_MAXIMUM = 0.05                                    # above this share of coarse rows the high/low/open families are not used for any row
+INPUT_WINDOW_BARS = features.LONGEST_FIXED_LOOKBACK            # 253: the 252-session return reads the bar 252 sessions back and the row's own
+STRICT_TIERS = (HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL)
+FEATURES_FROM = splits.BURNED_FIRST                            # a row on or after this session reads no bar before it: the session before is sealed
 SEGMENTS = (splits.BURN_IN, splits.DEVELOPMENT, splits.PURGED, splits.HISTORICAL_HOLDOUT, splits.BURNED, splits.FORWARD_HOLDOUT)
 _ELIGIBLE = {}
 
@@ -51,17 +68,39 @@ def _actions_by_security(store, source=None) -> dict:
     return out
 
 
-def row_tiers(sessions, present, first_seen) -> np.ndarray:
-    """The tier of each session's row. A bar was held at the time when Firm Lab stored it before the next session opened.
-    A row is tier A only when every one of its last 252 bars was held at the time; otherwise it is tier B."""
+def _window_sum(flags, start, end) -> np.ndarray:
+    """How many flags are set in [start[t], end[t]] for every t."""
+    total = np.concatenate([[0], np.cumsum(flags)])
+    return total[end + 1] - total[start]
+
+
+def row_tiers(sessions, present, history, *, oldest=None, label_reach=targets.MAX_HORIZON + 1) -> np.ndarray:
+    """The tier each session's row can claim from its bars alone. ``history`` is ``HistoryStore.bar_history``.
+
+    A  every bar the row's features read was stored by this machine's clock before the next session opened, and none
+       was changed afterwards. The row reads its last 253 bars, and further back where ``oldest`` says so.
+    C  a bar the row reads, or a bar its longest label reads, was changed by the vendor after it was first stored.
+    B  otherwise: a publisher-dated historical bar."""
     count = len(sessions)
-    held = np.array([first_seen.get(s, '9') <= _eligible_from(s) for s in sessions], bool) if count else np.zeros(0, bool)
-    run, bars = 0, np.zeros(count, int)
-    for t in range(count):
-        if present[t]:
-            run = run + 1 if held[t] else 0
-        bars[t] = run
-    return np.where(bars >= MINIMUM_HISTORY_BARS, HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL)
+    if not count:
+        return np.zeros(0, dtype=object)
+    since, clock, revised = history['since'], history['clock'], history['revised']
+    present = np.asarray(present, bool)
+    held = np.zeros(count, bool)
+    for t, s in enumerate(sessions):
+        stamp = since.get(s)
+        # a bar cannot be stored before its session closes, so only a time on the days up to the next open can qualify
+        if stamp is not None and clock.get(s) == 'SYSTEM' and s <= stamp[:10] <= _eligible_from(s)[:10]:
+            held[t] = when(stamp) <= when(_eligible_from(s))
+    changed = present & np.array([s in revised for s in sessions], bool) if revised else np.zeros(count, bool)
+    t = np.arange(count)
+    start = np.maximum(t - INPUT_WINDOW_BARS + 1, 0)
+    if oldest is not None:
+        start = np.minimum(start, np.asarray(oldest, int)).clip(0)
+    bars = _window_sum(present, start, t)
+    all_held = (_window_sum(present & ~held, start, t) == 0) & (bars >= INPUT_WINDOW_BARS)
+    restated = _window_sum(changed, start, np.minimum(t + label_reach, count - 1)) > 0
+    return np.where(restated, RETROSPECTIVE, np.where(all_held, HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL)).astype(object)
 
 
 def row_tier(*tiers) -> str:
@@ -69,32 +108,54 @@ def row_tier(*tiers) -> str:
     return lowest_tier(tiers)
 
 
-def security_rows(store, sid, security, spans, actions, *, source=None, membership_tier=PUBLISHER_DATED_HISTORICAL) -> dict:
+def _tail(panel, k0) -> dict:
+    """The panel from slot k0 on: what a row on or after that session is allowed to read."""
+    out = {name: (value[k0:] if isinstance(value, np.ndarray) else value) for name, value in panel.items()}
+    out['sessions'] = panel['sessions'][k0:]
+    return out
+
+
+def security_rows(store, sid, security, spans, actions, *, source=None, membership_tier=PUBLISHER_DATED_HISTORICAL, data_end=None) -> dict:
     """Everything one security contributes: per session, its features, whether the row is eligible, its tier, its segment
-    and its labels. A label value is returned only for a segment whose labels may be read (development and the burned
-    window); for every other segment it is removed before anything leaves this function. ``security`` is the master row
-    and is not read: nothing about a past row depends on what the master says today."""
+    and its labels. Label values and feature values are returned only for a segment that may be read (development and the
+    burned window); for every other segment both are removed before anything leaves this function, and ``eligible`` and
+    the label states say only whether they could be built. ``security`` is the master row and is not read: nothing about
+    a past row depends on what the master says today. ``data_end`` is the last session stored for any security."""
     p = panels.load(store, sid, source=source)
     sessions = p['sessions']
     count = len(sessions)
     audit = adjust.breaks(p, actions)
     mask = adjust.break_mask(p, audit['breaks'])
     computed = features.compute(p, mask, splits=audit['splits'])
-    values = computed['values']
+    values = {name: np.array(array, float) for name, array in computed['values'].items()}
+    oldest = np.array(computed['oldest_bar_read'], int)
+    k0 = panels.first_session_on_or_after(p, FEATURES_FROM) if count else None
+    if k0:                                                              # rows after the sealed holdout: computed from their own side of the boundary only
+        tail = _tail(p, k0)
+        later = [a for a in actions if str(a['effective_date'])[:10] >= sessions[k0]]
+        tail_audit = adjust.breaks(tail, later)
+        again = features.compute(tail, adjust.break_mask(tail, tail_audit['breaks']), splits=tail_audit['splits'])
+        for name in values:
+            values[name][k0:] = again['values'][name]
+        oldest[k0:] = again['oldest_bar_read'] + k0
     member = universe.member_mask(sessions, spans)
     history = np.cumsum(p['present'])
     core = np.all([np.isfinite(values[name]) for name in CORE_FEATURES], axis=0) if count else np.zeros(0, bool)
     eligible = member & p['present'] & (history >= MINIMUM_HISTORY_BARS) & core
-    bar_tier = row_tiers(sessions, p['present'], store.held_since(sid, source=source))
+    bar_tier = row_tiers(sessions, p['present'], store.bar_history(sid, source=source), oldest=oldest)
     tier = np.array([row_tier(t, membership_tier) for t in bar_tier], dtype=object) if count else np.zeros(0, dtype=object)
     segment = np.array([splits.segment(s) for s in sessions], dtype=object) if count else np.zeros(0, dtype=object)
-    delisting = targets.delisted_at_last_bar(p, actions)
+    delisting = targets.delisted_at_last_bar(p, actions, data_end)
     labels = targets.build(p, mask, delisted=delisting)
     readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
+    coarse = adjust.coarse_print(p)
+    reads_coarse = _window_sum(coarse, oldest.clip(0, max(count - 1, 0)), np.arange(count)) > 0 if count else np.zeros(0, bool)
     for h in labels:
         labels[h]['value'] = np.where(readable, labels[h]['value'], np.nan)        # sealed, purge and burn-in label values never leave this function
+    for name in values:
+        values[name] = np.where(readable, values[name], np.nan)                    # nor do their features: a price series is its own label
     return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'bar_tier': bar_tier,
-            'segment': segment, 'coarse': adjust.coarse_print(p), 'delisting': delisting,
+            'segment': segment, 'coarse': coarse, 'reads_coarse': reads_coarse, 'delisting': delisting,
             'features': values, 'labels': labels, 'breaks': audit['breaks'], 'blocks': p['blocks'], 'audit': {**audit, 'structure': computed['audit']},
             'history_bars': history}
 
@@ -122,20 +183,26 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     last_stored = store.bar_summary()['last_session']
     out = {'dataset_version': DATASET_VERSION, 'universe_hash': chosen['manifest']['universe_hash'], 'raw_member_rows': 0, 'eligible_feature_rows': 0,
            'by_segment': {s: {'eligible_feature_rows': 0, 'sessions': set(), 'instruments': set(), **{f'labelled_{h}': 0 for h in targets.HORIZONS}} for s in SEGMENTS},
-           'by_tier': {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0}, 'bars_held_at_the_time_rows': 0, 'by_year': {},
+           'strict_samples_by_tier': {str(h): {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0} for h in targets.HORIZONS},
+           'rows_not_strict_because_a_bar_was_revised': 0, 'bars_held_at_the_time_rows': 0, 'member_sessions': 0, 'by_year': {},
            'label_states': {str(h): {} for h in targets.HORIZONS}, 'delisting_exits_by_reason': {}, 'delisting_exits_by_year': {},
            'members_whose_bars_end_without_a_delisting_record': 0, 'breaks_by_reason': {}, 'splits_confirmed': 0,
            'split_convention': {'new_per_old': 0, 'old_per_new': 0},
-           'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0,
+           'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0, 'rows_reading_a_coarse_print': 0,
            'sample_sessions_per_instrument': [], 'sequence_ready': 0}
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
     totals = {h: {} for h in targets.HORIZONS}                           # horizon -> {window index: [sum, count]} for the cross-sectional mean
     hold_counts = {h: {} for h in targets.HORIZONS}                      # horizon -> {holdout window index: how many labels can be built}; a count, never a value
     for n, sid in enumerate(sorted(spans)):
-        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source)
-        sessions, eligible, segment = rows['sessions'], rows['eligible'], rows['segment']
+        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source, data_end=last_stored)
+        sessions, segment = rows['sessions'], rows['segment']
+        restated = rows['eligible'] & (rows['tier'] == RETROSPECTIVE)
+        out['rows_not_strict_because_a_bar_was_revised'] += int(restated.sum())
+        eligible = rows['eligible'] & ~restated                          # a row that reads a restated bar is tier C: not a strict sample
         out['raw_member_rows'] += int((rows['member'] & rows['present']).sum())
+        out['member_sessions'] += int(rows['member'].sum())
         out['eligible_feature_rows'] += int(eligible.sum())
+        out['rows_reading_a_coarse_print'] += int((eligible & rows['reads_coarse']).sum())
         out['splits_confirmed'] += rows['audit']['splits_confirmed']
         for key, value in rows['audit']['split_convention'].items():
             out['split_convention'][key] += value
@@ -159,8 +226,8 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
             part['eligible_feature_rows'] += 1
             part['sessions'].add(s)
             part['instruments'].add(sid)
-            out['by_tier'][rows['tier'][t]] += 1
-            out['bars_held_at_the_time_rows'] += int(rows['bar_tier'][t] == HELD_AT_THE_TIME)
+            sample = name in splits.SAMPLE_SEGMENTS
+            out['bars_held_at_the_time_rows'] += int(sample and rows['bar_tier'][t] == HELD_AT_THE_TIME)
             year = out['by_year'].setdefault(s[:4], {'eligible_feature_rows': 0, 'instruments': set()})
             year['eligible_feature_rows'] += 1
             year['instruments'].add(sid)
@@ -170,6 +237,8 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
                 out['label_states'][str(h)][text] = out['label_states'][str(h)].get(text, 0) + 1
                 if state in (targets.OK, targets.DELISTED_EXIT):
                     part[f'labelled_{h}'] += 1
+                    if sample:
+                        out['strict_samples_by_tier'][str(h)][rows['tier'][t]] += 1
                     if state == targets.DELISTED_EXIT and h == targets.MAX_HORIZON:
                         out['delisting_exits_by_reason'][reason] = out['delisting_exits_by_reason'].get(reason, 0) + 1
                         by_year = out['delisting_exits_by_year'].setdefault(s[:4], {})
@@ -191,7 +260,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     out['unique_sessions'] = len(set().union(*(p['sessions'] for p in out['by_segment'].values())))
     out['sequence_share'] = out.pop('sequence_ready') / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
     out['coarse_print_share'] = out['coarse_print_rows'] / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
-    out['high_low_open_families_usable'] = out['coarse_print_share'] is not None and out['coarse_print_share'] <= COARSE_SHARE_MAXIMUM
+    # all rows or none: one row that would read a coarsely printed bar withholds the high/low/open families from every row
+    out['high_low_open_families_usable'] = bool(out['eligible_feature_rows']) and out['rows_reading_a_coarse_print'] == 0
+    out['member_bars_present_share'] = out['raw_member_rows'] / out['member_sessions'] if out['member_sessions'] else None
     # Burn-in and purge sessions yield no sample. The total is the sum of the four sample segments, shown one by one.
     out['strict_samples_by_segment'] = {str(h): {name: out['by_segment'][name][f'labelled_{h}'] for name in splits.SAMPLE_SEGMENTS} for h in targets.HORIZONS}
     out['strict_samples'] = {h: sum(parts.values()) for h, parts in out['strict_samples_by_segment'].items()}
@@ -235,7 +306,8 @@ def manifest(store, universe_manifest) -> dict:
             'feature_set_version': features.FEATURE_SET_VERSION, 'feature_versions': sorted({d['version'] for d in features.DEFINITIONS}),
             'feature_code_hash': features.code_hash(), 'feature_names': list(features.NAMES), 'core_features': list(CORE_FEATURES),
             'target_version': targets.TARGET_VERSION, 'horizons': list(targets.HORIZONS), 'split_version': splits.SPLIT_VERSION,
-            'minimum_history_bars': MINIMUM_HISTORY_BARS, 'source_blocks_hash': universe_manifest['source_blocks_hash'],
+            'minimum_history_bars': MINIMUM_HISTORY_BARS, 'input_window_bars': INPUT_WINDOW_BARS, 'features_of_burned_rows_read_from': FEATURES_FROM,
+            'source_blocks_hash': universe_manifest['source_blocks_hash'],
             'actions_hash': universe_manifest['actions_hash'], 'captures': _sources(store)}
     body['dataset_spec_hash'] = content_hash(body)
     return body
@@ -247,7 +319,8 @@ def _array_hash(array) -> str:
 
 
 def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVELOPMENT,), years=None) -> dict:
-    """The rows of the named segments as arrays, with a manifest and one dataset hash. Refuses a sealed segment."""
+    """The strict rows of the named segments as arrays, with a manifest and one dataset hash. Refuses every segment that
+    may not be read. Rows that read a restated bar (tier C) are left out and counted."""
     if any(not splits.labels_allowed(s) for s in segments):
         raise ValueError('SEALED_SEGMENT')
     chosen = universe.load(store, universe_hash, require_current=True)
@@ -256,19 +329,23 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     spans = universe.membership(chosen['records'])
     securities = current_securities(store, source=source)
     actions = _actions_by_security(store, source)
-    ids, sessions, tiers, feats, blocks, coarse = [], [], [], [], set(), 0
+    ids, sessions, tiers, feats, blocks, coarse, touched, restated = [], [], [], [], set(), 0, 0, 0
     raw = {h: [] for h in targets.HORIZONS}
     states = {h: [] for h in targets.HORIZONS}
+    data_end = store.bar_summary()['last_session']
     for sid in sorted(spans):
-        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source)
+        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source, data_end=data_end)
         keep = rows['eligible'] & np.isin(rows['segment'], list(segments))
         if years is not None:
             keep &= np.array([s[:4] in years for s in rows['sessions']], bool)
+        restated += int((keep & (rows['tier'] == RETROSPECTIVE)).sum())
+        keep &= np.isin(rows['tier'], STRICT_TIERS)
         index = np.flatnonzero(keep)
         if not len(index):
             continue
         blocks.update(rows['blocks'])
         coarse += int(rows['coarse'][index].sum())
+        touched += int(rows['reads_coarse'][index].sum())
         ids.extend([sid] * len(index))
         sessions.extend(rows['sessions'][t] for t in index)
         tiers.extend(rows['tier'][index])
@@ -278,8 +355,8 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
             states[h].append(rows['labels'][h]['state'][index])
     X = np.vstack(feats) if feats else np.zeros((0, len(features.NAMES)))
     share = coarse / len(ids) if ids else 0.0
-    usable = share <= COARSE_SHARE_MAXIMUM
-    if not usable:              # too many rows are printed too coarsely: the high/low/open families are withheld from every row, not row by row
+    usable = touched == 0
+    if not usable:              # one row would read a coarsely printed bar: the high/low/open families are withheld from every row, never row by row
         X[:, [k for k, d in enumerate(features.DEFINITIONS) if d['uses_high_low_open']]] = np.nan
     order = np.lexsort((np.array(ids, dtype=object), np.array(sessions, dtype=object))) if ids else np.zeros(0, int)
     ids, sessions, tiers, X = [ids[k] for k in order], [sessions[k] for k in order], [tiers[k] for k in order], X[order]
@@ -299,7 +376,8 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
              'labels': content_hash({str(h): [_array_hash(y[h]), _array_hash(excess[h]), _array_hash(y_state[h].astype(float))] for h in targets.HORIZONS}),
              'tiers': content_hash(list(tiers)), 'blocks': content_hash(sorted(blocks))}
     body.update({'segments': list(segments), 'years': sorted(years) if years else None, 'rows': len(ids), 'hashes': parts,
-                 'coarse_print_share': share, 'high_low_open_families_usable': usable})
+                 'coarse_print_share': share, 'rows_reading_a_coarse_print': touched, 'high_low_open_families_usable': usable,
+                 'rows_left_out_because_a_bar_was_revised': restated})
     body['dataset_hash'] = content_hash({'spec': body['dataset_spec_hash'], 'segments': body['segments'], 'years': body['years'], 'hashes': parts})
     return {'security_id': ids, 'session': sessions, 'tier': tiers, 'X': X, 'feature_names': list(features.NAMES), 'y': y, 'y_excess': excess, 'y_state': y_state,
             'manifest': body}

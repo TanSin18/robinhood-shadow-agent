@@ -1,9 +1,13 @@
 """Hand-started commands for the historical research database. Nothing here is scheduled and nothing uses the network.
 
     python -m firm_lab.history.cli init      --db PATH
-    python -m firm_lab.history.cli ingest    --db PATH --tickers FILE --prices FILE [--funds FILE] [--actions FILE] [--sp500 FILE]
+    python -m firm_lab.history.cli ingest    --db PATH --tickers FILE --prices FILE [--funds FILE] [--actions FILE] [--sp500 FILE] [--sparse]
     python -m firm_lab.history.cli universe  --db PATH --start 1998-01-02 --end 2026-09-30
-    python -m firm_lab.history.cli count     --db PATH
+    python -m firm_lab.history.cli count     --db PATH [--universe HASH]
+
+``--sparse`` is for a price file that lists only scattered rows (for example the rows changed since a date). Without
+it, a stored session that lies inside the dates a file covers for a security and that the file no longer holds is
+recorded as removed by the vendor. Capture times always come from this machine's clock here.
     python -m firm_lab.history.cli readiness --db PATH --research-db PATH --out FILE
 
 The files are ones the operator downloaded. No key, login or address is read, asked for or stored.
@@ -34,9 +38,12 @@ def main(argv=None) -> int:
             p.add_argument('--funds')
             p.add_argument('--actions')
             p.add_argument('--sp500')
+            p.add_argument('--sparse', action='store_true')
         if name == 'universe':
             p.add_argument('--start', required=True)
             p.add_argument('--end', required=True)
+        if name == 'count':
+            p.add_argument('--universe')
         if name == 'readiness':
             p.add_argument('--research-db', required=True)
             p.add_argument('--out', required=True)
@@ -56,9 +63,11 @@ def main(argv=None) -> int:
             if args.tickers:
                 out['securities'] = ingest.ingest_securities(store, sharadar_files.securities(args.tickers), file=ingest.describe_file(args.tickers), **common)
             if args.prices:
-                out['stock_bars'] = ingest.ingest_bars(store, sharadar_files.prices(args.prices), file=ingest.describe_file(args.prices), price_table='stocks', **common)
+                out['stock_bars'] = ingest.ingest_bars(store, sharadar_files.prices(args.prices), file=ingest.describe_file(args.prices), price_table='stocks',
+                                                       sparse=args.sparse, **common)
             if args.funds:
-                out['fund_bars'] = ingest.ingest_bars(store, sharadar_files.prices(args.funds), file=ingest.describe_file(args.funds), price_table='funds', **common)
+                out['fund_bars'] = ingest.ingest_bars(store, sharadar_files.prices(args.funds), file=ingest.describe_file(args.funds), price_table='funds',
+                                                      sparse=args.sparse, **common)
             if args.actions:
                 out['actions'] = ingest.ingest_actions(store, sharadar_files.actions(args.actions), file=ingest.describe_file(args.actions), **common)
             if args.sp500:
@@ -67,7 +76,11 @@ def main(argv=None) -> int:
         elif args.command == 'universe':
             print(json.dumps(universe.build(store, args.start, args.end, progress=_progress), indent=1))
         elif args.command == 'count':
-            result = dataset.count(store, progress=_progress)
+            chosen = args.universe
+            if not chosen:                                              # several universes can fit the stored bars; the one built last is counted
+                current = [m for m in universe.manifests(store) if universe.is_current(store, m)]
+                chosen = current[-1]['universe_hash'] if current else None
+            result = dataset.count(store, universe_hash=chosen, progress=_progress)
             store.put('history_reports', {'kind': 'strict_count', **result})        # counts and hashes only: what the readiness report reads
             print(json.dumps(result, indent=1))
     return 0

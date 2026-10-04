@@ -16,6 +16,11 @@ COMMON = {'source': sf.SOURCE, 'adapter': sf.ADAPTER}
 RULE = {**universe.RULE, 'size': 6}
 
 
+@pytest.fixture(autouse=True)
+def _machine_clock(monkeypatch):
+    fx.set_clock(monkeypatch)                     # the clock a capture is stamped with; later than every time these tests supply
+
+
 def _store(folder, *, through=fx.LAST, rescale=None, tickers=None, without_delisted=False, edit=None):
     folder.mkdir(parents=True, exist_ok=True)
     fx.write_tickers(folder / 'T.csv', without_delisted=without_delisted)
@@ -34,7 +39,7 @@ def _store(folder, *, through=fx.LAST, rescale=None, tickers=None, without_delis
 @pytest.fixture(scope='module')
 def built(tmp_path_factory):
     store = _store(tmp_path_factory.mktemp('full'))
-    manifest = universe.build(store, fx.FIRST, '2026-10-02', rule=RULE)
+    manifest = universe.build(store, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
     counted = dataset.count(store)
     yield store, manifest, counted
     store.close()
@@ -43,7 +48,7 @@ def built(tmp_path_factory):
 # ---------------------------------------------------------------------------------------------------------- universe
 def test_the_universe_is_deterministic_and_every_record_is_known_before_it_takes_effect(built):
     store, manifest, _ = built
-    again = universe.build(store, fx.FIRST, '2026-10-02', rule=RULE)
+    again = universe.build(store, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
     assert again['universe_hash'] == manifest['universe_hash'] and again['records_hash'] == manifest['records_hash']
     loaded = universe.load(store)
     assert loaded['manifest']['universe_hash'] == manifest['universe_hash'] and len(loaded['records']) == manifest['formation_sessions'] == 100
@@ -62,7 +67,7 @@ def test_membership_at_a_date_does_not_change_when_later_data_arrives(built, tmp
     store, _, _ = built
     early = _store(tmp_path / 'early', through='2021-12-31')
     try:
-        universe.build(early, fx.FIRST, '2021-12-31', rule=RULE)
+        universe.build(early, fx.FIRST, '2021-12-31', rule=RULE, version=fx.VERSION)
         then = {r['formation_session']: r for r in universe.load(early)['records']}
     finally:
         early.close()
@@ -87,7 +92,7 @@ def test_delisted_companies_are_members_while_they_qualified_and_survivors_alone
     survivors = _store(tmp_path / 'survivors', through='2020-01-31', without_delisted=True)
     try:
         with pytest.raises(ValueError, match='SURVIVOR_ONLY_SOURCE'):
-            universe.build(survivors, fx.FIRST, '2020-01-31', rule=RULE)
+            universe.build(survivors, fx.FIRST, '2020-01-31', rule=RULE, version=fx.VERSION)
     finally:
         survivors.close()
 
@@ -102,7 +107,7 @@ def test_the_price_screen_reads_the_printed_price_and_liquidity_ranks_the_rest(b
     assert full['screened_out'] == {'PRICE_BELOW_MINIMUM': 1, 'RANKED_BELOW_SIZE': 6} and full['eligible_count'] == 12
     resplit = _store(tmp_path / 'resplit', through='2020-01-31', rescale=('AAA', 40.0))               # as if AAA split 40-for-1 later: adjusted close near 2 dollars
     try:
-        universe.build(resplit, fx.FIRST, '2020-01-31', rule=RULE)
+        universe.build(resplit, fx.FIRST, '2020-01-31', rule=RULE, version=fx.VERSION)
         after = {r['formation_session']: r['members'] for r in universe.load(resplit)['records']}
     finally:
         resplit.close()
@@ -174,7 +179,9 @@ def test_the_strict_count_is_honest_about_tiers_segments_and_what_it_did_not_rea
     store, manifest, counted = built
     assert counted['universe_hash'] == manifest['universe_hash'] and counted['dataset_version'] == 'pit-dataset-v2'
     assert counted['retrospective_samples'] == 0
-    assert counted['by_tier'] == {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: counted['eligible_feature_rows']}      # an archive is never "held at the time"
+    for h in ('5', '10', '20'):                                        # an archive is never "held at the time", and the tiers split exactly the strict samples
+        assert counted['strict_samples_by_tier'][h] == {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: counted['strict_samples'][h]}
+    assert counted['rows_not_strict_because_a_bar_was_revised'] == 0 and counted['bars_held_at_the_time_rows'] == 0
     assert counted['strict_samples']['5'] >= counted['strict_samples']['10'] >= counted['strict_samples']['20'] > 0
     assert sum(part['eligible_feature_rows'] for part in counted['by_segment'].values()) == counted['eligible_feature_rows'] <= counted['raw_member_rows']
     assert counted['by_segment'][splits.FORWARD_HOLDOUT]['eligible_feature_rows'] == 0 and counted['by_segment'][splits.BURN_IN]['eligible_feature_rows'] == 0
@@ -218,7 +225,7 @@ def test_no_label_value_of_a_sealed_holdout_is_returned_or_used(built, tmp_path)
     def recount(folder, edit):
         other = _store(folder, edit=edit)
         try:
-            universe.build(other, fx.FIRST, '2026-10-02', rule=RULE)
+            universe.build(other, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
             return dataset.count(other)
         finally:
             other.close()
@@ -256,26 +263,42 @@ def test_a_dataset_is_reproducible_and_its_hash_names_its_inputs(built, tmp_path
 
     other = _store(tmp_path / 'one-bar-changed', edit=nudge)
     try:
-        universe.build(other, fx.FIRST, '2026-10-02', rule=RULE)
+        universe.build(other, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
         c = dataset.materialise(other)
     finally:
         other.close()
     assert c['manifest']['dataset_hash'] != a['manifest']['dataset_hash'] and c['manifest']['source_blocks_hash'] != a['manifest']['source_blocks_hash']
 
 
-def test_a_row_is_tier_a_only_when_every_one_of_its_last_252_bars_was_held_at_the_time():
+def test_a_row_is_tier_a_only_when_every_bar_it_reads_was_held_at_the_time():
     sessions = list(calendar.sessions('2024-01-02', '2025-12-31'))
     present = np.ones(len(sessions), bool)
+    system = {s: 'SYSTEM' for s in sessions}
+    history = lambda since, clock=system, revised=(): {'since': since, 'clock': clock, 'revised': set(revised)}
     archive = {s: '2026-10-03T12:00:00+00:00' for s in sessions}
-    assert set(dataset.row_tiers(sessions, present, archive)) == {PUBLISHER_DATED_HISTORICAL}
+    assert set(dataset.row_tiers(sessions, present, history(archive))) == {PUBLISHER_DATED_HISTORICAL}
     start = 100                                                        # from this session on, each bar was stored the evening of its own session
     forward = {s: (calendar.session_close(s) if k >= start else '2026-10-03T12:00:00+00:00') for k, s in enumerate(sessions)}
-    tiers = dataset.row_tiers(sessions, present, forward)
-    assert list(tiers[:start + 251]) == [PUBLISHER_DATED_HISTORICAL] * (start + 251) and set(tiers[start + 251:]) == {HELD_AT_THE_TIME}
+    tiers = dataset.row_tiers(sessions, present, history(forward))
+    window = dataset.INPUT_WINDOW_BARS                                 # 253: the 252-session return reads 253 bars
+    assert window == 253 and list(tiers[:start + window - 1]) == [PUBLISHER_DATED_HISTORICAL] * (start + window - 1) and set(tiers[start + window - 1:]) == {HELD_AT_THE_TIME}
     late = dict(forward)
     late[sessions[400]] = calendar.session_close(sessions[402])        # one bar arrived two days late
-    tiers = dataset.row_tiers(sessions, present, late)
+    tiers = dataset.row_tiers(sessions, present, history(late))
     assert tiers[399] == HELD_AT_THE_TIME and set(tiers[400:500]) == {PUBLISHER_DATED_HISTORICAL}
+    # a time someone supplied is a claim, not a clock: the same times under a SUPPLIED clock hold nothing
+    assert set(dataset.row_tiers(sessions, present, history(forward, {s: 'SUPPLIED' for s in sessions}))) == {PUBLISHER_DATED_HISTORICAL}
+    # a pivot or leg that began before the 253-bar window pulls the row's reach back to it
+    oldest = np.maximum(np.arange(len(sessions)) - window + 1, 0)
+    oldest[start + window + 20] = start - 5                            # this row stands on a leg that began among the archive bars
+    tiers = dataset.row_tiers(sessions, present, history(forward), oldest=oldest)
+    assert tiers[start + window + 20] == PUBLISHER_DATED_HISTORICAL and tiers[start + window + 19] == HELD_AT_THE_TIME
+    # a bar the vendor changed after it was first stored is a restated value: every row that reads it, in a feature or a label, is tier C
+    tiers = dataset.row_tiers(sessions, present, history(forward, revised=[sessions[450]]))
+    reach = targets.MAX_HORIZON + 1
+    assert set(tiers[450 - reach:]) == {RETROSPECTIVE} and tiers[450 - reach - 1] == HELD_AT_THE_TIME and len(sessions) < 450 + window
+    tiers = dataset.row_tiers(sessions, present, history(forward, revised=[sessions[60]]))
+    assert set(tiers[60 - reach:60 + window]) == {RETROSPECTIVE} and tiers[60 + window] != RETROSPECTIVE       # the window ends: the bar is read no longer
     assert lowest_tier([HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL]) == PUBLISHER_DATED_HISTORICAL
     assert lowest_tier([HELD_AT_THE_TIME, 'UNKNOWN']) == RETROSPECTIVE and lowest_tier([]) == RETROSPECTIVE
 

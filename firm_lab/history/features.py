@@ -199,6 +199,9 @@ def _structure_features(prefix, close, high, low, atr, out):
     return {k: v - pivots.WINDOW for k, v in starts.items()}, {'pivots': s['pivots'], 'legs': s['legs'], 'outside_bars': s['outside_bars']}
 
 
+LONGEST_FIXED_LOOKBACK = max(d['lookback'] for d in DEFINITIONS if d['lookback'] != VARIABLE)      # bars, the row's own bar included
+
+
 def compute(panel, break_mask=None, splits=()) -> dict:
     """{'values': {feature name: array over panel sessions}, 'audit': {...}}. NaN means unavailable at that session.
 
@@ -276,4 +279,8 @@ def compute(panel, break_mask=None, splits=()) -> dict:
             unusable |= seen_coarse[t] - before > 0                     # any coarse bar in the window, its first bar included
         out[name] = np.where(unusable | ~present, np.nan, out[name])    # a session without a bar has no features
     audit['coarse_print_bars'] = int(coarse.sum())
-    return {'values': {name: out[name] for name in NAMES}, 'audit': audit}
+    # The oldest bar any feature of a row reads: the longest fixed window, or the start of the pivot or leg it stands on.
+    oldest = (t - LONGEST_FIXED_LOOKBACK + 1).astype(float)
+    for first in starts.values():
+        oldest = np.fmin(oldest, np.where(np.isfinite(first), first, oldest))
+    return {'values': {name: out[name] for name in NAMES}, 'audit': audit, 'oldest_bar_read': oldest.clip(0).astype(int)}

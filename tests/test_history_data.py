@@ -15,6 +15,11 @@ from firm_lab.history.store import BAR_TABLE, JSON_TABLES, HistoryStore, classif
 from firm_lab.history.validate import REASONS, bar_reasons
 
 AT = '2026-10-03T12:00:00+00:00'
+
+
+@pytest.fixture(autouse=True)
+def _machine_clock(monkeypatch):
+    fx.set_clock(monkeypatch)                     # the clock a capture is stamped with; later than every time these tests supply
 COMMON = {'source': sf.SOURCE, 'adapter': sf.ADAPTER}
 
 

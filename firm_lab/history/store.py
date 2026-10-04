@@ -6,7 +6,13 @@ any folder that holds an ``agent.db``, or when it already holds anything that lo
 Versions. Bars are stored per security and calendar year. A new capture for a security and year is compared with the
 current version: the same content adds nothing; anything else becomes the next version and the earlier one stays, also
 when the vendor returns to content it supplied before. A capture that holds only some sessions of a year extends the
-year; it never removes the sessions it does not mention. "Current" is always the highest version.
+year. Inside the span of sessions a capture does hold, a stored session it no longer mentions is a removal (the vendor
+took the bar out); outside that span nothing is removed. A file that lists only scattered rows (for example the rows
+changed since a date) is ingested as ``sparse`` and removes nothing. "Current" is always the highest version.
+
+Clocks. A version stored at the time this machine's clock showed is marked SYSTEM. A version stored with a time the
+caller supplied is marked SUPPLIED: its time orders the versions and nothing more. Only a SYSTEM version can show that
+a bar was held at the time. No supplied time may lie in the future or before a capture already stored.
 
 What append-only means here. Every connection this package opens refuses UPDATE, DELETE and REPLACE through triggers.
 That protects against the package's own mistakes. It does not protect against a person with the file and a SQL
@@ -20,7 +26,7 @@ import json
 import sqlite3
 import zlib
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import DATABASE_ROLE, POLICY_VERSION
@@ -35,6 +41,7 @@ BAR_COLUMNS = ('sessions', 'open', 'high', 'low', 'close', 'volume', 'close_unad
 VALUE_COLUMNS = ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted')
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'account', 'cash', 'portfolio', 'broker')
 OFFICIAL_TABLES = {'paper_accounts', 'cycle_runs', 'orders', 'fills', 'positions', 'accounts'}
+CLOCK_SKEW = timedelta(minutes=5)
 FIRST, EXTENDED, SCALE_ONLY, VALUE_CHANGE = 'FIRST', 'EXTENDED', 'SCALE_ONLY', 'VALUE_CHANGE'
 TOTAL_RETURN_READJUSTED, METADATA_ONLY = 'TOTAL_RETURN_READJUSTED', 'METADATA_ONLY'
 
@@ -90,33 +97,63 @@ def _same(old, i, new, j, columns) -> bool:
     return all(old[c][i] == new[c][j] for c in columns)
 
 
+def when(text) -> datetime:
+    """A stored or supplied timestamp as a time. Times are compared as times, never as text."""
+    return datetime.fromisoformat(utc_time(text))
+
+
 def _decimals(text) -> int:
     text = str(text)
     return len(text.split('.', 1)[1]) if '.' in text and 'e' not in text.lower() else 0
 
 
-def _scaled(old, i, new, j):
-    """The one factor this row was rescaled by (prices times k, volume divided by k, printed price unchanged), or None.
-    Each comparison allows what rounding of the printed numbers can explain, and nothing more."""
+def _places(block) -> dict:
+    """How finely each column of a block is printed: the most decimals any of its values shows. A vendor that drops
+    trailing zeros prints "52" for 52.00; the column, not the single value, says how the price was rounded."""
+    return {c: max((_decimals(v) for v in block[c] if v not in ('', None)), default=0) for c in ('open', 'high', 'low', 'close', 'volume')}
+
+
+def _factor_range(old, i, new, j, old_places, new_places):
+    """The range of factors k for which this row is the old row with prices times k and volume divided by k, given how
+    finely both were printed; None when no factor fits or the printed price itself moved. Every one of the four prices
+    and the volume must agree on k: a different bar is not a rescale."""
     try:
         if old['close_unadjusted'][i] != new['close_unadjusted'][j]:
             return None
-        was_close, now_close = float(old['close'][i]), float(new['close'][j])
-        k = now_close / was_close
-        if abs(k - 1.0) < 1e-9:
-            return None
-        ulp = lambda text: 0.5 * 10.0 ** -_decimals(text)
-        slack = abs(k) * (ulp(new['close'][j]) / abs(now_close) + ulp(old['close'][i]) / abs(was_close))      # how far k itself can be off
+        low, high = 0.0, float('inf')
         for c in ('open', 'high', 'low', 'close'):
             was, now = float(old[c][i]), float(new[c][j])
-            if abs(now - was * k) > ulp(new[c][j]) + abs(k) * ulp(old[c][i]) + abs(was) * slack + 1e-12 * abs(now):
-                return None
+            a, b = 0.5 * 10.0 ** -old_places[c], 0.5 * 10.0 ** -new_places[c]
+            low = max(low, (now - b) / (was + a))
+            high = min(high, (now + b) / (was - a) if was - a > 0 else float('inf'))
         was, now = float(old['volume'][i]), float(new['volume'][j])
-        if abs(now * k - was) > abs(k) * ulp(new['volume'][j]) + ulp(old['volume'][i]) + abs(now) * slack + 1e-9 * abs(was):
-            return None
-        return k
+        a, b = 0.5 * 10.0 ** -old_places['volume'], 0.5 * 10.0 ** -new_places['volume']
+        if was > 0 or now > 0:
+            low = max(low, (was - a) / (now + b))
+            high = min(high, (was + a) / (now - b) if now - b > 0 else float('inf'))
+        slack = 1e-12 * max(1.0, low)
+        return (low - slack, high + slack) if low <= high + 2 * slack else None
     except (ValueError, ZeroDivisionError):
         return None
+
+
+def _common_factor(old, new, pairs):
+    """The one factor every (old row, new row) pair of a block was rescaled by, or None. One is not a factor: a block
+    whose rows moved by nothing more than their printing is not a rescale."""
+    if not pairs:
+        return None
+    old_places, new_places = _places(old), _places(new)
+    low, high, ratios = 0.0, float('inf'), []
+    for i, j in pairs:
+        found = _factor_range(old, i, new, j, old_places, new_places)
+        if found is None:
+            return None
+        low, high = max(low, found[0]), min(high, found[1])
+        ratios.append(float(new['close'][j]) / float(old['close'][i]))
+    if low > high or low <= 1.0 <= high:
+        return None
+    middle = sorted(ratios)[len(ratios) // 2]
+    return min(max(middle, low), high)
 
 
 def classify_change(old, new) -> dict:
@@ -126,7 +163,8 @@ def classify_change(old, new) -> dict:
     rescaled by one common factor (prices times k, volume divided by k, the printed price unchanged) and nothing else
     differs: a vendor re-adjusting for a later split. TOTAL_RETURN_READJUSTED: only the total-return close differs: a
     later dividend. METADATA_ONLY: only the provider's update stamp differs. VALUE_CHANGE: anything else, including a
-    session that appeared in the past, a session that disappeared, or one corrected print."""
+    session that appeared in the past, a session that disappeared, one corrected print, or a "rescale" that only some
+    rows or only some columns show."""
     before, after = {s: k for k, s in enumerate(old['sessions'])}, {s: k for k, s in enumerate(new['sessions'])}
     removed = [s for s in before if s not in after]
     added = [s for s in after if s not in before]
@@ -139,11 +177,10 @@ def classify_change(old, new) -> dict:
     if removed or past_addition:
         return {**out, 'change': VALUE_CHANGE}
     if changed:
-        factors = [_scaled(old, before[s], new, after[s]) for s in changed]
-        consistent = None not in factors and max(factors) - min(factors) <= 1e-4 * abs(max(factors))
         prefix = changed == common[:len(changed)]                           # a split re-adjusts every session before its date, and only those
-        if consistent and prefix:
-            return {**out, 'change': SCALE_ONLY, 'scale_factor': round(float(sorted(factors)[len(factors) // 2]), 6)}
+        factor = _common_factor(old, new, [(before[s], after[s]) for s in changed]) if prefix else None
+        if factor is not None:
+            return {**out, 'change': SCALE_ONLY, 'scale_factor': round(float(factor), 6)}
         return {**out, 'change': VALUE_CHANGE}
     if added:
         return {**out, 'change': EXTENDED}
@@ -162,6 +199,7 @@ class HistoryStore:
         self.path = target
         self.db = sqlite3.connect(target.as_uri() + '?mode=ro', uri=True, timeout=120) if read_only else sqlite3.connect(target, timeout=120)
         self._depth = 0
+        self._latest = False                                               # the latest stored capture time, read once and then kept
         try:
             self.db.execute('PRAGMA recursive_triggers=ON')                 # so that INSERT OR REPLACE meets the delete trigger and is refused
             names = {r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -191,7 +229,7 @@ class HistoryStore:
             self.db.execute(f'CREATE TABLE {BAR_TABLE} (id TEXT PRIMARY KEY, source TEXT NOT NULL, security_id TEXT NOT NULL, year INTEGER NOT NULL, '
                             'version INTEGER NOT NULL, row_count INTEGER NOT NULL, first_session TEXT NOT NULL, last_session TEXT NOT NULL, capture_id TEXT NOT NULL, '
                             'change TEXT NOT NULL, content_hash TEXT NOT NULL, price_table TEXT NOT NULL, payload BLOB NOT NULL, created_at TEXT NOT NULL, '
-                            'UNIQUE(source, security_id, year, version))')
+                            'clock TEXT NOT NULL, UNIQUE(source, security_id, year, version))')
             self.db.execute(f'CREATE INDEX {BAR_TABLE}_security ON {BAR_TABLE}(security_id, year, version)')
             for table in JSON_TABLES + (BAR_TABLE, 'firm_meta'):
                 for action in ('UPDATE', 'DELETE'):
@@ -217,6 +255,7 @@ class HistoryStore:
             self._depth -= 1
             if self._depth == 0:
                 self.db.rollback()
+                self._latest = False                                       # whatever was written is gone; read the latest time again
             raise
         else:
             self._depth -= 1
@@ -229,6 +268,8 @@ class HistoryStore:
         if table not in JSON_TABLES:
             raise ValueError('UNKNOWN_TABLE')
         with self.transaction():
+            if table == 'history_captures':
+                self._latest = False
             return bool(self.db.execute(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)',
                                         (identity or content_hash(payload), canonical(payload), at or now_utc())).rowcount)
 
@@ -253,8 +294,23 @@ class HistoryStore:
         return self.db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
 
     def latest_capture_time(self):
-        row = self.db.execute(f'SELECT MAX(t) FROM (SELECT MAX(created_at) t FROM history_captures UNION ALL SELECT MAX(created_at) FROM {BAR_TABLE})').fetchone()
-        return row[0] if row else None
+        """The latest time any capture or bar version was stored under, as text in UTC; None in an empty store."""
+        if self._latest is False:
+            times = [r[0] for r in self.db.execute(f'SELECT created_at FROM history_captures UNION SELECT DISTINCT created_at FROM {BAR_TABLE}')]
+            self._latest = max(times, key=when) if times else None
+        return self._latest
+
+    def capture_clock(self, at=None) -> tuple:
+        """(time, clock) for a write. Without ``at`` the time is this machine's clock (SYSTEM). A supplied time is SUPPLIED:
+        it may not lie in the future, and no time may be earlier than a capture already stored."""
+        now = now_utc()
+        stamp, clock = (utc_time(at), 'SUPPLIED') if at else (now, 'SYSTEM')
+        if clock == 'SUPPLIED' and when(stamp) > when(now) + CLOCK_SKEW:
+            raise ValueError('CAPTURE_TIME_IN_THE_FUTURE')
+        latest = self.latest_capture_time()
+        if latest and when(stamp) < when(latest):
+            raise ValueError('CAPTURE_TIME_NOT_MONOTONIC')
+        return stamp, clock
 
     # ------------------------------------------------------------------------------------------------------- bars
     def sources(self) -> list:
@@ -268,25 +324,31 @@ class HistoryStore:
             raise ValueError('SOURCE_REQUIRED')                             # two vendors' bars for one identifier are two different series
         return found[0] if found else None
 
-    def put_bars(self, source, security_id, year, columns, capture_id, *, price_table, at=None) -> dict:
-        """Stores one security-year block. Every row is checked again here; a block holding an invalid row is refused whole.
-        Sessions of the current version that this capture does not mention are carried over, so a partial file extends a
-        year and never shortens it. Content equal to the current version is a duplicate; anything else is the next version."""
+    def put_bars(self, source, security_id, year, columns, capture_id, *, price_table, at=None, clock=None, sparse=False) -> dict:
+        """Stores one security-year block. Every row is checked again here, against the capture time too; a block holding an
+        invalid row is refused whole. Stored sessions outside the span this capture holds are carried over, so a partial file
+        extends a year. A stored session inside that span that the capture no longer mentions is removed from the new
+        version (``sparse`` captures remove nothing). Content equal to the current version is a duplicate; anything else is
+        the next version. ``clock`` is passed by ``ingest`` together with the time it already checked; a direct caller
+        leaves it out and the time is checked here."""
         if tuple(sorted(columns)) != tuple(sorted(BAR_COLUMNS)) or len({len(columns[c]) for c in BAR_COLUMNS}) != 1 or not columns['sessions']:
             raise ValueError('MALFORMED_BAR_BLOCK')
         if list(columns['sessions']) != sorted(set(columns['sessions'])) or any(str(s)[:4] != str(year) for s in columns['sessions']):
             raise ValueError('MALFORMED_BAR_BLOCK')
-        if price_table not in ('stocks', 'funds') or block_reasons(columns):
+        if clock is None:
+            at, clock = self.capture_clock(at)
+        elif clock not in ('SYSTEM', 'SUPPLIED') or not at:
+            raise ValueError('INVALID_CAPTURE_TIME')
+        if price_table not in ('stocks', 'funds') or block_reasons(columns, captured_at=at):
             raise ValueError('INVALID_BAR_BLOCK')
-        at = utc_time(at) if at else now_utc()
         body = {c: ['' if v is None else str(v) for v in columns[c]] for c in BAR_COLUMNS}
         previous = self.db.execute(f'SELECT version, payload, content_hash FROM {BAR_TABLE} WHERE source=? AND security_id=? AND year=? ORDER BY version DESC LIMIT 1',
                                    (source, security_id, int(year))).fetchone()
         carried = 0
         if previous:
             old = json.loads(zlib.decompress(previous[1]))
-            mentioned = set(body['sessions'])
-            keep = [k for k, s in enumerate(old['sessions']) if s not in mentioned]
+            mentioned, first, last = set(body['sessions']), body['sessions'][0], body['sessions'][-1]
+            keep = [k for k, s in enumerate(old['sessions']) if s not in mentioned and (sparse or s < first or s > last)]
             if keep:
                 carried = len(keep)
                 merged = sorted([(old['sessions'][k], 'old', k) for k in keep] + [(s, 'new', k) for k, s in enumerate(body['sessions'])])
@@ -300,18 +362,20 @@ class HistoryStore:
         change['sessions_carried_over'] = carried
         identity = content_hash([source, security_id, int(year), version])
         with self.transaction():
-            self.db.execute(f'INSERT INTO {BAR_TABLE} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            self.db.execute(f'INSERT INTO {BAR_TABLE} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (identity, source, security_id, int(year), version, len(body['sessions']), body['sessions'][0], body['sessions'][-1], capture_id,
-                             canonical(change), digest, price_table, zlib.compress(canonical(body).encode(), 6), at))
+                             canonical(change), digest, price_table, zlib.compress(canonical(body).encode(), 6), at, clock))
+        self._latest = at
         return {'stored': True, 'id': identity, 'version': version, **change}
 
     def bar_blocks(self, security_id, *, source=None, through_capture_time=None):
         """The current block of every year of one security: the highest version (optionally, the highest stored by a time)."""
         source = self._source(source)
+        through = None if through_capture_time is None else when(through_capture_time)
         latest = {}
         for year, version, identity, payload, created, capture in self.db.execute(
                 f'SELECT year, version, id, payload, created_at, capture_id FROM {BAR_TABLE} WHERE security_id=? AND source=? ORDER BY year, version', (security_id, source)):
-            if through_capture_time is None or created <= through_capture_time:
+            if through is None or when(created) <= through:
                 latest[year] = (version, identity, payload, capture)
         for year in sorted(latest):
             version, identity, payload, capture = latest[year]
@@ -328,31 +392,66 @@ class HistoryStore:
         out['blocks'] = blocks
         return out
 
-    def held_since(self, security_id, *, source=None) -> dict:
-        """{session: when the bar that is read today was first stored}. A bar is "the one read today" from the version in
-        which its values last changed; a pure rescale for a later split does not count as a change, because the printed
-        price and the shape of the bar are what they were. A revised bar was not held before its revision."""
+    def bar_history(self, security_id, *, source=None) -> dict:
+        """What the versions say about each bar that is read today:
+
+            since    {session: when the value read today was first stored}
+            clock    {session: SYSTEM or SUPPLIED, the clock of that version}
+            revised  the sessions whose value was changed after it was first stored
+
+        A pure rescale of a block for a later split (SCALE_ONLY), a re-adjusted total-return close and a new update stamp
+        do not change a bar. Anything else does: in a VALUE_CHANGE version every row whose values differ from the version
+        before is a revised bar, dated to that version, whether or not the row alone would pass for a rescale."""
         source = self._source(source)
-        current, since = {}, {}
-        for payload, created in self.db.execute(f'SELECT payload, created_at FROM {BAR_TABLE} WHERE security_id=? AND source=? ORDER BY year, version', (security_id, source)):
+        since, clock, revised, previous = {}, {}, set(), {}
+        for year, payload, created, stamp in self.db.execute(f'SELECT year, payload, created_at, clock FROM {BAR_TABLE} WHERE security_id=? AND source=? ORDER BY year, version',
+                                                             (security_id, source)):
             block = json.loads(zlib.decompress(payload))
-            for k, session in enumerate(block['sessions']):
-                row = {c: [block[c][k]] for c in VALUE_COLUMNS}
-                old = current.get(session)
-                if old is None or (old != row and _scaled(old, 0, row, 0) is None):
-                    since[session] = created
-                current[session] = row
-        return since
+            old = previous.get(year)
+            if old is None:
+                for session in block['sessions']:
+                    since[session], clock[session] = created, stamp
+            else:
+                kind = classify_change(old, block)['change']
+                before = {session: k for k, session in enumerate(old['sessions'])}
+                now = set(block['sessions'])
+                for k, session in enumerate(block['sessions']):
+                    if session not in before:
+                        since[session], clock[session] = created, stamp
+                        if session in revised or session < old['sessions'][-1]:
+                            revised.add(session)                       # it appeared in the past, or it was removed and came back
+                    elif kind == VALUE_CHANGE and not _same(old, before[session], block, k, VALUE_COLUMNS):
+                        since[session], clock[session] = created, stamp
+                        revised.add(session)
+                for session in before:
+                    if session not in now:
+                        since.pop(session, None)
+                        clock.pop(session, None)
+                        revised.add(session)                           # removed: if it returns, it returns as a revised bar
+            previous[year] = block
+        return {'since': since, 'clock': clock, 'revised': {session for session in revised if session in since}}
+
+    def held_since(self, security_id, *, source=None) -> dict:
+        """{session: when the bar that is read today was first stored}. See ``bar_history``."""
+        return self.bar_history(security_id, source=source)['since']
 
     def security_ids(self, *, price_table=None) -> list:
         query = f'SELECT DISTINCT security_id FROM {BAR_TABLE}' + (' WHERE price_table=?' if price_table else '') + ' ORDER BY 1'
         return [r[0] for r in self.db.execute(query, (price_table,) if price_table else ())]
 
     def current_blocks_hash(self, *, price_table=None) -> str:
-        """One hash over the identity and content of every current block: what a universe or a dataset was built from."""
+        """One hash over the identity and content of every current block: what a universe or a dataset was built from.
+        With ``price_table``: every current block of every security that has bars from that table, whichever table each
+        block came from, because a security's panel is read whole."""
         query = (f'SELECT id, content_hash FROM {BAR_TABLE} b WHERE version = (SELECT MAX(version) FROM {BAR_TABLE} WHERE source=b.source AND security_id=b.security_id '
-                 'AND year=b.year)' + (' AND price_table=?' if price_table else '') + ' ORDER BY id')
+                 'AND year=b.year)' + (f' AND security_id IN (SELECT DISTINCT security_id FROM {BAR_TABLE} WHERE price_table=?)' if price_table else '') + ' ORDER BY id')
         return content_hash([list(r) for r in self.db.execute(query, (price_table,) if price_table else ())])
+
+    def spans(self) -> list:
+        """(first session, last session, bars) of every security, from its current blocks. Dates and counts only."""
+        return [tuple(r) for r in self.db.execute(
+            f'SELECT MIN(first_session), MAX(last_session), SUM(row_count) FROM {BAR_TABLE} b WHERE version = (SELECT MAX(version) FROM {BAR_TABLE} '
+            'WHERE source=b.source AND security_id=b.security_id AND year=b.year) GROUP BY source, security_id')]
 
     def bar_summary(self) -> dict:
         row = self.db.execute(f'SELECT COUNT(DISTINCT source || char(31) || security_id), MIN(first_session), MAX(last_session), COUNT(*) FROM {BAR_TABLE}').fetchone()

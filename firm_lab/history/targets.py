@@ -40,16 +40,18 @@ REASONS = {OK: 'OK', NO_ENTRY: 'NO_ENTRY_BAR', PAST_HISTORY: 'WINDOW_PAST_STORED
 DELISTING_WINDOW = 5                     # sessions before the last bar within which a delisting record explains the end of the bars
 
 
-def delisted_at_last_bar(panel, actions):
+def delisted_at_last_bar(panel, actions, data_end=None):
     """The provider's code of the delisting (or acquisition) recorded at this security's last bar, or None. A record
-    dated more than a few sessions before the last bar, or any time after the stored data would have continued, does not
-    explain why the bars stop where they do."""
+    dated more than a few sessions before the last bar does not explain why the bars stop where they do. ``data_end``
+    is the last session stored for any security: bars that stop there have not been shown to stop at all, and a record
+    dated after it describes something the stored data cannot show, so neither makes an exit."""
     sessions = panel['sessions']
-    if not sessions:
+    if not sessions or (data_end is not None and sessions[-1] >= data_end):
         return None
     first_allowed = sessions[max(0, len(sessions) - 1 - DELISTING_WINDOW)]
+    last_allowed = _after(sessions[-1]) if data_end is None else min(_after(sessions[-1]), data_end)
     found = [a for a in actions if a['type'] == 'delisting' or (a['type'] == 'merger' and a.get('provider_code') == 'acquisitionby')]
-    near = [a for a in found if first_allowed <= str(a['effective_date'])[:10] and str(a['effective_date'])[:10] <= _after(sessions[-1])]
+    near = [a for a in found if first_allowed <= str(a['effective_date'])[:10] <= last_allowed]
     if not near:
         return None
     codes = [a.get('provider_code') or a['type'] for a in sorted(near, key=lambda a: (a['type'] != 'delisting', str(a['effective_date'])))]
