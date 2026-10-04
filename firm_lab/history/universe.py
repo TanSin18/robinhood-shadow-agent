@@ -46,8 +46,10 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
     Dollar volume is the unadjusted close times the shares traded on the day. The vendor supplies the shares only
     re-counted on today's basis (``adjust.volume_bounds``): exact when no later split touched the bar and after a
     forward split, a range of whole numbers after a reverse split. The rank uses the middle of the range; the range
-    itself is kept so that the builder can say where a later reverse split left a membership undecided. Nothing here
-    reads a reprinted price."""
+    itself is kept so that the builder can say where a later reverse split left a membership undecided. A security with
+    nothing known to have traded (the lowest possible median is zero) is screened out; if the re-count leaves room for
+    trading, its highest possible value is returned so that it is counted as undecided. No reprinted price is ranked
+    on: the re-count is taken back through the recorded split ratios."""
     sessions = panel['sessions']
     if not sessions:
         return {}
@@ -76,21 +78,27 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
             valid = np.isfinite(dollars[recent])
             if valid.sum() < rule['minimum_bars_in_window']:
                 out[r] = ('TOO_FEW_BARS_IN_WINDOW', None, None)
-            elif not np.median(high[recent][valid]) > 0:
-                out[r] = ('NO_DOLLAR_VOLUME', None, None)
+            elif not np.median(low[recent][valid]) > 0:               # nothing is known to have traded; the range says whether something may have
+                out[r] = ('NO_DOLLAR_VOLUME', None, (0.0, float(np.median(high[recent][valid]))))
             else:                                                       # the median of the lowest (highest) values bounds the median from below (above)
                 out[r] = (None, float(np.median(dollars[recent][valid])), (float(np.median(low[recent][valid])), float(np.median(high[recent][valid]))))
     return out
 
 
-def undecided(ranked, size) -> int:
-    """How many of the ranked candidates a later reverse split left undecided: their dollar volume is only known as a
-    range, and the range reaches across the cut. ``ranked`` is [(-dollars, security, lowest, highest)], best first."""
+def undecided(ranked, size, unranked=()) -> int:
+    """How many candidates a later reverse split left undecided: their dollar volume is only known as a range, and the
+    range reaches across the cut. ``ranked`` is [(-dollars, security, lowest, highest)], best first. ``unranked`` are
+    the highest possible dollar volumes of candidates screened out because nothing is known to have traded, although
+    the re-count leaves room for it: each could be a member if the universe has room or its range reaches the weakest
+    member."""
     inside, outside = ranked[:size], ranked[size:]
+    weakest_in = min((low for _, _, low, _ in inside), default=0.0)
+    room = len(inside) < size
+    doubtful = sum(1 for high in unranked if high > 0 and (room or high > weakest_in))
     if not outside:
-        return 0
-    weakest_in, strongest_out = min(low for _, _, low, _ in inside), max(high for _, _, _, high in outside)
-    return (sum(1 for _, _, low, high in inside if high > low and low < strongest_out)
+        return doubtful
+    strongest_out = max(high for _, _, _, high in outside)
+    return (doubtful + sum(1 for _, _, low, high in inside if high > low and low < strongest_out)
             + sum(1 for _, _, low, high in outside if high > low and high > weakest_in))
 
 
@@ -120,6 +128,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
             by_security.setdefault(payload['security_id'], []).append(payload)
     formations = calendar.month_ends(start, end)
     eligible = {r: [] for r in formations}
+    unranked = {r: [] for r in formations}
     screened_out = {r: {} for r in formations}
     for n, sid in enumerate(screened):
         p = panels.load(store, sid, source=source)
@@ -128,6 +137,8 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
                 eligible[r].append((-dollars, sid, bounds[0], bounds[1]))
             else:
                 screened_out[r][reason] = screened_out[r].get(reason, 0) + 1
+                if reason == 'NO_DOLLAR_VOLUME' and bounds and bounds[1] > 0:
+                    unranked[r].append(bounds[1])
         if progress and n % 500 == 0:
             progress(n, len(screened))
     rule_hash = content_hash(rule)
@@ -144,7 +155,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
                         'effective_to': formations[k + 1] if k + 1 < len(formations) else calendar.month_ends(effective_from, calendar.offset(effective_from, 30))[0],
                         'known_at': calendar.eligible_from(r), 'known_at_basis': 'every input is a bar on or before the formation session (bar-known-at-v1)',
                         'tier': PUBLISHER_DATED_HISTORICAL, 'members': members, 'member_count': len(members), 'eligible_count': len(ranked),
-                        'screened_out': screened_out[r], 'membership_undecided_by_volume_recount': undecided(ranked, rule['size']),
+                        'screened_out': screened_out[r], 'membership_undecided_by_volume_recount': undecided(ranked, rule['size'], unranked[r]),
                         'smallest_member_median_dollar_volume': -ranked[len(members) - 1][0] if members else None})
         ever.update(members)
     delisted = sum(1 for sid in ever if master.get(sid, {}).get('is_delisted'))

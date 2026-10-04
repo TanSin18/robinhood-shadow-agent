@@ -1285,3 +1285,85 @@ def test_a_later_split_moves_no_swing_and_a_tie_on_the_day_stays_a_tie():
             'volume': ['200', '200'], 'close_unadjusted': ['60.01', '60.00'], 'close_total_return': ['30.00', '30.00']}
     assert adjust.coarse_print(panel.from_columns(flat)).all()          # 60.00/60.01 on the day, 30.00 after the reprint: the range of the bar is gone
     assert adjust.TICK_BOUND == 0.0005 and adjust.PRECISION_BOUND == 5e-4
+
+
+# ------------------------------------------------------ review round 7 (an eighth, fresh reviewer; commit d196bb1)
+def test_where_a_rows_own_reach_ends_is_found_from_the_exact_close_alone():
+    """The reach that decides a row's tier included the start of the high/low pivot it stands on. Under a coarse reprint
+    untouched prints tie, pivots become rare and that start moves far back: a row of a stock that split later then read
+    a bar the vendor had once corrected, and was dropped."""
+    from firm_lab.history import features
+    plain, coarse = panel.from_columns(_cent_world()), panel.from_columns(_cent_world(400.0, 2))
+    a, b = features.compute(plain), features.compute(coarse)
+    np.testing.assert_array_equal(a['oldest_bar_read'], b['oldest_bar_read'])              # the tier's reach: the same in both worlds
+    assert (b['oldest_bar_read_shape'] < a['oldest_bar_read_shape']).any()                  # the high/low reach does move with the reprint ...
+    assert (b['oldest_bar_read_shape'] <= b['oldest_bar_read']).all()                       # ... and only ever feeds the all-or-none rule
+    sessions = plain['sessions']
+    history = {'since': {s: AT for s in sessions}, 'clock': {s: 'SUPPLIED' for s in sessions}, 'revised': {sessions[40]}, 'removed': set()}
+    ta = dataset.row_tiers(sessions, plain['present'], history, oldest=a['oldest_bar_read'])
+    tb = dataset.row_tiers(sessions, coarse['present'], history, oldest=b['oldest_bar_read'])
+    np.testing.assert_array_equal(ta, tb)                                                   # so a once-corrected bar costs both worlds the same rows
+
+
+def test_nothing_known_to_have_traded_is_not_a_member_whatever_a_later_split_did(tmp_path):
+    days = list(calendar.sessions('2018-06-01', '2019-12-31'))
+    def quiet(divisor):                                                 # no trade on most days; `divisor` re-counts it as after a later reverse split
+        n = len(days)
+        traded = np.where(np.arange(n) % 5 == 0, 3000.0, 0.0)
+        price = lambda k: f'{k:.6f}'
+        return {'sessions': tuple(days), 'present': np.ones(n, bool), 'volume': np.round(traded * divisor), 'close': np.full(n, 20.0 / divisor),
+                'close_unadjusted': np.full(n, 20.0), 'half_ulp': np.full(n, 1e-6), 'print_error': np.full(n, 1e-6)}
+    formations = calendar.month_ends('2019-06-01', '2019-12-31')
+    for divisor in (1.0, 0.1, 0.005):
+        found = universe.formation_stats(quiet(divisor), formations)
+        assert {r: v[0] for r, v in found.items()} == {r: 'NO_DOLLAR_VOLUME' for r in formations}, divisor
+        doubtful = [v[2][1] for v in found.values()]
+        assert all(high == 0 for high in doubtful) if divisor == 1.0 else all(high > 0 for high in doubtful)
+    assert universe.undecided([], 5, [0.0]) == 0 and universe.undecided([], 5, [1900.0]) == 1          # room in the universe: it could have been a member
+    full = [(-100.0 + k, str(k), 100.0 - k, 100.0 - k) for k in range(5)]
+    assert universe.undecided(full, 5, [50.0]) == 0 and universe.undecided(full, 5, [97.0]) == 1
+
+
+def test_a_price_reprinted_with_one_digit_and_a_thin_day_after_a_split_are_read_exactly(monkeypatch):
+    from firm_lab.history import features
+    # single-digit reprints: a $5-10 stock after a recorded 200-for-1, printed "0.03", "0.04": rounding moves the factor by more than a tenth
+    d = fx.series('LLL')
+    n, at = 600, 400
+    cents = np.round(np.clip(d['close'][:n] / d['close'][0] * 7.0, 5.0, 10.0), 2)       # the day's price before the split; a two-hundredth of it after
+    columns = {'sessions': d['sessions'][:n], 'volume': ['5000' if k < at else '1000000' for k in range(n)],
+               'close_unadjusted': [f'{c:.2f}' if k < at else f'{c / 200.0:.2f}' for k, c in enumerate(cents)]}
+    for name in ('open', 'high', 'low', 'close', 'close_total_return'):
+        columns[name] = [f'{c / 200.0:.2f}' for c in cents]
+    p = panel.from_columns(columns)
+    assert len({columns['close'][k] for k in range(at)}) <= 4 and p['print_error'][:at].max() > 0.1
+    found = adjust.breaks(p, [{'type': 'split', 'effective_date': p['sessions'][at], 'value': '200'}])
+    assert found['splits'] == [(at, 200.0)] and found['breaks'] == []
+    assert (adjust.reprint_scale(p, found['splits']) == 1.0).all()      # every bar of a correct record, however few digits it is printed with
+    np.testing.assert_array_equal(adjust.share_divisor(p, found['splits'])[:at], np.full(at, 200.0))
+    # a thin day after a later 3-for-2: the vendor's re-count is the day's shares times 1.5, rounded; the day's shares are still a whole number
+    rng = np.random.default_rng(3)
+    shares = rng.integers(0, 300, 500).astype(float)
+    base = _cent_world(n=500)
+    def with_volume(later, decimals):
+        columns = _cent_world(later, decimals, n=500)
+        columns['volume'] = [str(int(round(v * later))) for v in shares]
+        return panel.from_columns(columns)
+    plain = features.compute(with_volume(1.0, 2))['values']
+    for later, decimals in ((1.5, 7), (1.25, 6), (2.0, 6)):
+        other = with_volume(later, decimals)
+        low, high = adjust.volume_bounds(other)
+        assert (low == shares).all() and (high == shares).all() and not adjust.coarse_volume(other).any()
+        again = features.compute(other)['values']
+        for name in ('rvol20', 'volume_change', 'volume_percentile252', 'return_rvol', 'breakout_distance_rvol', 'breakout_volume_confirmation'):
+            np.testing.assert_allclose(again[name], plain[name], rtol=1e-9, atol=1e-9, equal_nan=True, err_msg=f'{name} after a later {later}-for-1')
+
+
+def test_a_bar_that_fits_anything_takes_the_ratio_of_its_neighbours():
+    columns = _cent_world(1.5, 6, n=300, ticker='HHH')                  # a later 3-for-2 the stored actions do not hold
+    k = 150
+    columns['close_unadjusted'][k] = '2'                                # printed with no decimals: this bar alone would agree with a ratio of one
+    columns['close'][k] = f'{2 / 1.5:.6f}'
+    for name, value in (('open', 2 / 1.5), ('high', 2 / 1.5), ('low', 2 / 1.5), ('close_total_return', 2 / 1.5)):
+        columns[name][k] = f'{value:.6f}'
+    scale = adjust.reprint_scale(panel.from_columns(columns))
+    assert scale[k] == scale[k - 1] == scale[k + 1] and scale[k] == pytest.approx(1.5, rel=1e-3)

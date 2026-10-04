@@ -219,7 +219,11 @@ def compute(panel, break_mask=None, splits=()) -> dict:
     # prints are compared untouched; everything measured across sessions on the close uses the exact close ``c``.
     scale = adjust.reprint_scale(panel, splits)
     o, h, l, cp = (np.asarray(panel[k], float) * scale for k in ('open', 'high', 'low', 'close'))
-    v = np.asarray(panel['volume'], float)
+    # Volume on one share basis: the shares that traded on the day (the middle of what the vendor's re-count allows, which
+    # is the exact number wherever a whole number of shares fits only once) times the divisor. The vendor's own re-count
+    # is that product rounded again, and for a thin day after a 3-for-2 the rounding is a third of the volume.
+    fewest, most = adjust.volume_bounds(panel, splits)
+    v = (fewest + most) / 2 * adjust.share_divisor(panel, splits)
     out = {}
     with np.errstate(invalid='ignore', divide='ignore'):
         span = h - l
@@ -283,8 +287,17 @@ def compute(panel, break_mask=None, splits=()) -> dict:
             unusable |= seen_coarse[t] - before > 0                     # any coarse bar in the window, its first bar included
         out[name] = np.where(unusable | ~present, np.nan, out[name])    # a session without a bar has no features
     audit['coarse_print_bars'] = int(coarse.sum())
-    # The oldest bar any feature of a row reads: the longest fixed window, or the start of the pivot or leg it stands on.
+    # The oldest bar a row reads. Two reaches, because they are found from different numbers:
+    #   oldest_bar_read        the longest fixed window, or the start of the close-based pivot or leg the row stands on.
+    #                          Found from the exact close only, so no later split can move it. A row's tier follows it.
+    #   oldest_bar_read_shape  the same, or the start of the high/low pivot or leg if that is earlier. Found from the
+    #                          vendor's reprinted highs and lows, so it may only feed an all-or-none decision.
     oldest = (t - LONGEST_FIXED_LOOKBACK + 1).astype(float)
-    for first in starts.values():
-        oldest = np.fmin(oldest, np.where(np.isfinite(first), first, oldest))
-    return {'values': {name: out[name] for name in NAMES}, 'audit': audit, 'oldest_bar_read': oldest.clip(0).astype(int)}
+    shape = oldest.copy()
+    for name, first in starts.items():
+        reach = np.where(np.isfinite(first), first, shape)
+        shape = np.fmin(shape, reach)
+        if name.startswith(('close_', 'fib_close_')):                   # pivots and legs on the exact close
+            oldest = np.fmin(oldest, np.where(np.isfinite(first), first, oldest))
+    return {'values': {name: out[name] for name in NAMES}, 'audit': audit, 'oldest_bar_read': oldest.clip(0).astype(int),
+            'oldest_bar_read_shape': shape.clip(0).astype(int)}

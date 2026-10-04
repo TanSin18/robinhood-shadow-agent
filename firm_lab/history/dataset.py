@@ -14,8 +14,11 @@ label, is tier C and is not a strict sample. A universe formed from an archive i
 today is tier B. Tier A needs forward capture of the bars and a universe formed from bars held at the time, and nothing
 does that yet. The Checkpoint 7 retrospective samples are a different dataset and are never added to these counts.
 
-What a row reads. Its features read its last 253 bars, and further back where the pivot or leg it stands on began
-earlier; its label reads the bars from T+1 to its exit. The tier follows exactly those bars.
+What a row reads. Its features read its last 253 bars, and further back where the close-based pivot or leg it stands
+on began earlier; its label reads the bars from T+1 to its exit. The tier follows exactly those bars, and that reach is
+found from the exact close alone. The pivots and legs on highs and lows can reach further back, but where they begin is
+read from the vendor's reprinted prices, so that reach decides nothing about a row: a bar in it that is coarsely
+printed, or that the vendor changed, only counts toward the all-or-none rule for the high/low/open features.
 
 Sealed segments (``splits``). Nothing of a segment that may not be read leaves ``security_rows``: no label value and
 no feature value of the historical holdout, the forward holdout, a purge or the burn-in. Only whether a row and its
@@ -134,7 +137,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
     mask = adjust.break_mask(p, audit['breaks'])
     computed = features.compute(p, mask, splits=audit['splits'])
     values = {name: np.array(array, float) for name, array in computed['values'].items()}
-    oldest = np.array(computed['oldest_bar_read'], int)
+    oldest, oldest_shape = np.array(computed['oldest_bar_read'], int), np.array(computed['oldest_bar_read_shape'], int)
     k0 = panels.first_session_on_or_after(p, FEATURES_FROM) if count else None
     if k0:                                                              # rows after the sealed holdout: computed from their own side of the boundary only
         tail = _tail(p, k0)
@@ -144,18 +147,27 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
         for name in values:
             values[name][k0:] = again['values'][name]
         oldest[k0:] = again['oldest_bar_read'] + k0
+        oldest_shape[k0:] = again['oldest_bar_read_shape'] + k0
     member = universe.member_mask(sessions, spans)
     history = np.cumsum(p['present'])
     core = np.all([np.isfinite(values[name]) for name in CORE_FEATURES], axis=0) if count else np.zeros(0, bool)
     eligible = member & p['present'] & (history >= MINIMUM_HISTORY_BARS) & core
-    bar_tier = row_tiers(sessions, p['present'], store.bar_history(sid, source=source), oldest=oldest)
+    history_of_bars = store.bar_history(sid, source=source)
+    bar_tier = row_tiers(sessions, p['present'], history_of_bars, oldest=oldest)
     tier = np.array([row_tier(t, membership_tier) for t in bar_tier], dtype=object) if count else np.zeros(0, dtype=object)
     segment = np.array([splits.segment(s) for s in sessions], dtype=object) if count else np.zeros(0, dtype=object)
     delisting = targets.delisted_at_last_bar(p, actions, data_end)
     labels = targets.build(p, mask, delisted=delisting, splits=audit['splits'])
     readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
     coarse = adjust.coarse_print(p, audit['splits'])
-    reads_coarse = _window_sum(coarse, oldest.clip(0, max(count - 1, 0)), np.arange(count)) > 0 if count else np.zeros(0, bool)
+    # What the high/low/open features of a row read reaches back to ``oldest_shape``, which is found from reprinted highs
+    # and lows. It therefore decides nothing about the row itself: a coarsely printed bar in that reach, or a bar the
+    # vendor changed or removed that lies beyond the row's own (close-based) reach, counts toward the all-or-none rule.
+    reach = oldest_shape.clip(0, max(count - 1, 0))
+    reads_coarse = _window_sum(coarse, reach, np.arange(count)) > 0 if count else np.zeros(0, bool)
+    if count:
+        changed_bars = np.array([s in history_of_bars['revised'] or s in history_of_bars['removed'] for s in sessions], bool)
+        reads_coarse = reads_coarse | (_window_sum(changed_bars, reach, np.arange(count)) > _window_sum(changed_bars, oldest.clip(0, count - 1), np.arange(count)))
     thin = adjust.coarse_volume(p, audit['splits'])
     t = np.arange(count)
     floor = np.where(t >= (k0 or 0), k0 or 0, 0)                       # a row past the sealed holdout reads no bar before its own side

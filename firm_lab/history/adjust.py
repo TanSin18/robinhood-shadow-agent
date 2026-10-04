@@ -38,6 +38,14 @@ SPLIT_VALUE_MEANS = 'new_per_old'         # a split's value is new shares per ol
 DIVIDEND_VALUE_MEANS = 'unadjusted'       # a cash dividend's value is the amount paid per share on the day
 
 
+def rounding_reach(panel) -> np.ndarray:
+    """How far, in logarithm, rounding can move a bar's factor (unadjusted over adjusted close) from its true value.
+    ``half_ulp`` is the two relative half-units added; the logarithm of a ratio moves by -log(1 - that) at most, which is
+    noticeably more once a price is printed with one significant digit ("0.04")."""
+    with np.errstate(invalid='ignore'):
+        return -np.log1p(-np.minimum(panel['half_ulp'], 0.99))
+
+
 def split_factor(panel) -> np.ndarray:
     """Unadjusted close over split-adjusted close: the number of today's shares that one share of that day became."""
     with np.errstate(invalid='ignore', divide='ignore'):
@@ -105,7 +113,8 @@ def breaks(panel, actions) -> dict:
         at = int(np.searchsorted(valid, slot))
         return int(valid[at]) if at < len(valid) else None
 
-    blur = {k: panel['half_ulp'][k] + panel['half_ulp'][j] for k, j in previous.items()}       # how far rounding can move the observed step
+    reach = rounding_reach(panel)
+    blur = {k: reach[k] + reach[j] for k, j in previous.items()}       # how far rounding can move the observed step
     observed = {k: factor[j] / factor[k] for k, j in previous.items()}
     visible = {k for k in previous if abs(math.log(observed[k])) > TOLERANCE + blur[k]}
     recorded = {}
@@ -209,17 +218,19 @@ def reprint_scale(panel, splits=()) -> np.ndarray:
     """What the vendor's adjusted prices of each bar must be multiplied by to stand on the exact close's share basis.
 
     Exactly 1 wherever the vendor's factor (unadjusted over adjusted close) is the product of the applied splits after
-    the session, within what its rounding explains. That is every bar of a correct record, with or without later
-    splits, so the vendor's own prints are compared with each other untouched and a tie on the day stays a tie.
+    the session, within what its rounding can explain (``rounding_reach``, exact also for a price printed with a single
+    digit). That is every bar of a correct record, with or without later splits, so the vendor's own prints are compared
+    with each other untouched and a tie on the day stays a tie.
 
     Elsewhere the vendor has adjusted for something the applied splits do not hold. The true ratio is the same over a
     whole stretch of sessions; it is taken as the median over the stretch, so that the rounding of one bar's close
     cannot tilt that bar against its neighbours."""
     count = len(panel['sessions'])
     scale = np.ones(count)
+    reach = rounding_reach(panel)
     with np.errstate(invalid='ignore', divide='ignore'):
         ratio = split_factor(panel) / _applied(panel, splits)
-        off = np.asarray(panel['present'], bool) & np.isfinite(ratio) & ~(np.abs(np.log(ratio)) <= TOLERANCE + panel['half_ulp'])
+        off = np.asarray(panel['present'], bool) & np.isfinite(ratio) & ~(np.abs(np.log(ratio)) <= TOLERANCE + reach)
     index = np.flatnonzero(off)
     if not len(index):
         return scale
@@ -229,10 +240,17 @@ def reprint_scale(panel, splits=()) -> np.ndarray:
     for n in range(1, len(index) + 1):
         a = int(index[n - 1])
         ends = n == len(index) or order[int(index[n])] != order[a] + 1 or \
-            abs(math.log(ratio[index[n]] / ratio[a])) > TOLERANCE + panel['half_ulp'][index[n]] + panel['half_ulp'][a]
+            abs(math.log(ratio[index[n]] / ratio[a])) > TOLERANCE + reach[index[n]] + reach[a]
         if ends:                                                        # a stretch ends where the bars stop being neighbours or the ratio steps
             scale[index[start:n]] = float(np.median(ratio[index[start:n]]))
             start = n
+    # A bar printed so coarsely that it agrees with anything is not evidence for 1. Between two neighbours that share
+    # another ratio which it also fits, it belongs to their stretch.
+    for n, k in enumerate(valid[1:-1], start=1):
+        before, after = scale[valid[n - 1]], scale[valid[n + 1]]
+        if scale[k] == 1.0 and before != 1.0 and abs(math.log(after / before)) <= TOLERANCE and math.isfinite(ratio[k]) \
+                and abs(math.log(ratio[k] / before)) <= TOLERANCE + reach[k]:
+            scale[k] = before
     return scale
 
 
@@ -278,7 +296,8 @@ def total_return_audit(panel, actions) -> dict:
             k = first_session_on_or_after(panel, str(action['effective_date'])[:10])
             if k is not None:
                 dated.add(k)
-    steps = [int(b) for a, b in zip(valid, valid[1:]) if abs(math.log(ratio[b] / ratio[a])) > 1e-4 + panel['half_ulp'][a] + panel['half_ulp'][b]]
+    reach = rounding_reach(panel)
+    steps = [int(b) for a, b in zip(valid, valid[1:]) if abs(math.log(ratio[b] / ratio[a])) > 1e-4 + reach[a] + reach[b]]
     on_action = sum(k in dated for k in steps)
     return {'factor_steps': len(steps), 'steps_on_a_recorded_distribution': on_action, 'steps_without_a_record': len(steps) - on_action,
             'recorded_distributions_without_a_step': len(dated - set(steps))}
