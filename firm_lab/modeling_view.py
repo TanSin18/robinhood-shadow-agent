@@ -42,13 +42,17 @@ def summary(research_database) -> dict:
         if not row:
             return empty()
         report = json.loads(row[0])
-        statuses = {}
+        statuses, others = {}, 0
         for (payload,) in db.execute('SELECT payload FROM modeling_models'):
-            status = json.loads(payload).get('status')
+            record = json.loads(payload)
+            status = record.get('status')
             if status not in ALLOWED_STATUSES:
                 return empty('UNEXPECTED_MODEL_STATUS')            # never show a model with a status this laboratory cannot give
+            if record.get('report_id') not in (None, report.get('report_id')):
+                others += 1                                        # a model of an earlier run: kept in the file, not counted with this report
+                continue
             statuses[status] = statuses.get(status, 0) + 1
-        return {'exists': True, 'warning': WARNING, 'report': report, 'models': sum(statuses.values()), 'registry_statuses': statuses,
+        return {'exists': True, 'warning': WARNING, 'report': report, 'models': sum(statuses.values()), 'registry_statuses': statuses, 'models_from_other_runs': others,
                 'stored_at': row[1], 'file': '/'.join(path.parts[-3:])}
     except (sqlite3.Error, ValueError, KeyError, TypeError) as error:
         return empty('LABORATORY_FILE_UNREADABLE:' + type(error).__name__)

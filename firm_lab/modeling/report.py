@@ -144,7 +144,7 @@ def assemble(lab) -> dict:
     c = targets.CLASSIFICATION
     candidates = [(f'{m}/{c}', m, {}) for m in ('logistic', 'xgboost', 'lightgbm', 'catboost', 'mlp')]
     candidates += [('mlp_multi_task', f'mlp_multi_task[{c}]', {'head': multi_names.index(c)}), ('transformer_multi_task', f'transformer_multi_task[{c}]', {'head': multi_names.index(c)})]
-    tables[c], _ = judged(c, candidates, classification=True)
+    tables[c], strongest_by_target[c] = judged(c, candidates, classification=True)
 
     # ---- distribution: pinball loss per quantile, interval coverage
     distribution = {'quantiles': list(QUANTILES), 'models': {}}
@@ -178,13 +178,21 @@ def assemble(lab) -> dict:
                 body['status'], body['status_reasons'] = selection.loss_status(body['fold_mean_pinball'], base['fold_mean_pinball'], body['mean_holdout_pinball'], base['mean_holdout_pinball'])
         base['status'], base['status_reasons'], base['role'] = 'EXPERIMENTAL', ['naive baseline: the training quantiles'], 'BASELINE'
 
-    # ---- risk targets: RMSE against the training mean (and volatility persistence)
-    risk = {}
+    # ---- risk targets: RMSE against the strongest naive baseline of the target (the training mean, or for volatility a line on
+    #      the last 20 sessions' realised volatility if that is the better naive forecast on development sessions)
+    risk, risk_baselines = {}, {}
+    NAIVE = {'historical_mean': 'naive baseline: the training mean', 'volatility_persistence': 'naive baseline: a line on the last 20 sessions’ realised volatility'}
     for target in targets.RISK:
-        base_folds, base_holdout = fold_losses(lab.results[f'historical_mean/{target}'], d, target, rmse)
-        body = {'historical_mean': {'role': 'BASELINE', 'status': 'EXPERIMENTAL', 'dev_rmse': float(np.mean(base_folds)), 'holdout_rmse': base_holdout, 'fold_rmse': base_folds}}
-        names = ['ridge', 'lightgbm'] + (['volatility_persistence'] if target == 'future_realized_vol_10' else [])
-        for name in names:
+        naive = {name: fold_losses(lab.results[f'{name}/{target}'], d, target, rmse) for name in NAIVE if lab.results.get(f'{name}/{target}', {}).get('status') == 'RUN'}
+        strongest = selection.strongest_loss_baseline({name: folds for name, (folds, _) in naive.items()})
+        base_folds, base_holdout = naive[strongest]
+        risk_baselines[target] = strongest
+        body = {}
+        for name, (folds, holdout) in naive.items():
+            rows, prediction = tournament.gather(lab.results[f'{name}/{target}'], 'dev')
+            body[name] = {'role': 'BASELINE', 'status': 'EXPERIMENTAL', 'status_reasons': [NAIVE[name]] + (['the strongest naive baseline on development sessions'] if name == strongest else []),
+                          'dev_rmse': float(np.mean(folds)), 'holdout_rmse': holdout, 'fold_rmse': folds, 'dev_spearman': metrics.spearman(d.y[target][rows], prediction)}
+        for name in ('ridge', 'lightgbm'):
             key = f'{name}/{target}'
             if lab.results.get(key, {}).get('status') != 'RUN':
                 body[name] = {'not_run': lab.results.get(key, {}).get('reason', 'not run')}
@@ -192,9 +200,8 @@ def assemble(lab) -> dict:
             folds, holdout = fold_losses(lab.results[key], d, target, rmse)
             status, reasons = selection.loss_status(folds, base_folds, holdout, base_holdout)
             rows, prediction = tournament.gather(lab.results[key], 'dev')
-            body[name] = {'role': 'BASELINE' if name == 'volatility_persistence' else 'CANDIDATE', 'status': 'EXPERIMENTAL' if name == 'volatility_persistence' else status,
-                          'status_reasons': ['naive baseline: a line on the last 20 sessions’ realised volatility'] if name == 'volatility_persistence' else reasons,
-                          'dev_rmse': float(np.mean(folds)), 'holdout_rmse': holdout, 'fold_rmse': folds,
+            body[name] = {'role': 'CANDIDATE', 'status': status, 'status_reasons': [f'compared with the strongest naive baseline: {strongest}'] + reasons,
+                          'compared_with': strongest, 'dev_rmse': float(np.mean(folds)), 'holdout_rmse': holdout, 'fold_rmse': folds,
                           'dev_spearman': metrics.spearman(d.y[target][rows], prediction)}
         risk[target] = body
 
@@ -327,7 +334,7 @@ def assemble(lab) -> dict:
                        'inner_tuning': 'the last quarter of each training window, purged; every tried configuration recorded',
                        'configurations_fitted': int(lab.configurations), 'bootstrap': f'moving block, block = label horizon, {draws} draws, fixed seed',
                        'multiple_testing': 'Holm at 10% over the candidates of each target, on holdout mean IC above zero'},
-        'tables': tables, 'strongest_baseline': strongest_by_target, 'distribution': distribution, 'risk': risk, 'ablation': ablation, 'specialists': specialists,
+        'tables': tables, 'strongest_baseline': strongest_by_target, 'distribution': distribution, 'risk': risk, 'risk_baselines': risk_baselines, 'ablation': ablation, 'specialists': specialists,
         'multi_task': multi, 'uncertainty': lab.uncertainty_record, 'calibration': lab.calibration_record, 'disagreement': lab.disagreement_record,
         'meta_label': lab.meta, 'conditional': lab.conditional_record, 'importance': lab.importance_record, 'examples': lab.example_records,
         'sufficiency': lab.sufficiency_record, 'frequency': lab.frequency_record, 'economic': economic, 'champions': champions,
@@ -360,6 +367,8 @@ def write(lab, report) -> dict:
                 identity = registry.model_id(key, result['target'], d.manifest['dataset_hash'], [b['chosen'] for b in result['blocks']], code)
                 artifacts[part] = store.add_predictions(identity, rows, prediction, part=part)
             judged = rows_by_key.get(key, [])
+            # one research status per judged head; the model's own status is that of the primary target's head when it has one
+            leading = next((r for r in judged if r['target'] == targets.PRIMARY), judged[0] if judged else None)
             names = [d.feature_names[i] for i in result['columns']]
             record = {
                 'model_id': identity, 'name': key, 'family': result.get('family'), 'architecture': ARCHITECTURE.get(result['name'], result['name']),
@@ -375,9 +384,10 @@ def write(lab, report) -> dict:
                 'metrics': [{k: v for k, v in r.items() if k not in ('status_reasons',)} for r in judged],
                 'artifact': {'kind': 'out-of-sample predictions (development folds and final holdout), stored in modeling_predictions', 'sha256': artifacts,
                              'fitted_weights_stored': False, 'refit': 'deterministic from dataset_hash, split, hyperparameters and seeds'},
-                'status': judged[0]['status'] if judged else 'EXPERIMENTAL',
-                'status_reasons': judged[0]['status_reasons'] if judged else ['a diagnostic or component run; not judged as a candidate on its own'],
-                'role': judged[0]['role'] if judged else 'DIAGNOSTIC',
+                'status': leading['status'] if leading else 'EXPERIMENTAL',
+                'status_reasons': leading['status_reasons'] if leading else ['a diagnostic or component run; not judged as a candidate on its own'],
+                'status_by_target': {r['target']: r['status'] for r in judged},
+                'role': leading['role'] if leading else 'DIAGNOSTIC', 'report_id': report['report_id'],
                 'time_policy': TIME_POLICY, 'plan_version': tournament.PLAN_VERSION,
                 'parameters': max((b['parameters'] for b in result['blocks']), default=0),
                 'sufficiency': lab.sufficiency_record.get(key),

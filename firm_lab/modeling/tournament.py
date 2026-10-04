@@ -169,6 +169,9 @@ def score(result, data, *, part, head=0, target=None, draws=2000) -> dict:
         out['classification'] = metrics.classification(y, prediction)
         ranked = data.y[targets.PRIMARY][rows]
         out['ranking'] = metrics.ranking(ranked, prediction, session, horizon=10, k=TOP_K, draws=draws)
+    elif result.get('scale') == 'rank':
+        # a per-session rank score is not a forecast in return units: it has a ranking record and no error, R2 or direction
+        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K, draws=draws)
     else:
         out['regression'] = metrics.regression(y, prediction)
         out['buckets'] = metrics.bucket_means(y, prediction)

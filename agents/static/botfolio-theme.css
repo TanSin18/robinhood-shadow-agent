@@ -535,6 +535,11 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 .agent-desk table.fl-fund td,.agent-desk table.fl-events td,.agent-desk table.fl-benchready td{overflow-wrap:break-word;word-break:normal;border-bottom:1px solid var(--hair-2)!important;padding-bottom:10px!important}
 .agent-desk table.fl-events a{color:var(--text-2);text-decoration:underline}
 .agent-desk table.fl-ready tbody td{vertical-align:top!important}
+/* ---------- Firm Lab: Modeling Laboratory (research tables; one neutral status style) ---------- */
+.agent-desk table.fl-lab td,.agent-desk table.fl-lab th{overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid var(--hair-2)!important;padding-bottom:8px!important}
+.agent-desk table.fl-lab details summary{cursor:pointer;color:var(--text-4)}
+.agent-desk #fl-modeling h3{margin-top:22px}
+.agent-desk #fl-modeling code{font-family:var(--bf-mono);font-size:12px}
 .agent-desk table.fl-ready tr.fl-ready-note td{border-top:0!important;padding-top:0!important;padding-bottom:14px!important}
 .agent-desk table.fl-ready .fl-sub{display:block;margin-top:4px;color:var(--text-4);line-height:1.35}
 .agent-desk table.fl-ready tr:not(.fl-ready-note) td{border-bottom:0;padding-bottom:4px}

@@ -242,7 +242,7 @@ class Lab:
                                'tried': [], 'train_rows': 0, 'train_sessions': 0, 'parameters': 0, 'describe': {'members': family_keys}})
         self.results['ensemble/family_equal_weight'] = {'name': 'family_equal_weight', 'status': 'RUN', 'family': 'ensemble', 'kind': models.REGRESSION,
                                                         'target': targets.PRIMARY, 'columns': [], 'blocks': blocks_out, 'seconds': 0.0,
-                                                        'configurations_tried': 1, 'quantile': None}
+                                                        'configurations_tried': 1, 'quantile': None, 'scale': 'rank'}
         self.ensemble_notes = {'stacker_weights': weights_log, 'gating': gate_log, 'family_members': family_keys}
 
     def _standardised(self, block):
@@ -441,6 +441,12 @@ class Lab:
             out['vti_volatility_terciles']['groups'].append({'group': label, 'sessions': int(len(values)), 'non_overlapping_windows': int(windows),
                                                              'mean_ic': float(values.mean()) if len(values) else None,
                                                              'meaningful': bool(windows >= 6)})
+        groups = out['vti_volatility_terciles']
+        readable = sum(1 for g in groups['groups'] if g['meaningful'])
+        groups['comparison_possible'] = bool(readable >= 2)
+        groups['result'] = ('Groups can be compared: at least two hold 6 or more non-overlapping windows.' if readable >= 2 else
+                            INSUFFICIENT_DATA + ': Too few sessions fall in two groups. The cut-offs come from the first training window, and almost every later '
+                            'session lies on one side of them, so there is no comparison between volatility groups to read.')
         fed = d.feature_names.index('days_since_fomc')
         change = d.feature_names.index('fed_latest_change_bps')
         by_session = {}
@@ -467,7 +473,7 @@ class Lab:
         block = self.definition['folds'][-1]
         train = rows[np.isin(d.row_session[rows], block.train)]
         test = rows[np.isin(d.row_session[rows], block.validation)]
-        out = {'fitted_on': 'the last development fold’s training window; evaluated on that fold’s validation block', 'families': {}}
+        out = {'fitted_on': 'the last development fold’s training window; evaluated on that fold’s validation block'}
 
         def by_family(values, feature_names):
             total = {}

@@ -69,7 +69,8 @@ def _leaderboard(rows):
                     f'{esc(str(r.get("folds_positive", 0)))} of {esc(str(r.get("folds", 0)))}<span class="small fl-sub">{esc(folds)}</span>',
                     f'{_n(r.get("holdout_mean_ic"))}<span class="small fl-sub">{esc(_interval(r.get("holdout_ic_interval_90")))}</span>',
                     (_n(r.get('dev_rmse'), 4, False) + ' / ' + _n(r.get('holdout_rmse'), 4, False)) if r.get('dev_rmse') is not None else
-                    (_n(r.get('dev_log_loss'), 4, False) + ' / ' + _n(r.get('holdout_log_loss'), 4, False)),
+                    (_n(r.get('dev_log_loss'), 4, False) + ' / ' + _n(r.get('holdout_log_loss'), 4, False)) if r.get('dev_log_loss') is not None else
+                    '<span class="small fl-sub">a rank score: no error in return units</span>',
                     _pct(r.get('dev_top_minus_bottom')) + ' / ' + _pct(r.get('holdout_top_minus_bottom'))])
     return out
 
@@ -113,9 +114,13 @@ def render_modeling(fl):
     boards = ''
     for target in ('excess_return_10', 'excess_return_5', 'excess_return_20', 'positive_excess_10'):
         rows = report['tables'].get(target) or []
-        note = (f'<p class="v10-note">Strongest naive baseline on development sessions: <b>{esc(report["strongest_baseline"].get(target, ""))}</b>. A model is compared '
-                'with it, per session, with overlapping labels respected.</p>') if target in report['strongest_baseline'] else (
-                '<p class="v10-note">Error is log loss; the base rate is the training share of positive outcomes. The rank correlation ranks the 10-session excess return by the predicted probability.</p>')
+        strongest = (report.get('strongest_baseline') or {}).get(target)
+        note = '<p class="v10-note">' + (f'Strongest naive baseline on development sessions: <b>{esc(strongest)}</b>. A model is compared with it, per session, '
+                                         'with overlapping labels respected. ' if strongest else '')
+        if target == 'positive_excess_10':
+            note += ('Error is log loss; the base rate is the training share of positive outcomes. The rank correlation ranks the 10-session excess return by the '
+                     'predicted probability, so a classifier is compared with the same naive baseline as the 10-session models.')
+        note += '</p>'
         boards += f'<h3>{esc(TARGET_NAMES[target])}</h3>{note}{_table(head, _leaderboard(rows))}'
     ablation = _table(('Reference model', 'Descriptor set', 'Descriptors', 'Development rank correlation', 'Change against technical baseline', 'Holdout rank correlation', 'Holdout change'),
                       [[esc(r['model']), f'<b>{esc(r["set"])}</b>', esc(str(r.get('features', '—'))), _n(r.get('dev_mean_ic')),
@@ -147,7 +152,10 @@ def render_modeling(fl):
         for name, r in body.items():
             if 'not_run' in r:
                 continue
-            risk_rows.append([esc(TARGET_NAMES[target]), f'<b>{esc(name)}</b>', 'naive baseline' if r['role'] == 'BASELINE' else _status(r['status']),
+            strongest = (report.get('risk_baselines') or {}).get(target)
+            state = (('strongest naive baseline' if name == strongest else 'naive baseline') if r['role'] == 'BASELINE' else
+                     _status(r['status']) + (f'<span class="small fl-sub">compared with {esc(r["compared_with"])}</span>' if r.get('compared_with') else ''))
+            risk_rows.append([esc(TARGET_NAMES[target]), f'<b>{esc(name)}</b>', state,
                               _n(r['dev_rmse'], 4, False) + ' / ' + _n(r['holdout_rmse'], 4, False)])
     risk = _table(('Risk target (close-based)', 'Model', 'Research status', 'RMSE, development / holdout'), risk_rows)
     calibration = report['calibration']
@@ -227,7 +235,8 @@ def render_modeling(fl):
             + '<h3>Meta-label research</h3><p class="v10-note">' + esc(meta.get('note', '')) + ' ' + esc(meta.get('question', '')) + '</p>'
             + _table(('Period', 'Meta model AUC', 'Prediction-size rule AUC', 'Share of rows where the primary direction was right'), meta_rows)
             + '<h3>Results by factual context</h3><p class="v10-note">' + esc(conditional.get('note', '')) + '</p>' + cond
-            + _facts((('Fed context', esc(conditional['fed']['result'])), ('PCE context', esc(conditional['pce']['result']))))
+            + _facts((('Volatility groups', esc(conditional['vti_volatility_terciles'].get('result') or 'not stated')),
+                      ('Fed context', esc(conditional['fed']['result'])), ('PCE context', esc(conditional['pce']['result']))))
             + '<h3>Size of the ranking spread</h3><p class="v10-note">' + esc(economic['statement'])
             + f' Stated cost range: {_pct(economic["cost_range_round_trip_two_legs"][0])} to {_pct(economic["cost_range_round_trip_two_legs"][1])}.</p>' + eco
             + '<h3>Prediction examples — research only</h3><p class="v10-note">Holdout rows from the last predicted session. Shown so the provenance of a prediction can be '

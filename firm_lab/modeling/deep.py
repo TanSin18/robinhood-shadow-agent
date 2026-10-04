@@ -30,6 +30,7 @@ class TorchModel(Model):
     requires = ('torch',)
     sequence = False
     heads = ('regression',)             # one entry per output: 'regression' or 'classification'
+    EPOCHS = 60
 
     def network(self, torch, features):
         raise NotImplementedError
@@ -80,7 +81,7 @@ class TorchModel(Model):
             a, b = torch.tensor(Z[learn], dtype=torch.float32), torch.tensor(target[learn], dtype=torch.float32)
             c, d = torch.tensor(Z[stop], dtype=torch.float32), torch.tensor(target[stop], dtype=torch.float32)
             best, best_state, waited, epochs = float('inf'), None, 0, 0
-            for epoch in range(self.params.get('epochs', 60)):
+            for epoch in range(self.params.get('epochs', self.EPOCHS)):
                 net.train()
                 order = generator.permutation(len(a))
                 for start in range(0, len(order), 256):

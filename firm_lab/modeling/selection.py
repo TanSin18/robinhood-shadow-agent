@@ -31,6 +31,12 @@ def strongest_baseline(baselines: dict) -> str:
     return max(sorted(baselines), key=key)
 
 
+def strongest_loss_baseline(fold_losses: dict) -> str:
+    """For a target judged by a loss: the naive baseline with the lowest mean development loss. A model that beats a weak
+    naive forecast and loses to a stronger one has not beaten "the naive baseline"."""
+    return min(sorted(fold_losses), key=lambda name: float(np.mean(fold_losses[name])))
+
+
 def _zero_if_none(value):
     return 0.0 if value is None or not np.isfinite(value) else float(value)
 
