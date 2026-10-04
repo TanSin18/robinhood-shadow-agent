@@ -11,6 +11,8 @@ STATUS_NOTE = (('REJECTED', 'not better than the strongest naive baseline on dev
                ('EXPERIMENTAL', 'not established: a gate was missed, or the model failed the data-sufficiency gate, in which case its result is not evidence either way'),
                ('CHALLENGER', 'better than every naive baseline on development sessions and not worse on the holdout; not established after adjustment for the number of models compared'),
                ('ELIGIBLE_FOR_FUTURE_REVIEW', 'passed every research gate; eligible for a later human review, nothing more'))
+FAMILY_NAMES = {'A_baseline': 'naive baseline', 'B_linear': 'linear', 'C_boosted_trees': 'boosted trees', 'D_neural': 'feed-forward network', 'E_sequence': 'sequence network',
+                'F_transformer': 'transformer', 'ensemble': 'combination'}
 TARGET_NAMES = {'excess_return_5': '5-session excess return vs VTI', 'excess_return_10': '10-session excess return vs VTI (primary)',
                 'excess_return_20': '20-session excess return vs VTI', 'positive_excess_10': 'Probability the 10-session excess return is above zero',
                 'close_mae_10': 'Largest adverse close excursion, next 10 sessions', 'close_mfe_10': 'Largest favourable close excursion, next 10 sessions',
@@ -51,6 +53,11 @@ def _table(head, rows, klass='fl-lab'):
             + ''.join('<tr>' + ''.join(f'<td data-label="{esc(h)}">{cell}</td>' for h, cell in zip(head, row)) + '</tr>' for row in rows) + '</tbody></table></div>')
 
 
+def _fold(title, body, hint=''):
+    """A section that starts closed: the page is long, and the detail is there for whoever wants it."""
+    return f'<details class="fl-fold"><summary>{esc(title)}' + (f'<span>{esc(hint)}</span>' if hint else '') + f'</summary>{body}</details>'
+
+
 def _facts(rows):
     return '<dl class="v10-facts fl-facts">' + ''.join(f'<div><dt>{esc(k)}</dt><dd>{v}</dd></div>' for k, v in rows) + '</dl>'
 
@@ -62,7 +69,7 @@ def _leaderboard(rows):
             out.append([f'<b>{esc(r["name"])}</b>', esc(r.get('family') or ''), _status(None) + f'<span class="small fl-sub">{esc(r["not_run"])}</span>', '—', '—', '—', '—', '—'])
             continue
         folds = ' / '.join(_n(x, 2) for x in r.get('fold_ics') or [])
-        role = 'naive baseline' if r['role'] == 'BASELINE' else esc(r.get('family') or '')
+        role = 'naive baseline' if r['role'] == 'BASELINE' else esc(FAMILY_NAMES.get(r.get('family'), r.get('family') or ''))
         reasons = '; '.join(r.get('status_reasons') or [])
         gate = f'<span class="small fl-sub">{esc(r["sufficiency"])}</span>' if r.get('sufficiency') and r['sufficiency'] != 'sufficient' else ''
         out.append([f'<b>{esc(r["name"])}</b>', role,
@@ -161,7 +168,14 @@ def _render(lab, report):
             note += ('Error is log loss; the base rate is the training share of positive outcomes. The rank correlation ranks the 10-session excess return by the '
                      'predicted probability, so a classifier is compared with the same naive baseline as the 10-session models.')
         note += '</p>'
-        boards += f'<h3>{esc(TARGET_NAMES[target])}</h3>{note}{_table(head, _leaderboard(rows))}'
+        counts = {}
+        for r in rows:
+            if r.get('role') == 'CANDIDATE' and r.get('status'):
+                counts[r['status']] = counts.get(r['status'], 0) + 1
+        hint = ', '.join(f'{k} {v}' for k, v in sorted(counts.items())) or 'nothing judged'
+        body = note + _table(head, _leaderboard(rows), 'fl-lab fl-board')
+        boards += (f'<h3>{esc(TARGET_NAMES[target])}</h3><p class="v10-note">Candidates: {esc(hint)}.</p>{body}' if target == 'excess_return_10'
+                   else _fold(TARGET_NAMES[target], body, 'candidates: ' + hint))
     ablation = _table(('Reference model', 'Descriptor set', 'Descriptors', 'Development rank correlation', 'Change against technical baseline', 'Holdout rank correlation', 'Holdout change'),
                       [[esc(r['model']), f'<b>{esc(r["set"])}</b>', esc(str(r.get('features', '—'))), _n(r.get('dev_mean_ic')),
                         (_n(r.get('dev_ic_change')) + f'<span class="small fl-sub">{esc(_interval(r.get("dev_ic_change_interval_90")))}</span>') if 'dev_ic_change' in r else 'reference',
@@ -236,18 +250,19 @@ def _render(lab, report):
     eco = _table(('Model', 'Top 5 minus bottom 5, development', 'Holdout', 'Whole development interval above the stated cost range? (a description, not a signal)'),
                  [[f'<b>{esc(r["name"])}</b>', _pct(r['dev_spread']) + f'<span class="small fl-sub">{esc(_interval([None if x is None else x * 100 for x in (r["dev_interval_90"] or [None, None])], 2))} %</span>',
                    _pct(r['holdout_spread']), 'yes' if r['development_interval_above_stated_cost_range'] else 'no'] for r in economic['rows']])
-    best = _table(('Question', 'Highest development score', 'Research status', 'Development', 'Holdout'),
-                  [[esc(label), f'<b>{esc((champions.get(key) or {}).get("name") or "none")}</b>'
-                    + ('<span class="small fl-sub">naive baseline</span>' if (champions.get(key) or {}).get('role') == 'BASELINE' else '')
-                    + f'<span class="small fl-sub">highest of {esc(str((champions.get(key) or {}).get("highest_of", "—")))} compared</span>',
-                    _status((champions.get(key) or {}).get('status'))
-                    + (f'<span class="small fl-sub">{esc((champions.get(key) or {})["sufficiency"])}</span>' if (champions.get(key) or {}).get('sufficiency') not in (None, 'sufficient') else ''),
-                    _n((champions.get(key) or {}).get(a), 4), _n((champions.get(key) or {}).get(b), 4)]
-                   for label, key, a, b in (('5-session excess return', 'best_5d', 'dev_mean_ic', 'holdout_mean_ic'), ('10-session excess return', 'best_10d', 'dev_mean_ic', 'holdout_mean_ic'),
-                                            ('20-session excess return', 'best_20d', 'dev_mean_ic', 'holdout_mean_ic'), ('Classifier (log loss)', 'best_classifier', 'dev_log_loss', 'holdout_log_loss'),
-                                            ('Distribution (pinball loss)', 'best_distribution_model', 'mean_dev_pinball', 'mean_holdout_pinball'),
-                                            ('Downside (RMSE)', 'best_downside_model', 'dev_rmse', 'holdout_rmse'), ('Strongest naive baseline', 'strongest_baseline', 'dev_mean_ic', 'holdout_mean_ic'),
-                                            ('Strongest advanced candidate', 'strongest_advanced_candidate', 'dev_mean_ic', 'holdout_mean_ic'))])
+    best_rows = []
+    for label, key, a, b, loss in (('5-session excess return', 'best_5d', 'dev_mean_ic', 'holdout_mean_ic', False), ('10-session excess return', 'best_10d', 'dev_mean_ic', 'holdout_mean_ic', False),
+                                   ('20-session excess return', 'best_20d', 'dev_mean_ic', 'holdout_mean_ic', False), ('Classifier (log loss)', 'best_classifier', 'dev_log_loss', 'holdout_log_loss', True),
+                                   ('Distribution (pinball loss)', 'best_distribution_model', 'mean_dev_pinball', 'mean_holdout_pinball', True),
+                                   ('Downside (RMSE)', 'best_downside_model', 'dev_rmse', 'holdout_rmse', True), ('Strongest naive baseline', 'strongest_baseline', 'dev_mean_ic', 'holdout_mean_ic', False),
+                                   ('Strongest advanced candidate', 'strongest_advanced_candidate', 'dev_mean_ic', 'holdout_mean_ic', False)):
+        row = champions.get(key) or {}
+        best_rows.append([esc(label), f'<b>{esc(row.get("name") or "none")}</b>'
+                          + ('<span class="small fl-sub">naive baseline</span>' if row.get('role') == 'BASELINE' else '')
+                          + f'<span class="small fl-sub">{"lowest loss" if loss else "highest"} of {esc(str(row.get("highest_of", "—")))} compared</span>',
+                          _status(row.get('status')) + (f'<span class="small fl-sub">{esc(row["sufficiency"])}</span>' if row.get('sufficiency') not in (None, 'sufficient') else ''),
+                          _n(row.get(a), 4, not loss), _n(row.get(b), 4, not loss)])
+    best = _table(('Question', 'Best development score', 'Research status', 'Development', 'Holdout'), best_rows)
     examples = ''
     for e in report.get('examples') or []:
         contributions = ', '.join(f'{k} {_n(v, 4)}' for k, v in list(e['family_contributions'].items())[:5])
@@ -263,27 +278,27 @@ def _render(lab, report):
                                ('Feature snapshot', f'<code>{esc(e["feature_snapshot_id"][:16])}</code> · calculation <code>{esc(e["calculation_hash"][:16])}</code>'))) + '</details>')
     return (stamp + intro + summary
             + '<h3>What this data cannot support</h3>' + limits
-            + '<h3>Validation design</h3>' + design + folds
-            + '<h3>What a research status means</h3>' + meanings
-            + '<h3>Highest development scores, with what the holdout said</h3><p class="v10-note">' + esc(champions['note']) + '</p>' + best
+            + '<h3>Best development scores, with what the holdout said</h3><p class="v10-note">' + esc(champions['note']) + '</p>' + best
             + boards
             + '<h3>Feature-family ablation</h3><p class="v10-note">Each family is added to the technical baseline (trend, momentum, volatility) and compared with it per session. '
             + f'<b>{esc(fib["statement"])}</b>: {esc(fib["why"])}. {esc(fib_detail)}. {esc(report["ablation"].get("note", ""))}</p>' + ablation
-            + '<h3>Specialist models and combinations</h3>' + special
             + '<h3>Neural models: is there enough data?</h3><p class="v10-note">A network that fails the gate is still shown, labelled, and cannot be a challenger.</p>' + sufficiency
-            + '<h3>Return distribution</h3>' + dist
-            + '<h3>Risk targets</h3>' + risk
-            + '<h3>Calibration</h3>' + cal + reliability
-            + '<h3>Model disagreement</h3>' + dis
-            + '<h3>Uncertainty</h3>' + unc
-            + '<h3>What the reference models leaned on</h3><p class="v10-note">' + esc(importance.get('limits', '')) + '</p>' + imp
-            + '<h3>Meta-label research</h3><p class="v10-note">' + esc(meta.get('note', '')) + ' ' + esc(meta.get('question', '')) + '</p>'
-            + _table(('Period', 'Meta model AUC', 'Prediction-size rule AUC', 'Share of rows where the primary direction was right'), meta_rows)
-            + '<h3>Results by factual context</h3><p class="v10-note">' + esc(conditional.get('note', '')) + '</p>' + cond
-            + _facts((('Volatility groups', esc(conditional['vti_volatility_terciles'].get('result') or 'not stated')),
-                      ('Fed context', esc(conditional['fed']['result'])), ('PCE context', esc(conditional['pce']['result']))))
-            + '<h3>Size of the ranking spread</h3><p class="v10-note">' + esc(economic['statement'])
-            + f' Stated cost range: {_pct(economic["cost_range_round_trip_two_legs"][0])} to {_pct(economic["cost_range_round_trip_two_legs"][1])}.</p>' + eco
-            + '<h3>Prediction examples — research only</h3><p class="v10-note">Shown so the provenance of a prediction can be followed. Which rows: '
-            + esc(((report.get('examples') or [{}])[0] or {}).get('shown_because') or 'none stored')
-            + '. They are measurements of a research model, not advice of any kind.</p>' + (examples or '<p class="v10-empty">None stored.</p>'))
+            + '<h3>More detail</h3>'
+            + _fold('Validation design', design + folds + '<h3>What a research status means</h3>' + meanings)
+            + _fold('Specialist models and combinations', special)
+            + _fold('Return distribution', dist)
+            + _fold('Risk targets', risk)
+            + _fold('Calibration', cal + reliability)
+            + _fold('Model disagreement', dis)
+            + _fold('Uncertainty', unc)
+            + _fold('What the reference models leaned on', '<p class="v10-note">' + esc(importance.get('limits', '')) + '</p>' + imp)
+            + _fold('Meta-label research', '<p class="v10-note">' + esc(meta.get('note', '')) + ' ' + esc(meta.get('question', '')) + '</p>'
+                    + _table(('Period', 'Meta model AUC', 'Prediction-size rule AUC', 'Share of rows where the primary direction was right'), meta_rows))
+            + _fold('Results by factual context', '<p class="v10-note">' + esc(conditional.get('note', '')) + '</p>' + cond
+                    + _facts((('Volatility groups', esc(conditional['vti_volatility_terciles'].get('result') or 'not stated')),
+                              ('Fed context', esc(conditional['fed']['result'])), ('PCE context', esc(conditional['pce']['result'])))))
+            + _fold('Size of the ranking spread', '<p class="v10-note">' + esc(economic['statement'])
+                    + f' Stated cost range: {_pct(economic["cost_range_round_trip_two_legs"][0])} to {_pct(economic["cost_range_round_trip_two_legs"][1])}.</p>' + eco)
+            + _fold('Prediction examples — research only', '<p class="v10-note">Shown so the provenance of a prediction can be followed. Which rows: '
+                    + esc(((report.get('examples') or [{}])[0] or {}).get('shown_because') or 'none stored')
+                    + '. They are measurements of a research model, not advice of any kind.</p>' + (examples or '<p class="v10-empty">None stored.</p>')))

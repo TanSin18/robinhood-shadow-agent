@@ -538,6 +538,16 @@ html:not(.v10-js) .agent-desk .v10-seg{display:none}
 /* ---------- Firm Lab: Modeling Laboratory (research tables; one neutral status style) ---------- */
 .agent-desk table.fl-lab td,.agent-desk table.fl-lab th{overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid var(--hair-2)!important;padding-bottom:8px!important}
 .agent-desk table.fl-lab details summary{cursor:pointer;color:var(--text-4)}
+.agent-desk table.fl-lab td,.agent-desk table.fl-lab th{text-align:left}
+.agent-desk table.fl-lab .cat{white-space:nowrap}
+@media (min-width:901px){.agent-desk table.fl-board th:nth-child(1){width:19%}.agent-desk table.fl-board th:nth-child(2){width:9%}.agent-desk table.fl-board th:nth-child(3){width:17%}
+  .agent-desk table.fl-board th:nth-child(4){width:13%}.agent-desk table.fl-board th:nth-child(5){width:12%}.agent-desk table.fl-board th:nth-child(6){width:12%}
+  .agent-desk table.fl-board th:nth-child(7){width:9%}.agent-desk table.fl-board th:nth-child(8){width:9%}
+  .agent-desk table.fl-board td:first-child{overflow-wrap:normal;word-break:break-word}}
+.agent-desk details.fl-fold{border-top:1px solid var(--hair-2);padding:10px 0}
+.agent-desk details.fl-fold>summary{cursor:pointer;font-weight:600;font-size:var(--fs-sm,14px);color:var(--text-2)}
+.agent-desk details.fl-fold>summary span{font-weight:400;color:var(--text-4);margin-left:8px}
+.agent-desk details.fl-fold[open]>summary{margin-bottom:10px}
 .agent-desk #fl-modeling h3{margin-top:22px}
 .agent-desk #fl-modeling code{font-family:var(--bf-mono);font-size:12px}
 .agent-desk table.fl-ready tr.fl-ready-note td{border-top:0!important;padding-top:0!important;padding-bottom:14px!important}
