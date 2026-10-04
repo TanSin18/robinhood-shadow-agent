@@ -15,7 +15,9 @@ AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY = 'AVAILABLE', 'UNAVAILABLE', 'N
 PARTIAL_EXISTING, BLOCKED = 'PARTIAL_EXISTING', 'BLOCKED'
 # PARTIAL_EXISTING: a source exists somewhere in the system but is not sufficient for, or not connected to, Firm Lab.
 # BLOCKED: no candidate provider can supply it cleanly.
-STATUSES = (AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY, PARTIAL_EXISTING, BLOCKED)
+# RESEARCH_ONLY: exists as offline research evidence only. Nothing in a trading path may read it; it is not "available" to any strategy.
+RESEARCH_ONLY = 'RESEARCH_ONLY'
+STATUSES = (AVAILABLE, UNAVAILABLE, NOT_STARTED, BUILD_ONLY, PARTIAL_EXISTING, BLOCKED, RESEARCH_ONLY)
 REGISTRY_VERSION = 5
 CONTROL_A_CLOSES = 'Robinhood read gateway, as recorded by Control A'
 TREASURY_PROVIDER = 'U.S. Treasury Fiscal Data'

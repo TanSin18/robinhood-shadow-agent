@@ -1,0 +1,12 @@
+# Isolated research environment for the Checkpoint 7 tournament (cloud container, Python 3.11). Never installed into the trading runtime.
+# The core (targets, dataset, splits, metrics, baselines, ridge, registry, page) needs only numpy and exchange_calendars; the rest is optional
+# and a missing library is recorded as NOT_RUN, never substituted.
+catboost==1.2.10
+exchange_calendars==4.13.2
+lightgbm==4.7.0
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.8.0
+scipy==1.17.1
+torch==2.14.1
+xgboost==2.1.4

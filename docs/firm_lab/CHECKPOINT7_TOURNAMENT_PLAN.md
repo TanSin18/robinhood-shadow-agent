@@ -1,0 +1,145 @@
+# Checkpoint 7 — tournament plan (written before any model was fitted)
+
+Written 2026-10-03, committed before the first tournament run. Plan version `checkpoint7-tournament-plan-v1`
+(`firm_lab/modeling/tournament.py`, `selection.py`). Everything below was fixed before a single out-of-sample number
+existed. A change after results are seen is a new plan version, recorded with its reason.
+
+**MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE.** Nothing here places, sizes or schedules a trade. No model
+gets a production or live status. The Firm trading trial is NOT REGISTERED.
+
+## 1. What is being asked
+
+Which features or model families, if any, carry out-of-sample information about the **10-session forward excess
+price return against VTI**? Companion targets: the 5- and 20-session excess return, the probability that the
+10-session excess return is positive, and three close-based risk targets over the next 10 sessions (largest adverse
+close excursion, largest favourable close excursion, realised close-to-close volatility).
+
+Not asked: what to buy, how much, with what instrument, or when to enter or leave.
+
+## 2. Data, and what it cannot support
+
+- Source: a hash-recorded snapshot of the Firm Lab research database. 23 instruments, 378 exchange sessions
+  (2025-03-31 to 2026-09-30) of stored, split-adjusted, price-return closes. VTI is the benchmark; 22 instruments are
+  samples (6 single stocks, 16 exchange-traded funds).
+- **Time rule: `SESSION_TIME_RETROSPECTIVE` (operator decision, 2026-10-03).** Firm Lab captured all of this on
+  2026-10-01 to 2026-10-03. Under the strict known-at rule no historical session has a usable feature (0 samples). For
+  modeling research, a close counts as known at its own session close, an SEC fact at its SEC acceptance time, a macro
+  value at its publication time. Nothing counts as known earlier. Every result is retrospective: not evidence that the
+  system held the data then. Closes are split-adjusted as of the capture date.
+- Features: the accepted Checkpoint 6 calculators, unchanged (same calculation hash), asked "what was known at the
+  close of session T" for every instrument and session, stored in a separate modeling database. The live research
+  database and the Feature Explorer are not touched.
+- Model inputs: numeric and boolean descriptors whose unit means the same for every instrument and date. Dollar
+  price levels and structured descriptions are left out by a fixed rule (`dataset.MODEL_UNITS`).
+- Sample: rows with at least 63 sessions of history and a label for every horizon. About 294 sessions × 22
+  instruments. **About 15 non-overlapping 20-session windows and 29 non-overlapping 10-session windows in total.** That
+  is very little. The realistic outcome of this checkpoint is that most questions come back INCONCLUSIVE.
+- Unavailable and not substituted: OHLCV (true range, candles, volume), intraday, CPI, labor, Treasury yields, market
+  volatility, historical sector constituents and mappings, consensus estimates.
+- Label limits: both legs are price returns (distributions are not added back); the label starts at the close the
+  features end at (a research label, not an executable entry).
+
+## 3. Validation design
+
+- No random split. Sessions are the unit; all instruments of a session are on the same side.
+- **Final holdout:** the last 20% of labelled sessions. Read once, at the end. Nothing is tuned or chosen on it.
+- **Development:** expanding walk-forward, 5 consecutive validation blocks after a first 80 training-only sessions.
+- **Purge:** 20 sessions (the longest label) before every validation block, for every target.
+- **Embargo:** 5 further sessions; with the purge it separates development from the holdout by 25 sessions.
+- **Configuration choice:** inside each training window, on its last quarter, purged the same way. Every tried
+  configuration and its inner score is recorded.
+- Preprocessing (feature availability filter, clipping, imputation, scaling, target scaling) is fitted on training
+  rows only.
+
+## 4. Families and search spaces (bounded, listed in `models.GRIDS` and `deep.py`)
+
+| Family | Members | Configurations |
+|---|---|---|
+| A naive baselines (mandatory) | zero; historical mean; per-instrument mean; 20-, 63- and 126-session momentum scaled by a one-variable line; registered-style momentum (126-session, only above the 200-session average); base rate (classification); training quantiles (distribution) | none |
+| B linear | least squares on 5 descriptors; ridge; elastic net; logistic regression; linear quantile regression | ridge 4, elastic net 3, logistic 3 |
+| C boosted trees | XGBoost, LightGBM, CatBoost (regression and classification); LightGBM quantiles | 3 each |
+| D shallow neural | feed-forward network, 32-16 hidden units, dropout 0.3, 3 seeds | 1 |
+| E sequence | causal temporal convolution, GRU, LSTM over 20 sessions, width 16, 3 seeds | 1 each |
+| F transformer | encoder only, 1 layer, 2 heads, width 16, 20 sessions, 3 seeds; single-task and multi-head | 1 |
+
+Also evaluated: multi-task heads against separately trained models; quantiles 10/25/50/75/90 and interval coverage;
+seed and bootstrap disagreement as model uncertainty; specialist models per feature family, their equal-weight
+average, a train-only linear stacker and a small gating network; a meta-label model against a plain
+prediction-size rule; conditional results by factual context where the count allows.
+
+Not built: reinforcement learning, options models, portfolio construction, position sizing, any buy/sell output.
+
+## 5. Feature-family ablation (mandatory)
+
+With ridge and LightGBM as the two reference models, on the primary target: technical baseline (trend, momentum,
+volatility); + Fibonacci; + support/resistance and breakout structure; + fundamentals; + earnings/SEC; + sector;
++ macro; full set. Each step is compared with the technical baseline, per session, paired.
+
+**Fibonacci rule (fixed now).** Let Δ be the per-session rank-correlation difference (technical + Fibonacci minus
+technical) on development sessions, with a 90% block-bootstrap interval.
+
+- `YES`: the interval's lower bound is above 0 for both reference models **and** Δ is positive on the holdout for both.
+- `NO`: the interval's upper bound is below +0.01 for both (the data rule out an improvement of 0.01), **or** Δ is at
+  or below 0 for both models on both development and holdout.
+- `INCONCLUSIVE`: anything else.
+
+Fibonacci gets no protection. If it adds nothing, that is what is reported.
+
+## 6. Metrics
+
+Regression: MAE, RMSE, R² (against the period mean and against a zero forecast), Pearson, Spearman, directional
+accuracy, realised mean by prediction bucket. Classification: ROC-AUC, PR-AUC, log loss, Brier, calibration error,
+reliability buckets. Ranking: per-session Spearman rank correlation (IC), top-5 and bottom-5 realised mean,
+top-minus-bottom, top-5 hit rate. Distribution: pinball loss, interval coverage and width.
+
+**Primary comparison metric: mean per-session IC on development sessions.** Sharpe is not used: no strategy exists.
+
+## 7. Statistics
+
+- Rows are not independent. Uncertainty is computed on per-session series with a moving-block bootstrap (block =
+  label horizon, 2,000 draws, fixed seed) and reported with the number of non-overlapping windows.
+- Model against baseline: paired per-session differences, same bootstrap.
+- Many models are compared. Holdout tests of "mean IC above zero" are adjusted across all registered models of a
+  target with Holm's method at 10%. The count of configurations evaluated is reported.
+- One good split proves nothing; fold-by-fold results are shown, and a model must be positive in at least 4 of 5 folds
+  to be more than experimental.
+
+## 8. Data-sufficiency gate for neural models (fixed now)
+
+Effective independent observations = (training sessions ÷ horizon) × effective number of independent instruments
+(participation ratio of the label correlation matrix). A network needs **at least 10 effective observations per
+trainable parameter** for its result to be treated as more than experimental. A model that fails is still run and
+reported, labelled `EXPERIMENTAL_INSUFFICIENT_DATA`, and cannot be a challenger. Seed-to-seed spread and
+fold-to-fold spread are reported for every network.
+
+## 9. Research status rules (fixed now)
+
+Statuses: `EXPERIMENTAL`, `CHALLENGER`, `REJECTED`, `ELIGIBLE_FOR_FUTURE_REVIEW`. There is no production or live status.
+
+For a ranking/regression or classification model, against the strongest naive baseline of the same target (the
+baseline with the highest development mean IC):
+
+- `REJECTED`: development mean IC is at or below 0, or at or below the strongest baseline's.
+- `CHALLENGER`: development mean IC above the baseline's; the paired difference interval's lower bound above 0;
+  positive IC in at least 4 of 5 folds; holdout mean IC above 0 and at least the baseline's; and, for a network, the
+  sufficiency gate passed. A classifier must also have a development log loss below the base rate's.
+- `ELIGIBLE_FOR_FUTURE_REVIEW`: a challenger whose holdout mean IC is above zero after Holm adjustment at 10%, and
+  whose paired holdout difference against the baseline has a lower bound above 0.
+- `EXPERIMENTAL`: everything else, including every model that fails the sufficiency gate.
+
+For quantile and risk models (no rank test is defined): `REJECTED` if worse than the naive baseline on development;
+`CHALLENGER` if better in at least 4 of 5 folds and on the holdout; otherwise `EXPERIMENTAL`.
+
+Naive baselines are registered as `EXPERIMENTAL` with the role `BASELINE`.
+
+## 10. What a result may and may not say
+
+May say: predicted excess return, probability, uncertainty, rank, model disagreement. May not say: buy, sell, enter,
+exit, strong buy, conviction trade. The economic-relevance note compares a top-minus-bottom spread with a stated,
+plausible cost range; it is not a profit figure and no cost model is fitted.
+
+## 11. Reruns
+
+The tournament is run once. If a defect in the code is found afterwards, it gets a failing test first, then the fix,
+then a full rerun, and the reason is recorded in the closure report. A rerun to get a better-looking number is not a
+defect fix and is not done.

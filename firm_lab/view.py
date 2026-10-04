@@ -238,6 +238,7 @@ def load(official_db=None, path=None, feature_filters=None) -> dict:
         total_return = json.loads(meta['vti_total_return_status']) if meta.get('vti_total_return_status') else None
         from .macro_view import summary_db as macro_summary
         from .research_features.view import feature_view
+        from .modeling_view import summary as modeling_summary
         return {
             'exists': True, 'mode': meta.get('mode'), 'database': '/'.join(path.parts[-3:]), 'created_at': meta.get('created_at'),
             'tables': tables, 'has_execution_tables': any(w in t for t in tables for w in FORBIDDEN_TABLE_WORDS),
@@ -257,6 +258,7 @@ def load(official_db=None, path=None, feature_filters=None) -> dict:
             'benchmarks': benchmarks,
             'macro': macro_summary(db, set(tables)),
             'research_features': feature_view(db,feature_filters),
+            'modeling': modeling_summary(path),
             'experiments': [{'experiment_id': e, 'name': n, 'status': s} for e, n, s in db.execute('SELECT experiment_id, name, status FROM experiment_registry')],
             'refused_fill_attempts': one("SELECT COUNT(*) FROM events WHERE kind IN ('FILL_REFUSED','REAL_ORDER_REFUSED')")[0],
             **FIXED}
