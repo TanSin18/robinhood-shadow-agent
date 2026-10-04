@@ -191,7 +191,7 @@ def test_holm_adjustment_makes_one_lucky_result_among_many_insufficient():
 # ====================================================================================================== status rules
 def _record(ic, holdout, folds, horizon=10, seed=0, n=130):
     generator = np.random.default_rng(seed)
-    return {'dev_mean_ic': ic, 'holdout_mean_ic': holdout, 'fold_ics': folds, 'horizon': horizon,
+    return {'dev_mean_ic': ic, 'holdout_mean_ic': holdout, 'fold_ics': folds, 'horizon': horizon, 'dev_identity_p': 0.001,
             'dev_ic_series': (ic + generator.normal(scale=0.05, size=n)).tolist(), 'holdout_ic_series': (holdout + generator.normal(scale=0.05, size=59)).tolist()}
 
 

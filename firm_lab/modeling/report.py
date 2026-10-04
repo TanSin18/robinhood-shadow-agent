@@ -18,6 +18,7 @@ from .lab import ALL_GROUPS, COST_RANGE, GATE_SEED, QUANTILES, SEQUENCE_GROUPS, 
 BASELINES = ('zero', 'historical_mean', 'instrument_mean', 'momentum_20', 'momentum_63', 'momentum_126', 'registered_style_momentum')
 NAIVE_CLASSIFIERS = ('base_rate', 'coin_flip')
 NETWORK_FAMILIES = ('D_', 'E_', 'F_')
+HOLM_LEVEL = 0.10
 ADVANCED_FAMILIES = ('C_boosted_trees', 'D_neural', 'E_sequence', 'F_transformer', 'ensemble')
 ARCHITECTURE = {
     'zero': 'constant 0', 'historical_mean': 'training mean', 'instrument_mean': 'per-instrument training mean',
@@ -118,19 +119,32 @@ def assemble(lab, *, supersedes=None) -> dict:
             cache[token] = summarize(lab.results[key], d, **kw)
         return cache[token]
 
-    # ---- the Holm family of a label: every registered model that ranks it (plan section 7), not only the candidates of one table
+    # ---- the Holm family of a label: every registered model that is judged by ranking it (plan section 7), not only the
+    #      candidates of one table. Quantile and risk models are judged by a loss and have no rank test. Two registry rows with
+    #      the same predictions (the full-set ablation run is the same model as the family run) are one test, not two.
     multi_names = [n for n, _ in lab.MULTI]
-    family = {t: {} for t in targets.REGRESSION}
+    family, same_as, seen = {t: {} for t in targets.REGRESSION}, {}, {t: {} for t in targets.REGRESSION}
     for key, result in lab.results.items():
         if result.get('status') != 'RUN' or result.get('kind') == models.QUANTILE:
             continue
         multi = isinstance(result['target'], (tuple, list))
         for head, target in enumerate(result['target'] if multi else [result['target']]):
             if target not in targets.REGRESSION + (targets.CLASSIFICATION,):
-                continue                                                # risk targets are judged by a loss; no rank test is defined for them
+                continue
             kw = {'head': head} if multi else {}
-            family[_label(target)][_token(key, kw)] = summary(key, **kw)['p_holdout_ic_not_positive']
+            token, label = _token(key, kw), _label(target)
+            series = summary(key, **kw)['holdout_ic_series']
+            digest = content_hash([round(float(v), 12) for v in series] + [round(float(v), 12) for v in summary(key, **kw)['dev_ic_series']])
+            if digest in seen[label] and summary(key, **kw)['holdout']['ranking']['sessions_with_a_ranking']:
+                same_as[token] = seen[label][digest]                    # identical session-by-session results: the same test
+                continue
+            seen[label].setdefault(digest, token)
+            family[label][token] = summary(key, **kw)['p_holdout_ic_not_positive']
     holm = {label: metrics.holm(values) for label, values in family.items()}
+    for label in holm:
+        for token, first in same_as.items():
+            if first in holm[label]:
+                holm[label][token] = holm[label][first]
 
     def judged(target, candidates, classification=False):
         """Rows for one target: naive baselines, then candidates with statuses from the fixed rules."""
@@ -157,13 +171,17 @@ def assemble(lab, *, supersedes=None) -> dict:
                 record['naive_log_loss'] = naive_log_loss
             test = holm[label][_token(key, kw)]
             status, reasons = selection.status(record, baselines, holm_rejected=test['rejected'], sufficient=_sufficient(lab, key))
+            batches = record['holdout']['ranking']['batches']
             reasons = [f'compared with the strongest naive baseline: {strongest}'] + reasons + [
-                f'Holm-adjusted p (holdout mean IC not above zero, family of {test["family_size"]} registered models): {test["adjusted"]:.3f}'
+                (f'holdout mean IC above zero: Holm-adjusted p {test["adjusted"]:.3f} in a family of {test["family_size"]} tests, level {HOLM_LEVEL:.2f}: '
+                 + ('met' if test['rejected'] else 'not met') + f' (a t test on {batches} batch means; it does not by itself make a challenger)')
                 if np.isfinite(_none_to_nan(record['p_holdout_ic_not_positive'])) else
-                f'no holdout p-value: {record["holdout"]["ranking"]["batches"]} batches are too few for a test (counted as 1 in the family of {test["family_size"]})']
+                f'holdout mean IC above zero: no test, the holdout has {batches} batch' + ('' if batches == 1 else 'es')
+                + f' and three are needed (counted as p = 1 in the family of {test["family_size"]} tests)']
             row = _row(key, lab, record, role='CANDIDATE', status=status, reasons=reasons, label=label_shown)
             row['sufficiency'] = None if key not in lab.sufficiency_record else lab.sufficiency_record[key]['label']
-            row['holm_adjusted_p'], row['holm_family_size'] = test['adjusted'], test['family_size']
+            row['holm_adjusted_p'], row['holm_family_size'], row['holm_met'] = test['adjusted'], test['family_size'], test['rejected']
+            row['dev_identity_p'] = record.get('dev_identity_p')
             rows.append(row)
         for key, label_shown, kw in candidates:
             if lab.results.get(key, {}).get('status') == 'NOT_RUN':
@@ -393,17 +411,20 @@ def assemble(lab, *, supersedes=None) -> dict:
                         'Fundamental and event descriptors exist for 5 single stocks only. Sector mappings are effective 2026-10-03 and are unavailable for every historical '
                         'session, so the "sector" set holds only trailing returns relative to VTI.',
                         'Macro descriptors (Fed, PCE) are validated from mid-2026 only and are identical across instruments on a day.',
-                        'The holdout was read twice: once by the first run under plan v1 and once by this run under plan v2. Every v2 change was made for a stated '
-                        'defect, not to move a result; the changes and the statuses they moved are listed in the closure report.']},
+                        'The holdout has been read by every run: under plan v1, under v2 after the independent review, and under v3 after the verification review. '
+                        'No prediction changed between the v2 and v3 runs. Every change was made for a stated defect, not to move a result; the changes and the '
+                        'statuses they moved are listed in docs/firm_lab/CHECKPOINT7_CLOSURE.md.']},
         'validation': {'split_method': definition['version'], 'walk_forward_folds': len(definition['folds']), 'purge_sessions': definition['horizon'],
                        'embargo_sessions': definition['embargo'], 'gap_before_holdout_sessions': definition['gap_before_holdout'], 'blocks': blocks,
                        'development_sessions': development_sessions, 'holdout_sessions': holdout_sessions,
                        'inner_tuning': 'the last quarter of each training window, purged; every tried configuration recorded',
                        'configurations_fitted': int(lab.configurations), 'interval_method': metrics.INTERVAL_METHOD,
                        'unranked_sessions': 'a session a model does not rank counts as rank correlation 0 for that model',
-                       'multiple_testing': 'Holm at 10% over every registered model that ranks the label (baselines, candidates, ablation and specialist runs; classifiers '
-                                           'with the 10-session models), on holdout mean IC above zero',
-                       'holm_family_sizes': {label: len(values) for label, values in family.items()}},
+                       'multiple_testing': 'Holm at 10% over every registered model that is judged by ranking the label (baselines, candidates, ablation and specialist '
+                                           'runs; classifiers with the 10-session models; two rows with identical results count once), on holdout mean IC above zero',
+                       'holm_family_sizes': {label: len(values) for label, values in family.items()},
+                       'holm_rows_identical_to_another': same_as,
+                       'identity_shuffle': f'{metrics.identity_permutation_p.__kwdefaults__["draws"]} shuffles of instrument identities, fixed seed; a challenger needs p at most {metrics.IDENTITY_LEVEL}'},
         'tables': tables, 'strongest_baseline': strongest_by_target, 'distribution': distribution, 'risk': risk, 'risk_baselines': risk_baselines, 'ablation': ablation,
         'specialists': specialists, 'multi_task': multi, 'uncertainty': lab.uncertainty_record, 'calibration': lab.calibration_record,
         'disagreement': lab.disagreement_record, 'meta_label': lab.meta, 'conditional': lab.conditional_record, 'importance': lab.importance_record,

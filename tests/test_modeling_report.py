@@ -267,6 +267,9 @@ def test_the_holm_family_of_a_label_is_every_registered_model_that_ranks_it(fini
                 expected[target] += 1
             elif target == targets.CLASSIFICATION:
                 expected[targets.PRIMARY] += 1                                                       # a classifier is tested on the 10-session label
+    same = report['validation']['holm_rows_identical_to_another']
+    assert same['ablation/ridge/full'] == f'ridge/{targets.PRIMARY}' and same['ablation/lightgbm/full'] == f'lightgbm/{targets.PRIMARY}'      # the same model run twice is one test
+    expected[targets.PRIMARY] -= len(same)
     assert report['validation']['holm_family_sizes'] == expected
     assert expected[targets.PRIMARY] > 40 and expected['excess_return_5'] == expected['excess_return_20'] == 7 + 7 + 2      # baselines, candidates and both multi-task heads
     for target, rows in report['tables'].items():
@@ -274,6 +277,9 @@ def test_the_holm_family_of_a_label_is_every_registered_model_that_ranks_it(fini
         for row in rows:
             if row['role'] == 'CANDIDATE' and row.get('status'):
                 assert row['holm_family_size'] == expected[label], (target, row['name'])            # not only the candidates of one table
+                assert isinstance(row['holm_met'], bool) and 0 < row['dev_identity_p'] <= 1
+                last = row['status_reasons'][-1]
+                assert last.startswith('holdout mean IC above zero: ') and ('level 0.10: met' in last or 'level 0.10: not met' in last or 'no test, the holdout has' in last)
 
 
 def test_every_result_fitted_as_a_network_is_gated_and_a_gate_failure_is_never_a_rejection_or_a_challenger(finished):

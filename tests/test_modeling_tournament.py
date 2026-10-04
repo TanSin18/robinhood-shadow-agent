@@ -57,7 +57,7 @@ def test_the_common_sample_and_the_design_are_what_the_plan_says():
     assert data.row_session[rows].min() == MINIMUM_HISTORY == 63 and data.row_session[rows].max() == 378 - 1 - 20      # history before, every label after
     design = tournament.design(data)
     assert (design['horizon'], design['embargo'], len(design['folds'])) == (20, 5, 5) and design['gap_before_holdout'] == 25
-    assert len(design['holdout'].validation) == 59 and tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v2'
+    assert len(design['holdout'].validation) == 59 and tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v3'
 
 
 def test_no_model_is_fitted_on_a_row_it_predicts_or_on_a_label_that_overlaps_the_block():

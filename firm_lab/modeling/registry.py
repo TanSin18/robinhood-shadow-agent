@@ -74,15 +74,35 @@ def model_id(name, target, dataset_hash, hyperparameters, code, run=None) -> str
 REGISTRY_TABLES = ('modeling_models', 'modeling_predictions', 'modeling_runs', 'modeling_reports')
 
 
+def protect(db):
+    """INSERT OR REPLACE deletes the old row without firing a delete trigger. These triggers close that door: on a
+    registry table a second insert under an existing identity is an error; on the dataset table it is ignored, which is
+    what registering the same dataset twice already meant. Applied to the modeling database and to every exported file."""
+    for table in REGISTRY_TABLES:
+        db.execute(f'CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) '
+                   "BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY'); END")
+    db.execute('CREATE TRIGGER IF NOT EXISTS modeling_datasets_no_replace BEFORE INSERT ON modeling_datasets WHEN EXISTS (SELECT 1 FROM modeling_datasets WHERE id = NEW.id) '
+               'BEGIN SELECT RAISE(IGNORE); END')
+
+
+def read_only(path) -> tuple:
+    """(newest report, every model row) read without writing a byte to the file."""
+    timeview.check(path)
+    db = sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)
+    try:
+        row = db.execute('SELECT payload FROM modeling_reports ORDER BY created_at DESC, id DESC LIMIT 1').fetchone()
+        return (json.loads(row[0]) if row else None), [json.loads(p) for (p,) in db.execute('SELECT payload FROM modeling_models ORDER BY created_at, id')]
+    finally:
+        db.close()
+
+
 class Registry:
     def __init__(self, path):
         timeview.check(path)
         self.db = sqlite3.connect(Path(path).resolve(), timeout=120)
         with self.db:
             timeview.create_tables(self.db)
-            for table in REGISTRY_TABLES:                           # INSERT OR REPLACE would delete a row without firing the delete trigger
-                self.db.execute(f'CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) '
-                                "BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY'); END")
+            protect(self.db)
 
     def __enter__(self):
         return self

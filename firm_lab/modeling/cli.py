@@ -28,6 +28,7 @@ EXPORTED = ('modeling_reports', 'modeling_models', 'modeling_datasets', 'modelin
 
 def export(database, out) -> dict:
     """Copies the report, registry, dataset manifests and run records into a new small file. No feature rows, no predictions."""
+    from . import registry
     timeview.check(database)
     out = Path(out)
     if out.exists():
@@ -51,6 +52,7 @@ def export(database, out) -> dict:
                 rows = [r for r in src.execute(f'SELECT id, payload, created_at FROM {table}') if not r[0].endswith(':samples')]
                 dst.executemany(f'INSERT INTO {table} VALUES (?,?,?)', rows)
                 counts[table] = len(rows)
+            registry.protect(dst)                                       # the exported file is append-only in the same way
     finally:
         src.close()
         dst.close()
@@ -61,10 +63,7 @@ def export(database, out) -> dict:
 def verify(database) -> dict:
     """Whether the newest stored report, and every registry row of its run, was produced by the code in this tree."""
     from . import registry, tournament
-    timeview.check(database)
-    with registry.Registry(database) as store:
-        report = store.latest_report()
-        rows = store.models()
+    report, rows = registry.read_only(database)                        # checking a file never changes it
     if not report:
         raise ValueError('NO_STORED_REPORT')
     code = registry.code_hash()

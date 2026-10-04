@@ -24,7 +24,7 @@ def _n(value, places=3, signed=True):
         return '—'
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return '—'
     if number != number:
         return '—'
@@ -111,7 +111,7 @@ def render_modeling(fl):
         return STAMP + INTRO + f'<p class="v10-empty">No laboratory run is stored on this machine ({esc(lab.get("missing_reason") or "NO_STORED_LABORATORY_RUN")}).</p>'
     try:
         return _render(lab, report)
-    except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError) as error:
         return STAMP + INTRO + ('<p class="v10-empty">A laboratory report is stored but could not be shown: it is incomplete or has a shape this page does not know '
                                 f'({esc(type(error).__name__)}). Nothing from it is displayed.</p>')
 
@@ -188,8 +188,9 @@ def _render(lab, report):
                      + [['<b>one unified model</b>', esc(specialists['unified_model']['model']), _n(specialists['unified_model']['dev_mean_ic']),
                          _n(specialists['unified_model']['holdout_mean_ic']), 'for comparison']])
     sufficiency = _table(('Network', 'Trainable parameters', 'Effective independent observations', 'Per parameter (10 needed)', 'Seed-to-seed range of development rank correlation', 'Gate'),
-                         [[f'<b>{esc(k)}</b>', esc(f'{v["parameters"]:,}'), esc(str(v['effective_independent_observations'])), esc(str(v['observations_per_parameter'])),
-                           _n(v.get('seed_ic_range'), 3, False), _status(v['label'])] for k, v in sorted(report['sufficiency'].items())])
+                         [[f'<b>{esc(k)}</b>'] + ([esc('inherited from ' + ', '.join(v['inherited_from'])), '—', '—', '—'] if v.get('inherited_from') else
+                                                   [esc(f'{v["parameters"]:,}'), esc(str(v['effective_independent_observations'])), esc(str(v['observations_per_parameter'])),
+                                                    _n(v.get('seed_ic_range'), 3, False)]) + [_status(v['label'])] for k, v in sorted(report['sufficiency'].items())])
     distribution = report['distribution']
     dist_rows = []
     for name, body in distribution['models'].items():

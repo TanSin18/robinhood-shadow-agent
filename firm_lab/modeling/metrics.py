@@ -11,8 +11,15 @@ is anti-conservative at this sample size (a no-information ranking had a "90% in
 time on development sessions and up to 25% on the holdout, and its tail share could be exactly 0). It was replaced; see
 the plan's amendments.
 
-A session a model does not rank (every prediction equal) has rank correlation 0 for that model. Every model is
-therefore averaged, compared and paired over the same sessions.
+The batch interval is not enough on its own. Against the real labels, a ranking that persists across sessions (the
+same instruments on top week after week) meets return patterns that persist longer than a batch, and its interval sits
+above zero 7% to 12% of the time at nominal 5% on development sessions (verification review). ``identity_permutation_p``
+answers that case exactly: it compares a model's mean rank correlation with what the same predictions earn when
+instrument identities are shuffled. A challenger has to pass both.
+
+A session a model does not rank (every prediction equal, or nothing predicted) has rank correlation 0 and a
+top-minus-bottom spread of 0 for that model. Every model is therefore averaged, compared and paired over the same
+sessions.
 
 Sharpe is deliberately absent: no trading strategy is registered, so there is no return stream to take a ratio of.
 """
@@ -22,7 +29,9 @@ import numpy as np
 
 MINIMUM_BATCHES = 3
 BATCH_HORIZONS = 2
-INTERVAL_METHOD = 'Student t on the means of consecutive batches two label horizons long; no interval below three batches'
+INTERVAL_METHOD = ('Student t on the means of consecutive batches two label horizons long; no interval below three batches. On development sessions a '
+                   'model must also beat its own predictions with instrument identities shuffled')
+IDENTITY_LEVEL = 0.05
 
 
 def _finite(*arrays):
@@ -161,24 +170,28 @@ def _tail_mean(values, scores, k, highest):
 
 def top_bottom(y, prediction, session, *, k=5) -> dict:
     """Per session: mean realised target of the k highest-predicted instruments, of the k lowest, and of all. No weights,
-    no costs, no holding: a description of the ranking, not a portfolio."""
+    no costs, no holding: a description of the ranking, not a portfolio. A session the model does not rank has a spread
+    of 0 and is counted, so the spread is an average over every session like the rank correlation."""
     y, prediction, session = np.asarray(y, dtype=float), np.asarray(prediction, dtype=float), np.asarray(session)
-    top, bottom, everything, hit = [], [], [], []
+    top, bottom, everything, hit, series = [], [], [], [], []
     for day in np.unique(session):
         mask = (session == day) & np.isfinite(y) & np.isfinite(prediction)
         if mask.sum() < 2 * k or np.all(prediction[mask] == prediction[mask][0]):
+            series.append(0.0)
             continue
         values, scores = y[mask], prediction[mask]
         top.append(_tail_mean(values, scores, k, True))
         bottom.append(_tail_mean(values, scores, k, False))
         everything.append(values.mean())
         hit.append(_tail_mean((values > 0).astype(float), scores, k, True))
+        series.append(top[-1] - bottom[-1])
     if not top:
-        return {'sessions': 0}
+        return {'sessions': int(len(series)), 'sessions_with_a_ranking': 0}
     top, bottom, everything = np.asarray(top), np.asarray(bottom), np.asarray(everything)
-    return {'sessions': int(len(top)), 'k': k, 'top_mean': float(top.mean()), 'bottom_mean': float(bottom.mean()), 'all_mean': float(everything.mean()),
-            'top_minus_bottom': float((top - bottom).mean()), 'top_minus_all': float((top - everything).mean()), 'top_hit_rate': float(np.mean(hit)),
-            'series_top_minus_bottom': (top - bottom).tolist()}
+    return {'sessions': int(len(series)), 'sessions_with_a_ranking': int(len(top)), 'k': k, 'top_minus_bottom': float(np.mean(series)),
+            # the three below describe the sessions that were ranked
+            'top_mean': float(top.mean()), 'bottom_mean': float(bottom.mean()), 'all_mean': float(everything.mean()),
+            'top_minus_all': float((top - everything).mean()), 'top_hit_rate': float(np.mean(hit)), 'series_top_minus_bottom': series}
 
 
 # ---------------------------------------------------------------------------- distribution
@@ -213,8 +226,9 @@ def batch_interval(series, *, horizon) -> dict:
     "the mean is not above zero". Batches are consecutive, at least two label horizons long, so that neighbouring batch
     means share little of any label window. Fewer than three batches: no interval and no p-value.
 
-    Under a worst-case series (a moving sum over the whole label window) the one-sided 5% test rejects 5% to 6% of the
-    time at every sample size used here; a regression test holds it to that."""
+    Under a Gaussian series that is a moving sum over the whole label window, the one-sided 5% test rejects about 6% of
+    the time at every sample size used here (a regression test holds it under 7.5%). That is not the worst case: see the
+    module note and ``identity_permutation_p``."""
     from scipy import stats
     series = np.asarray(series, dtype=float)
     series = series[np.isfinite(series)]
@@ -242,6 +256,45 @@ def paired_difference(series_a, series_b, *, horizon) -> dict:
     return batch_interval(filled(series_a) - filled(series_b), horizon=horizon)
 
 
+def identity_permutation_p(y, prediction, session, instrument, *, draws=2000, seed=11) -> dict:
+    """The one-sided p-value of a model's mean session rank correlation against the same predictions with instrument
+    identities shuffled. One shuffle is applied to every session at once, so whatever persists in the predictions and in
+    the labels is kept, and only the link between them is broken. Exact for the question "would these predictions,
+    attached to the wrong instruments, have done as well?". Needs every instrument in every session; otherwise there is
+    no p-value. Never 0: p = (1 + shuffles at least as good) / (1 + shuffles)."""
+    y, prediction = np.asarray(y, dtype=float), np.asarray(prediction, dtype=float)
+    days, names = np.unique(session), np.unique(instrument)
+    out = {'draws': int(draws), 'p': float('nan'), 'observed': float('nan')}
+    if len(y) != len(days) * len(names) or len(names) < 3:
+        out['note'] = 'not every instrument is present in every session'
+        return out
+    row = np.searchsorted(days, session)
+    column = np.searchsorted(names, instrument)
+    A, B = np.zeros((len(days), len(names))), np.zeros((len(days), len(names)))
+    filled_cells = np.zeros((len(days), len(names)), dtype=bool)
+    filled_cells[row, column] = True
+    if not filled_cells.all():
+        out['note'] = 'not every instrument is present in every session'
+        return out
+    P, Y = np.full(A.shape, np.nan), np.full(A.shape, np.nan)
+    P[row, column], Y[row, column] = prediction, y
+    for k in range(len(days)):
+        if not (np.all(np.isfinite(P[k])) and np.all(np.isfinite(Y[k]))):
+            continue                                                    # nothing predicted, or no label: the session counts as 0
+        a, b = rank(P[k]), rank(Y[k])
+        a, b = a - a.mean(), b - b.mean()
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na > 0 and nb > 0:
+            A[k], B[k] = a / na, b / nb
+    M = A.T @ B / len(days)                                             # M[j, i]: what instrument j's predictions earn against instrument i's labels
+    observed = float(np.trace(M))
+    generator = np.random.default_rng(seed)
+    index = np.arange(len(names))
+    as_good = sum(1 for _ in range(draws) if M[generator.permutation(len(names)), index].sum() >= observed)
+    out.update({'observed': observed, 'p': float((1 + as_good) / (1 + draws))})
+    return out
+
+
 def holm(p_values: dict, level=0.10) -> dict:
     """Holm's step-down control of the family-wise error rate over a family of tests. {name: {'p', 'adjusted', 'rejected'}}.
     A missing p-value (no interval could be formed) counts as 1."""
@@ -257,9 +310,9 @@ def holm(p_values: dict, level=0.10) -> dict:
     return out
 
 
-def ranking(y, prediction, session, *, horizon, k=5) -> dict:
+def ranking(y, prediction, session, *, horizon, k=5, instrument=None) -> dict:
     """The cross-sectional ranking record of one model on one evaluation period. The mean is over every session of the
-    period; a session without a ranking counts as 0."""
+    period; a session without a ranking counts as 0. With ``instrument`` the identity-shuffle p-value is added."""
     days, raw = session_ic(y, prediction, session)
     ic = filled(raw)
     ranked = int(np.isfinite(raw).sum())
@@ -274,7 +327,10 @@ def ranking(y, prediction, session, *, horizon, k=5) -> dict:
            'mean_ic_non_overlapping': float(independent.mean()) if len(independent) else float('nan'),
            'ic_interval_90': [interval['low'], interval['high']], 'p_ic_not_positive': interval['p_not_positive'], 'ic_series': ic.tolist(),
            'top_bottom': {key: value for key, value in spread.items() if key != 'series_top_minus_bottom'}}
-    if spread.get('sessions'):
+    if spread.get('sessions_with_a_ranking'):
         gap = batch_interval(np.asarray(spread['series_top_minus_bottom']), horizon=horizon)
         out['top_minus_bottom_interval_90'] = [gap['low'], gap['high']]
+    if instrument is not None:
+        shuffle = identity_permutation_p(y, prediction, session, instrument)
+        out['identity_permutation_p'], out['identity_permutation_draws'] = shuffle['p'], shuffle['draws']
     return out

@@ -179,3 +179,26 @@ same as independent. The report and the page now show these numbers.
 rerun is the defect-fix rerun section 11 provides for; it is disclosed in the report, on the page and in the closure
 report, with every status that moved and the change that moved it. No further rerun follows unless a new defect is
 found, recorded and tested first.
+
+## 13. Plan v3 — changes after the verification review
+
+Plan version `checkpoint7-tournament-plan-v3`, 2026-10-04. A third fresh reviewer checked the v2 repairs against the
+stored v2 report (`4794d1f4…`): every row, interval, Holm value and status recomputed independently matched, and no
+leak was found. Two repairs fell short of what was claimed for them, and some smaller points remained. They are
+repaired here, each with a regression first. **No prediction changed** between the v2 and v3 runs (the stored
+prediction hashes are identical), and no status rule was loosened.
+
+| # | Change | Why | Effect |
+|---|---|---|---|
+| 13 | **A challenger's development mean rank correlation must also be above what the same predictions earn with instrument identities shuffled** (one shuffle for every session, 2,000 shuffles, fixed seed, p at most 0.05). A record without that p-value has not passed. | The batch interval of v2 #1 is honest for rankings that change from session to session, and for a Gaussian moving sum it rejects about 6% at nominal 5%. That is not the worst case. The reviewer ran real labels against no-information rankings that persist across sessions (the same instruments on top week after week): the interval was above zero 8.5% to 11.5% of the time on the 5-session label and about 7% on the 10-session label. Return patterns across instruments persist longer than a batch. The identity shuffle is exact for that case. | Stricter: one more gate before CHALLENGER. No stored status depended on the interval alone. |
+| 14 | The top-minus-bottom spread counts a session without a ranking as a spread of 0; inner tuning scores a configuration that ranks nothing as 0; a fold in which nothing could be predicted is a fold of zeros. | v2 #2 said every model is averaged over every session, and these three places did not do it (the strongest baseline's spread was an average over 104 of 131 sessions). | Description and bookkeeping. No tuning choice changes. |
+| 15 | The Holm family counts two registry rows with identical session-by-session results once (the full-set ablation run is the same model as the family run), and is described as "every registered model that is judged by ranking the label": quantile and risk models are judged by a loss. The reason shown for a row names the level, whether it was met and the number of batches. | The family held two duplicates; the wording claimed more than the code did; a reader could not tell whether an adjusted p of 0.054 met the 10% level. | Family sizes 16, 53 and 16. |
+| 16 | An exported laboratory file is append-only in the same way as the modeling database; checking a file never writes to it; the page survives a number too large to print and shows a combination's inherited gate row as inherited. | An INSERT OR REPLACE succeeded on the exported file; `verify` added triggers to the file it checked; an absurd integer in a stored report raised. | Hardening. |
+
+Corrections to section 12. "Under a worst-case overlapping series the batch interval rejects 5% to 6%" should read:
+under a Gaussian moving-sum series it rejects about 6% (the regression test holds it under 7.5%); that is not the
+worst case, as #13 says. "28 risk and quantile rows" in the review record should read 25 registry rows, 14 of which had
+a status that differed from the report's.
+
+The holdout has now been read by three runs. The v3 run exists so that the stored report is the product of the code
+that is closed; it re-evaluates the same predictions under rules that are the same or stricter.

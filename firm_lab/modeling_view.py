@@ -62,7 +62,7 @@ def summary(research_database) -> dict:
             statuses[record['status']] = statuses.get(record['status'], 0) + 1
         return {'exists': True, 'warning': WARNING, 'report': report, 'models': sum(statuses.values()), 'registry_statuses': statuses, 'models_from_other_runs': others,
                 'stored_at': row[1], 'file': '/'.join(path.parts[-3:])}
-    except (sqlite3.Error, ValueError, KeyError, TypeError, AttributeError) as error:
+    except (sqlite3.Error, ValueError, KeyError, TypeError, AttributeError, ArithmeticError, RecursionError) as error:
         return empty('LABORATORY_FILE_UNREADABLE:' + type(error).__name__)
     finally:
         db.close()

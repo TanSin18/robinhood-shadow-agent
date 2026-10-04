@@ -19,7 +19,7 @@ import numpy as np
 from . import deep, metrics, models, splits, targets
 from .dataset import MINIMUM_HISTORY, sequences
 
-PLAN_VERSION = 'checkpoint7-tournament-plan-v2'
+PLAN_VERSION = 'checkpoint7-tournament-plan-v3'
 PURGE = targets.MAX_HORIZON
 EMBARGO = 5
 FOLDS = 5
@@ -68,17 +68,16 @@ def _target(data, target, rows):
 
 
 def _score(kind, y, prediction, session, quantile=None) -> float:
-    """The inner selection criterion, higher is better. Regression: mean session rank correlation. Classification:
-    negative log loss. Quantile: negative pinball loss."""
+    """The inner selection criterion, higher is better. Regression: mean session rank correlation over every inner
+    session (no ranking counts as 0). Classification: negative log loss. Quantile: negative pinball loss."""
     if prediction.ndim > 1:
         prediction, y = prediction[:, 0], y[:, 0]
     if kind == models.CLASSIFICATION:
         return -metrics.classification(y, prediction)['log_loss']
     if kind == models.QUANTILE:
         return -metrics.pinball(y, prediction, quantile)
-    ic = metrics.session_ic(y, prediction, session)[1]
-    ic = ic[np.isfinite(ic)]
-    return float(ic.mean()) if len(ic) else -float(np.sqrt(np.mean((prediction - y) ** 2)))
+    ic = metrics.filled(metrics.session_ic(y, prediction, session)[1])       # a configuration that ranks nothing scores 0, like any model
+    return float(ic.mean()) if len(ic) else 0.0
 
 
 def fit_predict(cls, params, data, target, columns, train_rows, predict_rows, seed=0):
@@ -143,11 +142,14 @@ def run(spec, data, definition, *, seed=0, keep_models=False) -> dict:
             'blocks': blocks, 'seconds': round(time.time() - started, 1), 'configurations_tried': len(grid), 'quantile': spec.get('quantile')}
 
 
-def gather(result, part) -> tuple:
-    """(rows, predictions) of the development folds ('dev') or of the holdout ('holdout'), predicted rows only."""
+def gather(result, part, *, every_row=False) -> tuple:
+    """(rows, predictions) of the development folds ('dev') or of the holdout ('holdout'). Predicted rows only, unless
+    ``every_row``: then every row of the part, with nan where nothing was predicted, so that a ranking record covers
+    every session whether or not the model could predict it."""
     blocks = [b for b in result['blocks'] if (b['block'] == 'final_holdout') == (part == 'holdout')]
-    rows = np.concatenate([b['rows'][b['predicted']] for b in blocks]) if blocks else np.array([], dtype=int)
-    prediction = np.concatenate([b['prediction'][b['predicted']] for b in blocks]) if blocks else np.array([])
+    keep = (lambda b: slice(None)) if every_row else (lambda b: b['predicted'])
+    rows = np.concatenate([b['rows'][keep(b)] for b in blocks]) if blocks else np.array([], dtype=int)
+    prediction = np.concatenate([b['prediction'][keep(b)] for b in blocks]) if blocks else np.array([])
     return rows, prediction
 
 
@@ -166,46 +168,54 @@ def _by_block(result, data, name, part, head, measure):
 
 def score(result, data, *, part, head=0, target=None) -> dict:
     """The metric record of one result on one part. A classification model is also scored as a ranking of the 10-session
-    excess return, so that every model answers the same ranking question."""
+    excess return, so that every model answers the same ranking question. Errors and losses are over the rows that were
+    predicted; the ranking record is over every session of the part."""
     rows, prediction = gather(result, part)
-    if not len(rows):
+    every, every_prediction = gather(result, part, every_row=True)
+    if not len(every):
         return {'n': 0}
     if prediction.ndim > 1:
-        prediction = prediction[:, head]
+        prediction, every_prediction = prediction[:, head], every_prediction[:, head]
     name = target or (result['target'][head] if isinstance(result['target'], (tuple, list)) else result['target'])
     y, session = data.y[name][rows], data.row_session[rows]
     kind = models.CLASSIFICATION if name == targets.CLASSIFICATION else result['kind'] if name not in targets.REGRESSION + targets.RISK else models.REGRESSION
     if result['kind'] == models.QUANTILE:
         return {'n': int(len(rows)), 'quantile': result['quantile'], 'pinball': metrics.pinball(y, prediction, result['quantile'])}
     horizon = int(name.rsplit('_', 1)[1]) if name[-1].isdigit() else targets.RISK_HORIZON
-    out = {'n': int(len(rows)), 'sessions': int(len(np.unique(session)))}
+    ranked = _ranked_label(name)
+    ranking = lambda: metrics.ranking(data.y[ranked][every], every_prediction, data.row_session[every], horizon=int(ranked.rsplit('_', 1)[1]), k=TOP_K,
+                                      instrument=data.row_instrument[every])
+    out = {'n': int(len(rows)), 'sessions': int(len(np.unique(data.row_session[every])))}
     if kind == models.CLASSIFICATION:
         out['classification'] = metrics.classification(y, prediction)
         out['classification'].update({'roc_auc': _by_block(result, data, name, part, head, metrics.roc_auc),
                                       'pr_auc': _by_block(result, data, name, part, head, metrics.average_precision),
                                       'auc_method': 'mean over blocks; a forecast that is constant within a block scores 0.5'})
-        ranked = data.y[targets.PRIMARY][rows]
-        out['ranking'] = metrics.ranking(ranked, prediction, session, horizon=10, k=TOP_K)
+        out['ranking'] = ranking()
     elif result.get('scale') == 'rank':
         # a per-session rank score is not a forecast in return units: it has a ranking record and no error, R2 or direction
-        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K)
+        out['ranking'] = ranking()
     else:
         out['regression'] = metrics.regression(y, prediction)
         out['buckets'] = metrics.bucket_means(y, prediction)
-        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K)
+        out['ranking'] = ranking()
     return out
+
+
+def _ranked_label(name):
+    """The label a model is ranked on: its own, or the 10-session excess return for the classifier of its sign."""
+    return targets.PRIMARY if name == targets.CLASSIFICATION else name
 
 
 def fold_ics(result, data, *, head=0, target=None) -> list:
     """Mean session rank correlation in each development fold: the stability record. A session without a ranking counts
-    as 0, so a fold in which a model ranked nothing has mean 0 and is not a positive fold."""
+    as 0, so a fold in which a model ranked nothing, or predicted nothing, has mean 0 and is not a positive fold."""
     out = []
-    name = target or (result['target'][head] if isinstance(result['target'], (tuple, list)) else result['target'])
-    name = targets.PRIMARY if name == targets.CLASSIFICATION else name
+    name = _ranked_label(target or (result['target'][head] if isinstance(result['target'], (tuple, list)) else result['target']))
     for b in result['blocks']:
-        if b['block'] == 'final_holdout' or not b['predicted'].any():
+        if b['block'] == 'final_holdout':
             continue
-        rows, prediction = b['rows'][b['predicted']], b['prediction'][b['predicted']]
+        rows, prediction = b['rows'], b['prediction']
         if prediction.ndim > 1:
             prediction = prediction[:, head]
         ic = metrics.filled(metrics.session_ic(data.y[name][rows], prediction, data.row_session[rows])[1])

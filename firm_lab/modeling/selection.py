@@ -48,7 +48,9 @@ def status(record, baselines: dict, *, holm_rejected, sufficient=True) -> tuple:
 
     Plan v2: a model that fails the data-sufficiency gate is EXPERIMENTAL whatever it scored (its result is not evidence
     for or against it); a challenger's paired development interval must be above zero against every naive baseline,
-    not only the one that happened to score highest."""
+    not only the one that happened to score highest. Plan v3: its development mean IC must also be above what the same
+    predictions earn with instrument identities shuffled ('dev_identity_p' at most 0.05); a record without that p-value
+    has not passed."""
     reasons = []
     strongest = strongest_baseline(baselines)
     baseline = baselines[strongest]
@@ -68,7 +70,9 @@ def status(record, baselines: dict, *, holm_rejected, sufficient=True) -> tuple:
     holdout, base_holdout = _zero_if_none(record['holdout_mean_ic']), _zero_if_none(baseline['holdout_mean_ic'])
     checks = {'paired development difference interval above zero against every naive baseline': not not_beaten,
               f'positive in at least {FOLDS_REQUIRED} of {len(record["fold_ics"])} folds': positive_folds >= FOLDS_REQUIRED,
-              'holdout mean IC above zero and at least the strongest baseline’s': holdout > 0 and holdout >= base_holdout}
+              'holdout mean IC above zero and at least the strongest baseline’s': holdout > 0 and holdout >= base_holdout,
+              f'development mean IC above the same predictions with instrument identities shuffled (p at most {metrics.IDENTITY_LEVEL})':
+                  bool(np.isfinite(_nan_if_none(record.get('dev_identity_p'))) and record['dev_identity_p'] <= metrics.IDENTITY_LEVEL)}
     if record.get('dev_log_loss') is not None:
         checks['development log loss below the base rate and below a coin flip'] = record['dev_log_loss'] < record['naive_log_loss']
     failed = [name for name, ok in checks.items() if not ok]

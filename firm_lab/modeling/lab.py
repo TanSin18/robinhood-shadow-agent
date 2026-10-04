@@ -48,7 +48,8 @@ def summarize(result, data, *, head=0, target=None) -> dict:
     out = {'target': name, 'horizon': horizon, 'dev': _strip(dev), 'holdout': _strip(holdout), 'fold_ics': tournament.fold_ics(result, data, head=head, target=name),
            'dev_mean_ic': dev.get('ranking', {}).get('mean_ic'), 'holdout_mean_ic': holdout.get('ranking', {}).get('mean_ic'),
            'dev_ic_series': dev.get('ranking', {}).get('ic_series', []), 'holdout_ic_series': holdout.get('ranking', {}).get('ic_series', []),
-           'p_holdout_ic_not_positive': holdout.get('ranking', {}).get('p_ic_not_positive')}
+           'p_holdout_ic_not_positive': holdout.get('ranking', {}).get('p_ic_not_positive'),
+           'dev_identity_p': dev.get('ranking', {}).get('identity_permutation_p')}
     if 'classification' in dev:
         out['dev_log_loss'] = dev['classification']['log_loss']
     return out

@@ -80,7 +80,7 @@ def _series_record(mean, *, n=131, holdout=59, horizon=5, seed=0, zero_first=0, 
     dev = mean + generator.normal(scale=0.04, size=n)
     dev[:zero_first] = 0.0
     hold = (mean if holdout_mean is None else holdout_mean) + generator.normal(scale=0.04, size=holdout)
-    return {'dev_mean_ic': float(dev.mean()), 'holdout_mean_ic': float(hold.mean()), 'fold_ics': folds or [float(dev.mean())] * 5, 'horizon': horizon,
+    return {'dev_mean_ic': float(dev.mean()), 'holdout_mean_ic': float(hold.mean()), 'fold_ics': folds or [float(dev.mean())] * 5, 'horizon': horizon, 'dev_identity_p': 0.001,
             'dev_ic_series': dev.tolist(), 'holdout_ic_series': hold.tolist()}
 
 
@@ -213,7 +213,7 @@ REQUIRED = ('report_id', 'plan_version', 'time_policy', 'code_hash', 'dataset', 
 def test_a_partial_or_malformed_stored_report_never_takes_the_page_down(tmp_path):
     good = _report()
     for key in sorted(good):
-        for value in ('missing', None, [], 'text', 7):
+        for value in ('missing', None, [], 'text', 7, 10 ** 400):
             broken = {k: v for k, v in good.items() if k != key or value != 'missing'}
             if value != 'missing':
                 broken[key] = value
@@ -266,11 +266,135 @@ def test_no_calculator_reads_a_field_that_was_linked_from_a_later_filing_and_the
         text = path.read_text()
         assert 'fiscal_period_end' not in text and 'periodic_accession' not in text, path.name      # stored on the 8-K row, known only once the 10-Q exists
     plan = (ROOT / 'docs' / 'firm_lab' / 'CHECKPOINT7_TOURNAMENT_PLAN.md').read_text()
-    assert tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v2' and '## 12. Plan v2' in plan and 'checkpoint7-tournament-plan-v2' in plan
+    assert tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v3' and '## 12. Plan v2' in plan and '## 13. Plan v3' in plan and 'checkpoint7-tournament-plan-v3' in plan
     for phrase in ('batch', 'every naive baseline', 'counts as 0', 'every registered model', 'strongest naive baseline', 'read twice'):
         assert phrase in plan.split('## 12. Plan v2')[1], phrase                                    # each change after the first run is recorded with its reason
+    for phrase in ('identities shuffled', 'No prediction changed', 'not the worst case', 'spread of 0'):
+        assert phrase in plan.split('## 13. Plan v3')[1], phrase
     assert 'never opens the registered database' not in (ROOT / 'firm_lab' / 'modeling' / 'cli.py').read_text()
     assert 'development sessions' in tournament.average_pair_correlation.__doc__ and 'bootstrap' not in metrics.batch_interval.__doc__.lower()
+    assert 'not the worst case' in metrics.batch_interval.__doc__ and 'worst-case' not in metrics.__doc__                 # the interval is not described as more than it is
     page = (ROOT / 'agents' / 'desk' / 'modeling_lab.py').read_text()
     assert 'STATUS_NOTE' in page.split('def _render')[1]                                            # what a status means is shown, not left as dead text
     assert modeling.WARNING == 'MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE'
+
+
+# ====================================================================================================== the verification review (plan v3)
+def _persistent_null(generator, sessions=131, instruments=22):
+    """Labels whose cross-section persists (each instrument has its own drift) and a score that never changes: a ranking
+    with no information that looks the same in every session. The case the batch interval alone gets wrong."""
+    drift = generator.normal(scale=0.01, size=instruments)
+    y = (drift[None, :] + generator.normal(scale=0.02, size=(sessions, instruments))).ravel()
+    score = np.tile(generator.normal(size=instruments), sessions)
+    return y, score, np.repeat(np.arange(sessions), instruments), np.tile(np.arange(instruments), sessions)
+
+
+def test_a_ranking_that_persists_by_chance_is_caught_by_the_identity_shuffle_where_the_interval_alone_is_not():
+    generator = np.random.default_rng(42)
+    draws, by_interval, by_shuffle, by_both = 300, 0, 0, 0
+    for _ in range(draws):
+        y, score, session, instrument = _persistent_null(generator)
+        record = metrics.ranking(y, score, session, horizon=5, instrument=instrument)
+        interval, shuffle = record['ic_interval_90'][0] > 0, record['identity_permutation_p'] <= metrics.IDENTITY_LEVEL
+        by_interval, by_shuffle, by_both = by_interval + interval, by_shuffle + shuffle, by_both + (interval and shuffle)
+    assert by_interval / draws > 0.15                                                               # the interval alone calls chance an edge far too often here
+    assert by_shuffle / draws <= 0.09 and by_both / draws <= 0.09                                   # the shuffle holds its level (5%; 300 draws), and so does the pair
+    y, score, session, instrument = _persistent_null(generator)
+    informed = metrics.ranking(y, y + generator.normal(scale=0.02, size=len(y)), session, horizon=5, instrument=instrument)
+    assert informed['identity_permutation_p'] == pytest.approx(1 / 2001)                            # a real link is found, and p is never zero
+
+
+def test_the_identity_shuffle_is_the_mean_rank_correlation_of_the_shuffled_predictions():
+    generator = np.random.default_rng(5)
+    y, score, session, instrument = _persistent_null(generator, sessions=40, instruments=9)
+    score = score + generator.normal(scale=0.5, size=len(score))
+    record = metrics.identity_permutation_p(y, score, session, instrument, draws=200, seed=3)
+    assert record['observed'] == pytest.approx(metrics.filled(metrics.session_ic(y, score, session)[1]).mean())
+    check = np.random.default_rng(3)
+    as_good = 0
+    for _ in range(200):
+        order = check.permutation(9)
+        shuffled = score.reshape(40, 9)[:, order].ravel()                                           # every session's predictions handed to other instruments, the same way
+        as_good += metrics.filled(metrics.session_ic(y, shuffled, session)[1]).mean() >= record['observed'] - 1e-12
+    assert record['p'] == pytest.approx((1 + as_good) / 201)
+    partial = metrics.identity_permutation_p(y[:-1], score[:-1], session[:-1], instrument[:-1])
+    assert math.isnan(partial['p']) and 'not every instrument' in partial['note']                   # an incomplete panel gets no p-value, not a wrong one
+
+
+def test_a_challenger_must_also_beat_its_own_predictions_with_identities_shuffled():
+    baseline = {'steady': _series_record(0.04, seed=4)}
+    candidate = _series_record(0.11, seed=3)
+    assert selection.status(candidate, baseline, holm_rejected=False)[0] == 'CHALLENGER'
+    status, reasons = selection.status(dict(candidate, dev_identity_p=0.20), baseline, holm_rejected=False)
+    assert status == 'EXPERIMENTAL' and any('identities shuffled' in r for r in reasons)
+    unmeasured = {k: v for k, v in candidate.items() if k != 'dev_identity_p'}
+    assert selection.status(unmeasured, baseline, holm_rejected=True)[0] == 'EXPERIMENTAL'          # no p-value is not a pass
+    assert selection.status(dict(candidate, dev_identity_p=float('nan')), baseline, holm_rejected=True)[0] == 'EXPERIMENTAL'
+
+
+def test_the_zero_rule_also_covers_the_spread_the_tuning_score_and_a_fold_with_nothing_predicted():
+    data = synthetic(strength=0.02, seed=6)
+    data.X[data.row_session < 150, NAMES.index('return126')] = np.nan
+    design = tournament.design(data)
+    columns = list(range(len(NAMES)))
+    late = tournament.run({'name': 'm', 'cls': models.SingleFeature, 'grid': [{'feature': 'return126'}], 'target': targets.PRIMARY, 'columns': columns}, data, design)
+    record = tournament.score(late, data, part='dev')['ranking']
+    spread = record['top_bottom']
+    assert spread['sessions'] == record['sessions'] > spread['sessions_with_a_ranking'] == record['sessions_with_a_ranking']      # every session is counted
+    rows, prediction = tournament.gather(late, 'dev')
+    ranked_only = metrics.top_bottom(data.y[targets.PRIMARY][rows], prediction, data.row_session[rows], k=5)
+    series = [v for v in ranked_only['series_top_minus_bottom'] if v != 0.0]
+    assert spread['top_minus_bottom'] == pytest.approx(sum(series) / record['sessions'])            # unranked sessions pull the spread toward 0
+    # tuning: a configuration that ranks nothing scores 0, in the same units as one that ranks
+    y, session = data.y[targets.PRIMARY][rows], data.row_session[rows]
+    assert tournament._score(models.REGRESSION, y, np.zeros(len(rows)), session) == 0.0
+    assert -1 <= tournament._score(models.REGRESSION, y, prediction, session) <= 1
+    # a fold in which nothing could be predicted is a fold of zeros, not a missing fold
+    ridge = tournament.run({'name': 'ridge', 'cls': models.Ridge, 'grid': [{'alpha': 100.0}], 'target': targets.PRIMARY, 'columns': columns}, data, design)
+    ridge['blocks'][0]['predicted'][:] = False
+    ridge['blocks'][0]['prediction'][:] = np.nan
+    summary = lab_module.summarize(ridge, data)
+    assert len(summary['fold_ics']) == 5 and summary['fold_ics'][0] == 0.0 and len(summary['dev_ic_series']) == summary['dev']['ranking']['sessions']
+    baseline = lab_module.summarize(late, data)
+    assert selection.status(summary, {'m': baseline}, holm_rejected=False)[0] in ('REJECTED', 'EXPERIMENTAL', 'CHALLENGER')      # the comparison is aligned: nothing raises
+
+
+def test_an_exported_file_is_append_only_and_checking_a_file_never_changes_it(tmp_path):
+    from firm_lab.modeling import cli, timeview
+    path = _modeling_db(tmp_path)
+    report = {'report_id': 'r1', 'code_hash': registry.code_hash(), 'plan_version': tournament.PLAN_VERSION}
+    with registry.Registry(path) as store:
+        store.add_model(_model_record(report_id='r1', code_hash=registry.code_hash()))
+        store.add_report('r1', report)
+    db = sqlite3.connect(path)
+    with db:
+        db.execute("INSERT INTO modeling_datasets VALUES ('d1', '{\"a\": 1}', 'x')")
+        db.execute("INSERT OR REPLACE INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')")       # ignored: the stored row stays
+    assert db.execute("SELECT payload FROM modeling_datasets WHERE id = 'd1'").fetchone()[0] == '{"a": 1}'
+    db.close()
+    before = timeview.file_sha256(path)
+    assert cli.verify(path)['matches'] is True and timeview.file_sha256(path) == before             # verify reads; it does not write
+    out = tmp_path / 'firm_lab_modeling_lab.db'
+    cli.export(path, out)
+    exported = sqlite3.connect(out)
+    for table in ('modeling_models', 'modeling_reports'):
+        identity = exported.execute(f'SELECT id FROM {table} LIMIT 1').fetchone()[0]
+        with pytest.raises(sqlite3.DatabaseError, match='APPEND_ONLY'):
+            exported.execute(f"INSERT OR REPLACE INTO {table} VALUES (?, '{{\"status\": \"ELIGIBLE_FOR_FUTURE_REVIEW\"}}', 'x')", (identity,))
+        with pytest.raises(sqlite3.DatabaseError, match='APPEND_ONLY'):
+            exported.execute(f"UPDATE {table} SET payload = '{{}}'")
+    exported.close()
+
+
+def test_an_inherited_gate_row_says_so_and_a_huge_number_cannot_take_the_page_down(tmp_path):
+    report = _report()
+    report['sufficiency']['ensemble/family_equal_weight'] = {'parameters': 4417, 'effective_independent_observations': 65.2, 'observations_per_parameter': 0.0148,
+                                                             'seed_ic_range': 0.013, 'label': 'EXPERIMENTAL_INSUFFICIENT_DATA', 'inherited_from': ['mlp/excess_return_10']}
+    html = modeling_lab.render_modeling({'modeling': {'exists': True, 'report': report, 'models': 2, 'registry_statuses': {}}})
+    row = html.split('ensemble/family_equal_weight</b>')[1].split('</tr>')[0]
+    assert 'inherited from mlp/excess_return_10' in row and '4,417' not in row                      # not shown with its member's parameter count as if its own
+    report['tables']['excess_return_10'][1]['dev_mean_ic'] = 10 ** 400
+    path = _lab_file(tmp_path, report)
+    state = modeling_view.summary(tmp_path / 'firm_lab.db')
+    page = firm_lab_page.render({'firm_lab': {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'modeling': state}})
+    assert 'id="fl-modeling"' in page and modeling.WARNING in page                                  # a corrupt number degrades the cell or the section, never the page
