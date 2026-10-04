@@ -1,9 +1,17 @@
 """The historical research database: one separate file, append-only, versioned, holding no trade.
 
-Licensed vendor data lives only here. The file is refused inside a Git work tree, beside the registered database, or
-when it already holds anything that looks like an execution table. Rows are content-addressed: storing the same content
-twice adds nothing, and different content for the same security and year becomes the next version while the earlier
-one stays. UPDATE and DELETE are refused by triggers on every table.
+Licensed vendor data lives only here. The file is refused inside a Git work tree, beside the registered database, in
+any folder that holds an ``agent.db``, or when it already holds anything that looks like an execution table.
+
+Versions. Bars are stored per security and calendar year. A new capture for a security and year is compared with the
+current version: the same content adds nothing; anything else becomes the next version and the earlier one stays, also
+when the vendor returns to content it supplied before. A capture that holds only some sessions of a year extends the
+year; it never removes the sessions it does not mention. "Current" is always the highest version.
+
+What append-only means here. Every connection this package opens refuses UPDATE, DELETE and REPLACE through triggers.
+That protects against the package's own mistakes. It does not protect against a person with the file and a SQL
+prompt, who can drop a trigger or a table. What makes a change detectable is that every block carries the hash of its
+content and every dataset names the blocks it was built from.
 """
 from __future__ import annotations
 
@@ -11,19 +19,24 @@ import hashlib
 import json
 import sqlite3
 import zlib
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import DATABASE_ROLE, POLICY_VERSION
+from .validate import block_reasons
 
 CANONICAL_OFFICIAL = Path('/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/data/agent.db')
+OFFICIAL_NAME = 'agent.db'
 JSON_TABLES = ('history_captures', 'history_securities', 'history_actions', 'history_index_events', 'history_bar_rejections',
                'history_universe', 'history_datasets', 'history_reservations', 'history_reports')
 BAR_TABLE = 'history_bars'
 BAR_COLUMNS = ('sessions', 'open', 'high', 'low', 'close', 'volume', 'close_unadjusted', 'close_total_return', 'provider_updated')
+VALUE_COLUMNS = ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted')
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'account', 'cash', 'portfolio', 'broker')
 OFFICIAL_TABLES = {'paper_accounts', 'cycle_runs', 'orders', 'fills', 'positions', 'accounts'}
 FIRST, EXTENDED, SCALE_ONLY, VALUE_CHANGE = 'FIRST', 'EXTENDED', 'SCALE_ONLY', 'VALUE_CHANGE'
+TOTAL_RETURN_READJUSTED, METADATA_ONLY = 'TOTAL_RETURN_READJUSTED', 'METADATA_ONLY'
 
 
 def canonical(value) -> str:
@@ -46,59 +59,111 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _refuse_official(target, official_db):
+def utc_time(value) -> str:
+    """An ISO timestamp with an offset, as UTC. A time without an offset, or anything else, is refused: capture times are
+    compared with exchange times, and a comparison of two different notations is not a comparison."""
+    try:
+        stamp = datetime.fromisoformat(str(value))
+    except ValueError:
+        raise ValueError('INVALID_CAPTURE_TIME') from None
+    if stamp.tzinfo is None or stamp.utcoffset() is None or 'T' not in str(value):
+        raise ValueError('INVALID_CAPTURE_TIME')
+    return stamp.astimezone(timezone.utc).isoformat()
+
+
+def refuse_private_location(path, official_db=CANONICAL_OFFICIAL) -> Path:
+    """The resolved path, or an error when it is the registered database, beside it, in a folder holding an ``agent.db``,
+    or inside a Git work tree. Used for the database and for every file written from it."""
+    target = Path(path).resolve()
     for raw in (official_db, CANONICAL_OFFICIAL):
         official = Path(raw).resolve()
-        if target == official or official.parent in target.parents or (target.exists() and official.exists() and target.samefile(official)):
+        if target == official or official.parent == target.parent or official.parent in target.parents or (target.exists() and official.exists() and target.samefile(official)):
             raise ValueError('OFFICIAL_DATABASE_FORBIDDEN')
+    if target.name == OFFICIAL_NAME or (target.parent / OFFICIAL_NAME).exists():
+        raise ValueError('OFFICIAL_DATABASE_FORBIDDEN')
+    if any((parent / '.git').exists() for parent in target.parents):
+        raise ValueError('HISTORY_DATABASE_INSIDE_A_REPOSITORY')            # licensed data must never be committable
+    return target
 
 
-def _inside_a_repository(target) -> bool:
-    return any((parent / '.git').exists() for parent in target.parents)
+def _same(old, i, new, j, columns) -> bool:
+    return all(old[c][i] == new[c][j] for c in columns)
+
+
+def _decimals(text) -> int:
+    text = str(text)
+    return len(text.split('.', 1)[1]) if '.' in text and 'e' not in text.lower() else 0
+
+
+def _scaled(old, i, new, j):
+    """The one factor this row was rescaled by (prices times k, volume divided by k, printed price unchanged), or None.
+    Each comparison allows what rounding of the printed numbers can explain, and nothing more."""
+    try:
+        if old['close_unadjusted'][i] != new['close_unadjusted'][j]:
+            return None
+        was_close, now_close = float(old['close'][i]), float(new['close'][j])
+        k = now_close / was_close
+        if abs(k - 1.0) < 1e-9:
+            return None
+        ulp = lambda text: 0.5 * 10.0 ** -_decimals(text)
+        slack = abs(k) * (ulp(new['close'][j]) / abs(now_close) + ulp(old['close'][i]) / abs(was_close))      # how far k itself can be off
+        for c in ('open', 'high', 'low', 'close'):
+            was, now = float(old[c][i]), float(new[c][j])
+            if abs(now - was * k) > ulp(new[c][j]) + abs(k) * ulp(old[c][i]) + abs(was) * slack + 1e-12 * abs(now):
+                return None
+        was, now = float(old['volume'][i]), float(new['volume'][j])
+        if abs(now * k - was) > abs(k) * ulp(new['volume'][j]) + ulp(old['volume'][i]) + abs(now) * slack + 1e-9 * abs(was):
+            return None
+        return k
+    except (ValueError, ZeroDivisionError):
+        return None
 
 
 def classify_change(old, new) -> dict:
-    """How a new version of one security-year differs from the version before it. Never used to alter either."""
-    before, after = dict(zip(old['sessions'], range(len(old['sessions'])))), dict(zip(new['sessions'], range(len(new['sessions']))))
+    """How a new version of one security-year differs from the version before it. Never used to alter either.
+
+    EXTENDED: only sessions after the previous last session were added. SCALE_ONLY: every session before some date was
+    rescaled by one common factor (prices times k, volume divided by k, the printed price unchanged) and nothing else
+    differs: a vendor re-adjusting for a later split. TOTAL_RETURN_READJUSTED: only the total-return close differs: a
+    later dividend. METADATA_ONLY: only the provider's update stamp differs. VALUE_CHANGE: anything else, including a
+    session that appeared in the past, a session that disappeared, or one corrected print."""
+    before, after = {s: k for k, s in enumerate(old['sessions'])}, {s: k for k, s in enumerate(new['sessions'])}
     removed = [s for s in before if s not in after]
-    common = [s for s in before if s in after]
-    changed, factors = 0, set()
-    for s in common:
-        i, j = before[s], after[s]
-        same = all(old[c][i] == new[c][j] for c in ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted'))
-        if same:
-            continue
-        changed += 1
-        try:
-            ratios = [float(new[c][j]) / float(old[c][i]) for c in ('open', 'high', 'low', 'close')]
-            volume = float(new['volume'][j]) * ratios[3] / float(old['volume'][i]) if float(old['volume'][i]) else 1.0
-            scale = max(ratios) - min(ratios) < 1e-3 * ratios[3] and abs(volume - 1) < 1e-2 and old['close_unadjusted'][i] == new['close_unadjusted'][j]
-            factors.add(round(ratios[3], 4) if scale else None)
-        except (ValueError, ZeroDivisionError):
-            factors.add(None)
-    if removed or None in factors or len(factors) > 1:
-        kind = VALUE_CHANGE
-    elif factors:
-        kind = SCALE_ONLY
-    else:
-        kind = EXTENDED
-    return {'change': kind, 'sessions_changed': changed, 'sessions_removed': len(removed), 'sessions_added': len(after) - len(common),
-            'scale_factor': next(iter(factors)) if kind == SCALE_ONLY else None}
+    added = [s for s in after if s not in before]
+    common = [s for s in old['sessions'] if s in after]
+    changed = [s for s in common if not _same(old, before[s], new, after[s], VALUE_COLUMNS)]
+    total = sum(1 for s in common if old['close_total_return'][before[s]] != new['close_total_return'][after[s]])
+    meta = sum(1 for s in common if old['provider_updated'][before[s]] != new['provider_updated'][after[s]])
+    out = {'sessions_changed': len(changed), 'sessions_removed': len(removed), 'sessions_added': len(added), 'scale_factor': None}
+    past_addition = bool(added) and bool(old['sessions']) and min(added) < old['sessions'][-1]
+    if removed or past_addition:
+        return {**out, 'change': VALUE_CHANGE}
+    if changed:
+        factors = [_scaled(old, before[s], new, after[s]) for s in changed]
+        consistent = None not in factors and max(factors) - min(factors) <= 1e-4 * abs(max(factors))
+        prefix = changed == common[:len(changed)]                           # a split re-adjusts every session before its date, and only those
+        if consistent and prefix:
+            return {**out, 'change': SCALE_ONLY, 'scale_factor': round(float(sorted(factors)[len(factors) // 2]), 6)}
+        return {**out, 'change': VALUE_CHANGE}
+    if added:
+        return {**out, 'change': EXTENDED}
+    if total:
+        return {**out, 'change': TOTAL_RETURN_READJUSTED, 'sessions_changed': total}
+    return {**out, 'change': METADATA_ONLY, 'sessions_changed': meta}
 
 
 class HistoryStore:
     def __init__(self, path, *, official_db=CANONICAL_OFFICIAL, create=False, read_only=False):
-        target = Path(path).resolve()
-        _refuse_official(target, official_db)
-        if _inside_a_repository(target):
-            raise ValueError('HISTORY_DATABASE_INSIDE_A_REPOSITORY')                # licensed data must never be committable
+        target = refuse_private_location(path, official_db)
         if not target.exists():
             if not create or read_only:
                 raise ValueError('HISTORY_DATABASE_REQUIRED')
             target.parent.mkdir(parents=True, exist_ok=True)
         self.path = target
         self.db = sqlite3.connect(target.as_uri() + '?mode=ro', uri=True, timeout=120) if read_only else sqlite3.connect(target, timeout=120)
+        self._depth = 0
         try:
+            self.db.execute('PRAGMA recursive_triggers=ON')                 # so that INSERT OR REPLACE meets the delete trigger and is refused
             names = {r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if names & OFFICIAL_TABLES or any(word in name for name in names for word in FORBIDDEN_TABLE_WORDS):
                 raise ValueError('EXECUTION_TABLE_FORBIDDEN')
@@ -125,7 +190,8 @@ class HistoryStore:
                 self.db.execute(f'CREATE TABLE {table} (id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at TEXT NOT NULL)')
             self.db.execute(f'CREATE TABLE {BAR_TABLE} (id TEXT PRIMARY KEY, source TEXT NOT NULL, security_id TEXT NOT NULL, year INTEGER NOT NULL, '
                             'version INTEGER NOT NULL, row_count INTEGER NOT NULL, first_session TEXT NOT NULL, last_session TEXT NOT NULL, capture_id TEXT NOT NULL, '
-                            'change TEXT NOT NULL, payload BLOB NOT NULL, created_at TEXT NOT NULL, UNIQUE(source, security_id, year, version))')
+                            'change TEXT NOT NULL, content_hash TEXT NOT NULL, price_table TEXT NOT NULL, payload BLOB NOT NULL, created_at TEXT NOT NULL, '
+                            'UNIQUE(source, security_id, year, version))')
             self.db.execute(f'CREATE INDEX {BAR_TABLE}_security ON {BAR_TABLE}(security_id, year, version)')
             for table in JSON_TABLES + (BAR_TABLE, 'firm_meta'):
                 for action in ('UPDATE', 'DELETE'):
@@ -141,12 +207,28 @@ class HistoryStore:
     def close(self):
         self.db.close()
 
+    @contextmanager
+    def transaction(self):
+        """Everything written inside is stored together or not at all."""
+        self._depth += 1
+        try:
+            yield self
+        except BaseException:
+            self._depth -= 1
+            if self._depth == 0:
+                self.db.rollback()
+            raise
+        else:
+            self._depth -= 1
+            if self._depth == 0:
+                self.db.commit()
+
     # ------------------------------------------------------------------------------------------------ generic rows
     def put(self, table, payload, *, identity=None, at=None) -> bool:
-        """Stores one content-addressed row. True when it was new."""
+        """Stores one row. True when it was new. An identity that is already stored is left exactly as it is."""
         if table not in JSON_TABLES:
             raise ValueError('UNKNOWN_TABLE')
-        with self.db:
+        with self.transaction():
             return bool(self.db.execute(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)',
                                         (identity or content_hash(payload), canonical(payload), at or now_utc())).rowcount)
 
@@ -154,7 +236,7 @@ class HistoryStore:
         if table not in JSON_TABLES:
             raise ValueError('UNKNOWN_TABLE')
         at = at or now_utc()
-        with self.db:
+        with self.transaction():
             before = self.db.total_changes
             self.db.executemany(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)', ((content_hash(p), canonical(p), at) for p in payloads))
             return self.db.total_changes - before
@@ -162,7 +244,7 @@ class HistoryStore:
     def rows(self, table):
         if table not in JSON_TABLES:
             raise ValueError('UNKNOWN_TABLE')
-        for identity, payload, created in self.db.execute(f'SELECT id, payload, created_at FROM {table} ORDER BY created_at, id'):
+        for identity, payload, created in self.db.execute(f'SELECT id, payload, created_at FROM {table} ORDER BY created_at, rowid'):
             yield identity, json.loads(payload), created
 
     def count(self, table) -> int:
@@ -170,39 +252,65 @@ class HistoryStore:
             raise ValueError('UNKNOWN_TABLE')
         return self.db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
 
+    def latest_capture_time(self):
+        row = self.db.execute(f'SELECT MAX(t) FROM (SELECT MAX(created_at) t FROM history_captures UNION ALL SELECT MAX(created_at) FROM {BAR_TABLE})').fetchone()
+        return row[0] if row else None
+
     # ------------------------------------------------------------------------------------------------------- bars
-    def put_bars(self, source, security_id, year, columns, capture_id, *, at=None) -> dict:
-        """Stores one security-year block exactly as supplied. Identical content is a duplicate; different content is the
-        next version, with a record of how it differs. The earlier version is never touched."""
+    def sources(self) -> list:
+        return [r[0] for r in self.db.execute(f'SELECT DISTINCT source FROM {BAR_TABLE} ORDER BY 1')]
+
+    def _source(self, source):
+        if source:
+            return source
+        found = self.sources()
+        if len(found) > 1:
+            raise ValueError('SOURCE_REQUIRED')                             # two vendors' bars for one identifier are two different series
+        return found[0] if found else None
+
+    def put_bars(self, source, security_id, year, columns, capture_id, *, price_table, at=None) -> dict:
+        """Stores one security-year block. Every row is checked again here; a block holding an invalid row is refused whole.
+        Sessions of the current version that this capture does not mention are carried over, so a partial file extends a
+        year and never shortens it. Content equal to the current version is a duplicate; anything else is the next version."""
         if tuple(sorted(columns)) != tuple(sorted(BAR_COLUMNS)) or len({len(columns[c]) for c in BAR_COLUMNS}) != 1 or not columns['sessions']:
             raise ValueError('MALFORMED_BAR_BLOCK')
-        if list(columns['sessions']) != sorted(set(columns['sessions'])) or any(s[:4] != str(year) for s in columns['sessions']):
+        if list(columns['sessions']) != sorted(set(columns['sessions'])) or any(str(s)[:4] != str(year) for s in columns['sessions']):
             raise ValueError('MALFORMED_BAR_BLOCK')
-        body = {c: list(columns[c]) for c in BAR_COLUMNS}
-        identity = content_hash([source, security_id, int(year), body])
-        if self.db.execute(f'SELECT 1 FROM {BAR_TABLE} WHERE id=?', (identity,)).fetchone():
-            return {'stored': False, 'id': identity}
-        previous = self.db.execute(f'SELECT version, payload FROM {BAR_TABLE} WHERE source=? AND security_id=? AND year=? ORDER BY version DESC LIMIT 1',
+        if price_table not in ('stocks', 'funds') or block_reasons(columns):
+            raise ValueError('INVALID_BAR_BLOCK')
+        at = utc_time(at) if at else now_utc()
+        body = {c: ['' if v is None else str(v) for v in columns[c]] for c in BAR_COLUMNS}
+        previous = self.db.execute(f'SELECT version, payload, content_hash FROM {BAR_TABLE} WHERE source=? AND security_id=? AND year=? ORDER BY version DESC LIMIT 1',
                                    (source, security_id, int(year))).fetchone()
+        carried = 0
         if previous:
-            change = classify_change(json.loads(zlib.decompress(previous[1])), body)
-            version = previous[0] + 1
+            old = json.loads(zlib.decompress(previous[1]))
+            mentioned = set(body['sessions'])
+            keep = [k for k, s in enumerate(old['sessions']) if s not in mentioned]
+            if keep:
+                carried = len(keep)
+                merged = sorted([(old['sessions'][k], 'old', k) for k in keep] + [(s, 'new', k) for k, s in enumerate(body['sessions'])])
+                body = {c: [(old if origin == 'old' else body)[c][k] for _, origin, k in merged] for c in BAR_COLUMNS}
+            digest = content_hash(body)
+            if digest == previous[2]:
+                return {'stored': False, 'id': content_hash([source, security_id, int(year), previous[0]]), 'version': previous[0]}
+            change, version = classify_change(old, body), previous[0] + 1
         else:
-            change, version = {'change': FIRST}, 1
-        with self.db:
-            self.db.execute(f'INSERT INTO {BAR_TABLE} VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+            digest, change, version = content_hash(body), {'change': FIRST}, 1
+        change['sessions_carried_over'] = carried
+        identity = content_hash([source, security_id, int(year), version])
+        with self.transaction():
+            self.db.execute(f'INSERT INTO {BAR_TABLE} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (identity, source, security_id, int(year), version, len(body['sessions']), body['sessions'][0], body['sessions'][-1], capture_id,
-                             canonical(change), zlib.compress(canonical(body).encode(), 6), at or now_utc()))
+                             canonical(change), digest, price_table, zlib.compress(canonical(body).encode(), 6), at))
         return {'stored': True, 'id': identity, 'version': version, **change}
 
     def bar_blocks(self, security_id, *, source=None, through_capture_time=None):
         """The current block of every year of one security: the highest version (optionally, the highest stored by a time)."""
-        query = f'SELECT year, version, id, payload, created_at, capture_id FROM {BAR_TABLE} WHERE security_id=?'
-        args = [security_id]
-        if source:
-            query, args = query + ' AND source=?', args + [source]
+        source = self._source(source)
         latest = {}
-        for year, version, identity, payload, created, capture in self.db.execute(query + ' ORDER BY year, version', args):
+        for year, version, identity, payload, created, capture in self.db.execute(
+                f'SELECT year, version, id, payload, created_at, capture_id FROM {BAR_TABLE} WHERE security_id=? AND source=? ORDER BY year, version', (security_id, source)):
             if through_capture_time is None or created <= through_capture_time:
                 latest[year] = (version, identity, payload, capture)
         for year in sorted(latest):
@@ -210,7 +318,7 @@ class HistoryStore:
             yield {'year': year, 'version': version, 'id': identity, 'capture_id': capture, **json.loads(zlib.decompress(payload))}
 
     def bars(self, security_id, **kw) -> dict:
-        """{column: [values as supplied]} over every stored year, plus the identities of the blocks they came from."""
+        """{column: [values as stored]} over every stored year, plus the identities of the blocks they came from."""
         out = {c: [] for c in BAR_COLUMNS}
         blocks = []
         for block in self.bar_blocks(security_id, **kw):
@@ -220,28 +328,38 @@ class HistoryStore:
         out['blocks'] = blocks
         return out
 
-    def first_seen(self, security_id, *, source=None) -> dict:
-        """{session: the time the earliest stored block holding that session was stored}. A bar Firm Lab stored before the
-        next session opened was held at the time; a bar stored later was not."""
-        query = f'SELECT payload, created_at FROM {BAR_TABLE} WHERE security_id=?'
-        args = [security_id]
-        if source:
-            query, args = query + ' AND source=?', args + [source]
-        out = {}
-        for payload, created in self.db.execute(query + ' ORDER BY created_at, version', args):
-            for session in json.loads(zlib.decompress(payload))['sessions']:
-                out.setdefault(session, created)
-        return out
+    def held_since(self, security_id, *, source=None) -> dict:
+        """{session: when the bar that is read today was first stored}. A bar is "the one read today" from the version in
+        which its values last changed; a pure rescale for a later split does not count as a change, because the printed
+        price and the shape of the bar are what they were. A revised bar was not held before its revision."""
+        source = self._source(source)
+        current, since = {}, {}
+        for payload, created in self.db.execute(f'SELECT payload, created_at FROM {BAR_TABLE} WHERE security_id=? AND source=? ORDER BY year, version', (security_id, source)):
+            block = json.loads(zlib.decompress(payload))
+            for k, session in enumerate(block['sessions']):
+                row = {c: [block[c][k]] for c in VALUE_COLUMNS}
+                old = current.get(session)
+                if old is None or (old != row and _scaled(old, 0, row, 0) is None):
+                    since[session] = created
+                current[session] = row
+        return since
 
-    def security_ids(self) -> list:
-        return [r[0] for r in self.db.execute(f'SELECT DISTINCT security_id FROM {BAR_TABLE} ORDER BY 1')]
+    def security_ids(self, *, price_table=None) -> list:
+        query = f'SELECT DISTINCT security_id FROM {BAR_TABLE}' + (' WHERE price_table=?' if price_table else '') + ' ORDER BY 1'
+        return [r[0] for r in self.db.execute(query, (price_table,) if price_table else ())]
+
+    def current_blocks_hash(self, *, price_table=None) -> str:
+        """One hash over the identity and content of every current block: what a universe or a dataset was built from."""
+        query = (f'SELECT id, content_hash FROM {BAR_TABLE} b WHERE version = (SELECT MAX(version) FROM {BAR_TABLE} WHERE source=b.source AND security_id=b.security_id '
+                 'AND year=b.year)' + (' AND price_table=?' if price_table else '') + ' ORDER BY id')
+        return content_hash([list(r) for r in self.db.execute(query, (price_table,) if price_table else ())])
 
     def bar_summary(self) -> dict:
-        row = self.db.execute(f'SELECT COUNT(DISTINCT security_id), MIN(first_session), MAX(last_session), COUNT(*) FROM {BAR_TABLE}').fetchone()
+        row = self.db.execute(f'SELECT COUNT(DISTINCT source || char(31) || security_id), MIN(first_session), MAX(last_session), COUNT(*) FROM {BAR_TABLE}').fetchone()
         rows = self.db.execute(f'SELECT COALESCE(SUM(row_count), 0) FROM {BAR_TABLE} b WHERE version = (SELECT MAX(version) FROM {BAR_TABLE} '
                                'WHERE source=b.source AND security_id=b.security_id AND year=b.year)').fetchone()[0]
         changes = {}
         for (change,) in self.db.execute(f'SELECT change FROM {BAR_TABLE}'):
             kind = json.loads(change)['change']
             changes[kind] = changes.get(kind, 0) + 1
-        return {'securities': row[0], 'first_session': row[1], 'last_session': row[2], 'blocks': row[3], 'bars': rows, 'block_versions': changes}
+        return {'securities': row[0], 'first_session': row[1], 'last_session': row[2], 'blocks': row[3], 'bars': rows, 'block_versions': changes, 'sources': self.sources()}

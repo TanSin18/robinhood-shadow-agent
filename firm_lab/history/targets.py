@@ -16,8 +16,10 @@ A label is not built, and the reason is recorded, when:
     NO_EXIT_BAR                   the security is still listed at T+1+h but has no bar there
     LABEL_WINDOW_HAS_BREAK        a spin-off, large distribution or split inconsistency lies inside the window
 
-Delisting. When the security's last bar falls before T+1+h and the provider marks it delisted, the label uses the last
-close as the exit and is flagged. These rows are kept: they are the failures and the takeovers. For a bankruptcy or a
+Delisting. When the security's last bar falls before T+1+h and a delisting or acquisition is recorded at that last bar,
+the label uses the last close as the exit and is flagged. The master's present-day "delisted" flag is not used: a store
+that simply ends, or a file that was cut short, is not a delisting, and bars that stop with no record yield no label
+(``WINDOW_PAST_STORED_HISTORY``), which is counted. These rows are kept: they are the failures and the takeovers. For a bankruptcy or a
 regulatory delisting the last price overstates what a holder recovered; that is a stated limitation, counted per reason.
 
 The excess label subtracts the equal-weighted mean label of the universe members of session T. No fund is needed, and
@@ -35,11 +37,38 @@ REASONS = {OK: 'OK', NO_ENTRY: 'NO_ENTRY_BAR', PAST_HISTORY: 'WINDOW_PAST_STORED
            DELISTED_EXIT: 'EXIT_AT_LAST_PRICE_BEFORE_DELISTING'}
 
 
+DELISTING_WINDOW = 5                     # sessions before the last bar within which a delisting record explains the end of the bars
+
+
+def delisted_at_last_bar(panel, actions):
+    """The provider's code of the delisting (or acquisition) recorded at this security's last bar, or None. A record
+    dated more than a few sessions before the last bar, or any time after the stored data would have continued, does not
+    explain why the bars stop where they do."""
+    sessions = panel['sessions']
+    if not sessions:
+        return None
+    first_allowed = sessions[max(0, len(sessions) - 1 - DELISTING_WINDOW)]
+    found = [a for a in actions if a['type'] == 'delisting' or (a['type'] == 'merger' and a.get('provider_code') == 'acquisitionby')]
+    near = [a for a in found if first_allowed <= str(a['effective_date'])[:10] and str(a['effective_date'])[:10] <= _after(sessions[-1])]
+    if not near:
+        return None
+    codes = [a.get('provider_code') or a['type'] for a in sorted(near, key=lambda a: (a['type'] != 'delisting', str(a['effective_date'])))]
+    return codes[0]
+
+
+def _after(session, days=DELISTING_WINDOW) -> str:
+    from . import calendar
+    try:
+        return calendar.offset(session, days)
+    except ValueError:
+        return session
+
+
 def build(panel, break_mask, *, delisted, horizons=HORIZONS) -> dict:
     """{h: {'value': array, 'state': array of codes, 'exit_index': array}} over the panel's sessions.
 
-    ``delisted`` says the provider marks this security delisted, so the end of its bars is an end and not merely the end
-    of the stored data. A label with state OK or DELISTED_EXIT has a value; every other state has NaN."""
+    ``delisted`` is true (or the provider's code, from ``delisted_at_last_bar``) when a delisting is recorded at the last
+    bar, so the end of its bars is an end and not merely the end of the stored data. A label with state OK or DELISTED_EXIT has a value; every other state has NaN."""
     count = len(panel['sessions'])
     opens, closes, present = panel['open'], panel['close'], panel['present']
     seen = np.cumsum(break_mask) if break_mask is not None else np.zeros(count, int)

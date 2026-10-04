@@ -31,3 +31,7 @@ data/evidence/
 data/STOP_TRADING
 data/INCIDENT_STOP
 .superpowers/
+# Checkpoint 8: licensed vendor data and anything derived from it never belongs in the repository
+firm_lab_history*
+vendor-data/
+SHARADAR*

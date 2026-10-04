@@ -297,8 +297,11 @@ def test_the_reserved_chronology_never_reuses_the_checkpoint_7_window_and_seals_
     assert r['checkpoint7_holdout_reused_as_pristine'] is False and r['sealed'] == ['HISTORICAL_HOLDOUT', 'FORWARD_HOLDOUT']
     assert r['segments']['HISTORICAL_HOLDOUT'] == ['2021-01-04', '2025-03-28'] and r['segments']['BURNED_CHECKPOINT7'] == ['2025-03-31', '2026-10-02']
     assert r['segments']['FORWARD_HOLDOUT'] == ['2026-10-05', None] and r['segments']['DEVELOPMENT'] == ['1999-01-04', '2020-11-23']
-    for session in ('2025-03-31', '2026-06-08', '2026-09-01', '2026-09-30', '2026-10-02'):          # every Checkpoint 7 session, its holdout included
+    for session in ('2025-03-31', '2026-06-09', '2026-09-01'):                                       # Checkpoint 7's window; its holdout ran 2026-06-09 to 2026-09-01
         assert splits.segment(session) == splits.BURNED and splits.BURNED not in splits.SEALED
+    for session in ('2026-09-03', '2026-09-30', '2026-10-02'):                                       # the tail: a label from here would end in the forward holdout
+        assert splits.segment(session) == splits.PURGED
+    assert r['last_burned_sample_session'] == '2026-09-02' and r['label_values_readable_in'] == ['DEVELOPMENT', 'BURNED_CHECKPOINT7']
     assert splits.segment('1998-06-01') == splits.BURN_IN and splits.segment('1999-01-04') == splits.DEVELOPMENT and splits.segment('2020-11-23') == splits.DEVELOPMENT
     assert splits.segment('2020-11-24') == splits.PURGED and splits.segment('2020-12-31') == splits.PURGED and splits.segment('2021-01-04') == splits.HISTORICAL_HOLDOUT
     gap = calendar.sessions('2020-11-24', '2020-12-31')
@@ -306,6 +309,9 @@ def test_the_reserved_chronology_never_reuses_the_checkpoint_7_window_and_seals_
     last = splits.holdout_last_sample()
     assert calendar.offset(last, targets.MAX_HORIZON + 1) == '2025-03-28'                             # its longest label ends at the holdout's last open
     assert splits.segment(last) == splits.HISTORICAL_HOLDOUT and splits.segment(calendar.offset(last, 1)) == splits.PURGED
-    assert splits.segment('2026-10-05') == splits.FORWARD_HOLDOUT and splits.segment('2030-01-02') == splits.FORWARD_HOLDOUT
+    assert splits.segment('2026-10-05') == splits.FORWARD_HOLDOUT and splits.segment('2027-01-04') == splits.FORWARD_HOLDOUT
+    for day in ('2026-10-03', '2030-01-02'):                                                          # a Saturday; a date past the calendar
+        with pytest.raises(ValueError, match='NOT_AN_EXCHANGE_SESSION'):
+            splits.segment(day)
     assert splits.labels_allowed(splits.DEVELOPMENT) and not splits.labels_allowed(splits.PURGED)
     assert not [name for name in dir(splits) if 'unseal' in name.lower()]                             # this checkpoint has no way to open a holdout

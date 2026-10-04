@@ -21,11 +21,19 @@ window with it, is not reused as a pristine test set:
 | `DEVELOPMENT` | 1999-01-04 to 2020-11-23 | Training and expanding, purged walk-forward validation: at least 5 folds, each validated on at least 252 sessions |
 | `PURGE` | 2020-11-24 to 2020-12-31 (26 sessions) | No samples. A label of session T ends at the open of T+21; then a 5-session embargo |
 | `HISTORICAL_HOLDOUT` | 2021-01-04 to 2025-03-28 | **Sealed.** Read once, by a registered Checkpoint 9 plan, after every model and every choice is frozen |
-| `BURNED_CHECKPOINT7` | 2025-03-31 to 2026-10-02 | Never a test set |
+| `BURNED_CHECKPOINT7` | 2025-03-31 to 2026-10-02 | Never a test set. Samples through 2026-09-02; the last 21 sessions (2026-09-03 to 2026-10-02) are a purge |
 | `FORWARD_HOLDOUT` | 2026-10-05 onward | **Sealed.** Data that did not exist when this was written |
 
-A holdout sample whose longest label would end after 2025-03-28 is dropped, so the historical holdout does not
-reach into the burned window. Its last sample session is 2025-02-27.
+A sample whose longest label would end inside the next segment is dropped, at every boundary:
+
+* The historical holdout does not reach into the burned window. Its last sample session is 2025-02-27.
+* The burned window does not reach into the forward holdout. Its last sample session is 2026-09-02. A label from
+  2026-09-03 onward would be built from forward-holdout prices, so those sessions yield no sample.
+
+**Label values can be read in two segments only: `DEVELOPMENT` and `BURNED_CHECKPOINT7`.** In both holdouts, in every
+purge and in the burn-in, the dataset builder blanks the value before a row leaves it.
+
+Only an exchange session has a segment. Asking for the segment of any other date is an error, not a guess.
 
 ## Why these dates
 
@@ -41,9 +49,12 @@ Chosen from the calendar and from the sufficiency specification, without looking
 
 ## How the seal is enforced
 
-* The dataset builder removes the label values of both sealed segments before any row leaves it. Only whether a label
-  can be built is counted, which reads dates and the existence of bars.
-* `materialise` refuses a sealed segment (`SEALED_SEGMENT`).
+* The dataset builder removes the label values of every segment that is not readable (both holdouts, the purges, the
+  burn-in) before any row leaves it. Only whether a label can be built is counted, which reads dates and the
+  existence of bars.
+* `materialise` refuses every segment that is not readable (`SEALED_SEGMENT`).
+* The strict count is reported per segment. The headline number is the sum over the four sample segments; purge and
+  burn-in sessions are never in it.
 * Breadth, the one quantity measured from labels, is measured on `DEVELOPMENT` only. A test changes prices inside
   the holdout and shows that no reported number moves, then changes prices inside development and shows that one does.
 * Checkpoint 8 contains no code that opens a seal. Opening one is a Checkpoint 9 act with its own registration.

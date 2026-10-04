@@ -9,7 +9,10 @@ a timestamp for each fact. A daily bar has no publication timestamp, so its avai
 ## 1. Where the data lives
 
 * One separate file, `firm_lab_history.db`, beside the research database. Role `CHECKPOINT8_HISTORICAL_RESEARCH`,
-  mode `BUILD_OBSERVE`. The registered (Control A) database is never opened for writing and the path check refuses it.
+  mode `BUILD_OBSERVE`. The registered (Control A) database is never opened for writing. The path check refuses the
+  registered file, its folder, any folder that holds an `agent.db`, and any Git work tree. The same check guards the
+  readiness summary file, and a vendor file that sits inside a repository is refused before it is read
+  (`VENDOR_FILE_INSIDE_A_REPOSITORY`).
 * Licensed vendor data lives only in that file. It is never committed to Git, never copied into a report, a prompt,
   a review file or the dashboard overlay. The readiness page reads a small summary file that holds counts and
   hashes, not prices.
@@ -20,15 +23,38 @@ a timestamp for each fact. A daily bar has no publication timestamp, so its avai
 
 * Every ingested file is recorded as a **capture**: file name, SHA-256, size, table kind, rows read, stored,
   duplicate and rejected, the adapter version and the capture time. That record is the validation receipt.
-* Bars are stored per security and calendar year as one content-addressed block of the provider's own text values.
-  Storing the same content again adds nothing. Different content for the same security and year is stored as the
-  **next version**; the earlier version stays. Nothing is updated or deleted (database triggers refuse both).
-* A new version records what changed: `SCALE_ONLY` when every price moved by one common factor and volume by its
-  inverse (the vendor re-adjusting for a new split), `EXTENDED` when sessions were only added, or `VALUE_CHANGE`
-  when a past value differs in any other way. A `VALUE_CHANGE` is a vendor revision of history; it is counted on the
-  readiness page, because it is evidence against treating that value as first-published.
-* Corporate actions, security-master rows and index-membership events are stored the same way: content-addressed,
-  with the capture they came from.
+* **A capture is stored whole or not at all.** One file is one database transaction; a failure part-way leaves
+  nothing behind. A capture time must be a real UTC time and may not be earlier than the latest capture already
+  stored (`INVALID_CAPTURE_TIME`, `CAPTURE_TIME_NOT_MONOTONIC`); times are compared as times, never as text.
+* Bars are stored per security and calendar year as one block of the provider's own text values. A new capture for
+  a security and year is compared with the **current** version. The same content adds nothing. Anything else becomes
+  the **next version**, and the earlier one stays, also when the vendor returns to content it supplied before.
+  A capture that holds only some sessions of a year extends that year; it never removes the sessions it does not
+  mention.
+* Every block is validated again at the point of storage (`INVALID_BAR_BLOCK`), so no code path can store a bar the
+  row checks would have rejected.
+* A new version records what changed:
+
+  | Class | Meaning |
+  |---|---|
+  | `EXTENDED` | only sessions after the previous last session were added |
+  | `SCALE_ONLY` | every session before some date moved by one common factor (prices times k, volume divided by k) and the printed price did not move: the vendor re-adjusting for a later split |
+  | `TOTAL_RETURN_READJUSTED` | only the total-return close differs: a later dividend |
+  | `METADATA_ONLY` | only the provider's update stamp differs |
+  | `VALUE_CHANGE` | anything else: one corrected print, a session that appeared in the past, a session that disappeared |
+
+  A `VALUE_CHANGE` is a vendor revision of history. It is counted on the readiness page ("Stored versions"), and
+  the revised bar is dated to the capture that revised it: it was not held before then.
+* Security-master rows, corporate actions and index-membership events are stored content-addressed with the capture
+  they came from. A security-master row that returns to an earlier state is stored as a new row, so "the current row"
+  is always the latest stored. Two securities claiming one identifier with different names is refused
+  (`CONFLICTING_SECURITY_IDENTITY`).
+* One store may hold more than one source, but bars of two sources are never read as one series: a read that does
+  not name the source is refused when two exist (`SOURCE_REQUIRED`).
+* **What append-only means.** Every connection this package opens refuses UPDATE, DELETE and REPLACE through database
+  triggers. That protects against the package's own mistakes. It does not protect against a person with the file and
+  a SQL prompt. What makes such a change detectable is that every block carries the hash of its content and every
+  universe and dataset names the hash of the blocks it was built from.
 
 ## 3. Validation: reject, never repair
 
@@ -38,21 +64,23 @@ reason that applies, and the capture counts it.
 | Reason | Check |
 |---|---|
 | `MISSING_FIELD` | open, high, low, close, volume, unadjusted close and session date are all present |
-| `NOT_FINITE` | every number parses and is finite |
+| `NOT_FINITE` | every number is a plain decimal number and finite; anything else (`nan`, `inf`, hexadecimal, digits of another script, underscores) is refused |
 | `NON_POSITIVE_PRICE` | open, high, low, close and unadjusted close are above zero |
 | `LOW_ABOVE_OPEN_OR_CLOSE` | `low <= min(open, close)` |
 | `HIGH_BELOW_OPEN_OR_CLOSE` | `high >= max(open, close)` |
 | `LOW_ABOVE_HIGH` | `low <= high` |
 | `NEGATIVE_VOLUME` | `volume >= 0` |
+| `INVALID_TOTAL_RETURN_CLOSE` | the total-return close may be absent; when present it is a positive number |
 | `NOT_AN_EXCHANGE_SESSION` | the date is a New York Stock Exchange session |
-| `SESSION_NOT_COMPLETE_AT_CAPTURE` | the session had closed before the capture time |
+| `SESSION_NOT_COMPLETE_AT_CAPTURE` | the session had closed before the capture time (compared as times) |
 | `UNKNOWN_SECURITY` | the symbol resolves to exactly one security in the stored security master |
 | `AMBIGUOUS_SECURITY` | the symbol resolves to more than one security |
 | `CONFLICTING_DUPLICATE` | two rows in one file for the same security and session differ: both are rejected |
-| `CURRENCY_NOT_USD` | the security's price currency is U.S. dollars |
+| `CURRENCY_NOT_USD` | the security's price currency is stated and is U.S. dollars; a blank currency is not assumed |
 
-An identical duplicate row is kept once and counted. A file whose columns are not the documented ones is refused
-whole (`UNEXPECTED_FILE_LAYOUT`).
+An identical duplicate row is kept once and counted. A file with a required column missing, or with a column
+repeated in its header, is refused whole (`UNEXPECTED_FILE_LAYOUT`). A security-master row whose delisted flag is
+not one of the provider's two values is rejected (`MALFORMED_SECURITY`); nothing is guessed from it.
 
 **Consistency with corporate actions** is checked per security after bars and actions are both stored. The ratio of
 unadjusted close to split-adjusted close is the cumulative split factor. It must be constant between split dates and
@@ -74,7 +102,7 @@ Every stored series names its basis. Bases are never mixed inside one calculatio
 |---|---|
 | open, high, low, close, volume | `SPLIT_ADJUSTED_AS_OF_CAPTURE`: adjusted for splits up to the capture date; not adjusted for cash dividends or spin-offs |
 | unadjusted close | `UNADJUSTED`: the price printed on the day |
-| total-return close | `SPLIT_DIVIDEND_SPINOFF_ADJUSTED_AS_OF_CAPTURE`: the vendor's method; stored, not validated; read only to size a recorded distribution, never as a price |
+| total-return close | `SPLIT_DIVIDEND_SPINOFF_ADJUSTED_AS_OF_CAPTURE`: the vendor's method; checked only for being a positive number; read only to size a recorded distribution, never as a price |
 
 **Why a later split does not leak, and where it could.** A split after session T multiplies every price at or before
 T by the same number. A feature that is a ratio of prices (a return, a distance to an average, a wick over a range)
@@ -115,11 +143,14 @@ Checkpoint 7. Cash dividends are not added back. Known effects, stated rather th
 * A bar describes one exchange session. It cannot be known before that session closes (early closes included, from
   the exchange calendar).
 * No source gives the time at which a historical end-of-day bar was first published, and none is invented. The bar
-  is treated as available **no later than the open of the next exchange session**. That is a bound, stored as
-  `eligible_from`, with the basis `EXCHANGE_SESSION_COMPLETE_NEXT_OPEN_BOUND`.
-* The time Firm Lab actually received the bar is stored separately as `captured_at` and is never used as a
-  historical known-at for a publisher-dated bar. A bar Firm Lab itself captured before `eligible_from` is tier A;
-  a historical bar from a licensed archive is tier B.
+  is treated as available **no later than the open of the next exchange session**. That is a bound, computed from
+  the exchange calendar (`eligible_from`), with the basis `EXCHANGE_SESSION_COMPLETE_NEXT_OPEN_BOUND`. It is not a
+  stored column.
+* The time Firm Lab actually received a bar is the creation time of the stored version it sits in, and is never used
+  as a historical known-at for a publisher-dated bar. A bar is tier A only when the value **read today** was already
+  stored before `eligible_from`. A pure rescale for a later split does not change that date; a revision does: a bar
+  the vendor later changed is tier B from the revision, whatever was held before. A historical bar from a licensed
+  archive is tier B.
 * Consequence for a training row: features use bars up to and including session T; the decision time is the open
   of session T+1; the label starts at the open of T+1. No label uses a price at or before the last feature bar.
 
@@ -127,7 +158,8 @@ Checkpoint 7. Cash dividends are not added back. Known effects, stated rather th
 that the price is the exchange's price for that session as the archive holds it. It does not claim Firm Lab held
 the bar then, and it cannot rule out that the vendor corrected an erroneous print after the fact. Two safeguards
 bound that: versioned captures expose any later `VALUE_CHANGE`, and closes Firm Lab already holds from another
-source are compared one by one (bar O6 of the sufficiency specification).
+source are compared one by one (bar O6 of the sufficiency specification). Rejected rows are measured per file: bar
+O4 is the largest rejected share in any one bar file, so ingesting a clean file again cannot dilute a bad one.
 
 ## 6. Corporate actions
 
@@ -142,25 +174,39 @@ effective date and no announcement time; `announcement_timestamp` is stored as `
 
 ## 7. Survivorship
 
-* The whole provider table is stored, delisted securities included, before any universe is formed. A universe
-  formed only from securities trading today is refused by the builder (`SURVIVOR_ONLY_SOURCE`) when the stored
-  security master holds no delisted security.
+* The whole provider table is stored, delisted securities included, before any universe is formed. The builder
+  refuses a source in which **no delisted security has bars** (`SURVIVOR_ONLY_SOURCE`); a delisted row in the master
+  with no price history behind it does not pass. That guard catches only the total absence of failures. The measure
+  of how complete they are is bar H4, below.
 * The universe at a past date is formed only from bars up to that date (`historical_universe.md`). A company that
   later failed or was acquired is a member for as long as it qualified.
-* **Labels through a delisting.** When a member's last bar falls inside a label window, the label uses the last
-  available price as the exit and is marked `EXIT_AT_LAST_PRICE_BEFORE_DELISTING` with the provider's delisting
-  reason. These rows are kept; dropping them would remove exactly the failures and takeovers. Such a label covers
-  fewer sessions than its horizon (down to a single session); it is flagged so that a later plan can treat it apart.
+* **Labels through a delisting.** A delisting is taken from a **dated record** (a delisting, or an acquisition by
+  another company) within five sessions of the security's last bar. The present-day delisted flag of the master is
+  not used: it says nothing about when, and it would turn the mere end of the stored data into an exit. With such a
+  record, a label whose window runs past the last bar uses the last close as the exit and has the state
+  `DELISTED_EXIT` with the provider's reason. These rows are kept; dropping them would remove exactly the failures
+  and takeovers. Such a label covers fewer sessions than its horizon (down to a single session); it is flagged so
+  that a later plan can treat it apart.
+* **Bars that end without a record.** A member whose bars stop before the end of the stored data with no such record
+  gets no label there (`PAST_HISTORY`) and is counted (`members_whose_bars_end_without_a_delisting_record`). A large
+  count is evidence that the vendor's action table is incomplete.
 * **Stated limitation.** No free or individually licensed source found gives a post-delisting return. For an
   acquisition the last price is close to the deal value. For a bankruptcy or a regulatory delisting the last price
   overstates what a holder recovered, so such labels are biased upward. The count of such rows per year and per
-  reason is reported, and the limitation is shown on the readiness page.
+  reason is reported (`delisting_exits_by_year`), and the limitation is shown on the readiness page.
 * Coverage is the provider's claim until measured. The check that is possible is made: the number of securities
   with a last bar in each year, against the delisting actions recorded for that year.
 
 ## 8. Reproducibility
 
-A dataset manifest names the capture identities and file hashes of every source table, the security-master and
-action versions, the universe version and its hash, each feature-set version with the code hash, the target version
-and the split version. The same captures and the same code give the same dataset hash; a test builds twice and
-compares.
+A dataset manifest names the capture identities and file hashes of every source table, the hash of the current bar
+blocks, the hash of the corporate actions, the universe version and its hash, each feature-set version with the code
+hash, the target version and the split version. The same captures and the same code give the same dataset hash; a
+test builds twice and compares. The dataset hash covers label states and evidence tiers as well as values.
+
+A universe records the bar blocks and actions it was formed from. When either changes, the stored universe is
+**stale**: counting and materialising refuse it (`UNIVERSE_IS_STALE`) until it is rebuilt. A rebuild adds a new
+universe beside the old one; the old one stays readable by its hash.
+
+These hashes are integrity checks, not authentication. A person who can write the file can write a matching hash.
+The readiness page says what it read and from where; it does not claim more.

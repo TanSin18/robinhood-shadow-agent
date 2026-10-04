@@ -151,6 +151,20 @@ def exact_close(panel, splits=()) -> np.ndarray:
     return panel['close_unadjusted'] / divisor
 
 
+def share_divisor(panel, splits=()) -> np.ndarray:
+    """How many of today's shares one share of each session became: what the vendor's adjusted volume was multiplied by.
+    Where the confirmed splits explain the vendor's own factor (unadjusted over adjusted close) the exact product of
+    their ratios is used, so that rounding in the reprinted prices plays no part; elsewhere the vendor's factor stands."""
+    count = len(panel['sessions'])
+    exact = np.ones(count)
+    for k, ratio in splits:
+        exact[:k] *= ratio
+    printed = split_factor(panel)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        agrees = np.abs(np.log(printed / exact)) <= TOLERANCE + panel['half_ulp']
+    return np.where(agrees, exact, printed)
+
+
 def total_return_audit(panel, actions) -> dict:
     """Counts the steps in the vendor's total-return factor and how many fall on a recorded dividend or spin-off date.
     A report only. The total-return close is never used as a price."""

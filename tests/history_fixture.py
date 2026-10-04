@@ -65,16 +65,18 @@ def series(ticker, seed=7):
     return {'sessions': sessions, 'open': open_, 'high': high, 'low': low, 'close': close, 'volume': volume, 'unadjusted': close * factor, 'total': total}
 
 
-def price_rows(tickers=None, *, through=LAST, rescale=None):
-    """Vendor price rows. ``rescale`` = (ticker, factor) re-adjusts that ticker as a later split would."""
+def price_rows(tickers=None, *, through=LAST, rescale=None, decimals=6):
+    """Vendor price rows. ``rescale`` = (ticker, factor) re-adjusts that ticker as a later split would; ``decimals`` is
+    how finely the adjusted prices are printed."""
     for ticker in tickers or SECURITIES:
         data = series(ticker)
         k = 1.0 if not rescale or rescale[0] != ticker else rescale[1]
         for i, s in enumerate(data['sessions']):
             if s > through:
                 break
-            yield [ticker, s] + [f'{data[c][i] / k:.6f}' for c in ('open', 'high', 'low', 'close')] + [f'{data["volume"][i] * k:.1f}', f'{data["total"][i] / k:.6f}',
-                                                                                                     f'{data["unadjusted"][i]:.4f}', '2026-10-03']
+            yield [ticker, s] + [f'{data[c][i] / k:.{decimals}f}' for c in ('open', 'high', 'low', 'close')] + [f'{data["volume"][i] * k:.1f}',
+                                                                                                              f'{data["total"][i] / k:.{decimals}f}',
+                                                                                                              f'{data["unadjusted"][i]:.4f}', '2026-10-03']
 
 
 def write_prices(path, rows):
@@ -103,7 +105,7 @@ def write_tickers(path, *, extra=(), without_delisted=False):
     return path
 
 
-def write_actions(path):
+def write_actions(path, extra=()):
     fff = series('FFF')
     paid = DISTRIBUTION[2] * fff['unadjusted'][fff['sessions'].index(DISTRIBUTION[1]) - 1]        # one tenth of the prior close
     rows = [['2020-06-15', 'split', 'AAA', 'AAA Corp', '2.0', '', ''],
@@ -116,7 +118,7 @@ def write_actions(path):
     with open(path, 'w', newline='') as handle:
         writer = csv.writer(handle)
         writer.writerow(['date', 'action', 'ticker', 'name', 'value', 'contraticker', 'contraname'])
-        writer.writerows(rows)
+        writer.writerows(rows + [list(r) for r in extra])
     return path
 
 

@@ -39,9 +39,10 @@ def _reader(path, required):
     reader = csv.DictReader(handle)
     header = [h.strip().lower() for h in (reader.fieldnames or [])]
     missing = [c for c in required if c not in header]
-    if missing:
+    repeated = sorted({c for c in header if header.count(c) > 1})
+    if missing or repeated:
         handle.close()
-        raise UnexpectedFileLayout('UNEXPECTED_FILE_LAYOUT: missing ' + ', '.join(missing))
+        raise UnexpectedFileLayout('UNEXPECTED_FILE_LAYOUT: ' + ('missing ' + ', '.join(missing) if missing else 'repeated ' + ', '.join(repeated)))
     reader.fieldnames = header
     return handle, reader
 
@@ -65,7 +66,7 @@ def securities(path):
                 continue                                              # a row that describes another table (fundamentals coverage), not a price series
             cik = _CIK.search(row.get('secfilings') or '')
             yield {'security_id': (row['permaticker'] or '').strip(), 'symbol': (row['ticker'] or '').strip(), 'name': row['name'], 'exchange': row['exchange'],
-                   'category': row['category'], 'currency': (row['currency'] or '').strip() or None, 'is_delisted': (row['isdelisted'] or '').strip().upper() == 'Y',
+                   'category': row['category'], 'currency': (row['currency'] or '').strip() or None, 'is_delisted': {'Y': True, 'N': False}.get((row['isdelisted'] or '').strip().upper()),
                    'first_price_date': row['firstpricedate'] or None, 'last_price_date': row['lastpricedate'] or None, 'price_table': table,
                    'cik': cik.group(1) if cik else None, 'sector_current': row.get('sector') or None, 'industry_current': row.get('industry') or None,
                    'sic_code_current': row.get('siccode') or None, 'provider_updated': row.get('lastupdated') or None,

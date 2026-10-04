@@ -7,8 +7,10 @@
 * every input is tier A (Firm Lab held it before the next session opened) or tier B (a publisher-dated historical bar);
 * its label at the horizon exists (``targets``): entry at the open of T+1, never a price at or before T.
 
-The row's tier is the lowest among its inputs. Tier A needs every one of the last 252 bars to have been held at the
-time, so a row built from a licensed archive is tier B. Retrospective inputs (tier C) are not used by this builder at
+The row's tier is the lowest among its bars, its universe membership and its label. A bar counts as held at the time
+only if the value read today was stored before the next session opened and has not been revised since; a universe
+formed from an archive is tier B; so every row built today is tier B. Tier A needs forward capture of the bars and a
+universe formed from bars held at the time, and nothing does that yet. Retrospective inputs (tier C) are not used by this builder at
 all; the Checkpoint 7 retrospective samples are a different dataset and are never added to these counts.
 
 Sealed segments (``splits``): label VALUES of the historical holdout and of the forward holdout are never returned,
@@ -23,7 +25,7 @@ import hashlib
 
 import numpy as np
 
-from . import BAR_KNOWN_AT_VERSION, HELD_AT_THE_TIME, POLICY_VERSION, PUBLISHER_DATED_HISTORICAL, RETURN_BASIS, adjust, calendar, features, panel as panels, splits, sufficiency, targets, universe
+from . import BAR_KNOWN_AT_VERSION, HELD_AT_THE_TIME, POLICY_VERSION, PUBLISHER_DATED_HISTORICAL, RETURN_BASIS, lowest_tier, adjust, calendar, features, panel as panels, splits, sufficiency, targets, universe
 from .ingest import current_securities
 from .store import content_hash
 
@@ -62,9 +64,16 @@ def row_tiers(sessions, present, first_seen) -> np.ndarray:
     return np.where(bars >= MINIMUM_HISTORY_BARS, HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL)
 
 
-def security_rows(store, sid, security, spans, actions, *, source=None) -> dict:
+def row_tier(*tiers) -> str:
+    """The tier of a row from the tiers of its parts: the lowest."""
+    return lowest_tier(tiers)
+
+
+def security_rows(store, sid, security, spans, actions, *, source=None, membership_tier=PUBLISHER_DATED_HISTORICAL) -> dict:
     """Everything one security contributes: per session, its features, whether the row is eligible, its tier, its segment
-    and its labels. Label values inside a sealed segment are removed before anything is returned."""
+    and its labels. A label value is returned only for a segment whose labels may be read (development and the burned
+    window); for every other segment it is removed before anything leaves this function. ``security`` is the master row
+    and is not read: nothing about a past row depends on what the master says today."""
     p = panels.load(store, sid, source=source)
     sessions = p['sessions']
     count = len(sessions)
@@ -76,14 +85,16 @@ def security_rows(store, sid, security, spans, actions, *, source=None) -> dict:
     history = np.cumsum(p['present'])
     core = np.all([np.isfinite(values[name]) for name in CORE_FEATURES], axis=0) if count else np.zeros(0, bool)
     eligible = member & p['present'] & (history >= MINIMUM_HISTORY_BARS) & core
-    tier = row_tiers(sessions, p['present'], store.first_seen(sid, source=source))
+    bar_tier = row_tiers(sessions, p['present'], store.held_since(sid, source=source))
+    tier = np.array([row_tier(t, membership_tier) for t in bar_tier], dtype=object) if count else np.zeros(0, dtype=object)
     segment = np.array([splits.segment(s) for s in sessions], dtype=object) if count else np.zeros(0, dtype=object)
-    labels = targets.build(p, mask, delisted=bool(security.get('is_delisted')))
-    sealed = np.isin(segment, splits.SEALED) if count else np.zeros(0, bool)
+    delisting = targets.delisted_at_last_bar(p, actions)
+    labels = targets.build(p, mask, delisted=delisting)
+    readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
     for h in labels:
-        labels[h]['value'] = np.where(sealed, np.nan, labels[h]['value'])          # a sealed label value never leaves this function
-    return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'segment': segment,
-            'coarse': adjust.coarse_print(p),
+        labels[h]['value'] = np.where(readable, labels[h]['value'], np.nan)        # sealed, purge and burn-in label values never leave this function
+    return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'bar_tier': bar_tier,
+            'segment': segment, 'coarse': adjust.coarse_print(p), 'delisting': delisting,
             'features': values, 'labels': labels, 'breaks': audit['breaks'], 'blocks': p['blocks'], 'audit': {**audit, 'structure': computed['audit']},
             'history_bars': history}
 
@@ -94,26 +105,34 @@ def _sources(store) -> list:
 
 
 def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
-    """The strict point-in-time sample count and the quantities of the sufficiency specification. Fits nothing."""
-    chosen = universe.load(store, universe_hash)
-    if chosen['manifest'] is None:
+    """The strict point-in-time sample count and the quantities of the sufficiency specification. Fits nothing. Refuses
+    a universe that was built from bars or actions other than the ones stored now."""
+    if not any(p.get('kind') == 'universe_manifest' for _, p, _ in store.rows('history_universe')):
         return {'dataset_version': DATASET_VERSION, 'universe': None, 'raw_member_rows': 0, 'strict_samples': {str(h): 0 for h in targets.HORIZONS},
+                'strict_samples_by_segment': {str(h): {name: 0 for name in splits.SAMPLE_SEGMENTS} for h in targets.HORIZONS},
                 'retrospective_samples': 0, 'reason': 'NO_STORED_UNIVERSE'}
+    chosen = universe.load(store, universe_hash, require_current=True)
     spans = universe.membership(chosen['records'])
     securities = current_securities(store, source=source)
     actions = _actions_by_security(store, source)
     every = calendar.sessions(splits.FIRST_SAMPLE, splits.development_last())
     dev_position = {s: k for k, s in enumerate(every)}
+    hold = calendar.sessions(splits.HOLDOUT_FIRST, splits.holdout_last_sample())
+    hold_position = {s: k for k, s in enumerate(hold)}
+    last_stored = store.bar_summary()['last_session']
     out = {'dataset_version': DATASET_VERSION, 'universe_hash': chosen['manifest']['universe_hash'], 'raw_member_rows': 0, 'eligible_feature_rows': 0,
            'by_segment': {s: {'eligible_feature_rows': 0, 'sessions': set(), 'instruments': set(), **{f'labelled_{h}': 0 for h in targets.HORIZONS}} for s in SEGMENTS},
-           'by_tier': {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0}, 'by_year': {}, 'label_states': {str(h): {} for h in targets.HORIZONS},
-           'delisting_exits_by_reason': {}, 'breaks_by_reason': {}, 'splits_confirmed': 0, 'split_convention': {'new_per_old': 0, 'old_per_new': 0},
+           'by_tier': {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0}, 'bars_held_at_the_time_rows': 0, 'by_year': {},
+           'label_states': {str(h): {} for h in targets.HORIZONS}, 'delisting_exits_by_reason': {}, 'delisting_exits_by_year': {},
+           'members_whose_bars_end_without_a_delisting_record': 0, 'breaks_by_reason': {}, 'splits_confirmed': 0,
+           'split_convention': {'new_per_old': 0, 'old_per_new': 0},
            'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0,
            'sample_sessions_per_instrument': [], 'sequence_ready': 0}
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
     totals = {h: {} for h in targets.HORIZONS}                           # horizon -> {window index: [sum, count]} for the cross-sectional mean
+    hold_counts = {h: {} for h in targets.HORIZONS}                      # horizon -> {holdout window index: how many labels can be built}; a count, never a value
     for n, sid in enumerate(sorted(spans)):
-        rows = security_rows(store, sid, securities[sid], spans[sid], actions.get(sid, []), source=source)
+        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source)
         sessions, eligible, segment = rows['sessions'], rows['eligible'], rows['segment']
         out['raw_member_rows'] += int((rows['member'] & rows['present']).sum())
         out['eligible_feature_rows'] += int(eligible.sum())
@@ -131,8 +150,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         for t in range(len(sessions)):
             run = run + 1 if eligible[t] else 0
             out['sequence_ready'] += int(run >= sufficiency.NETWORK_BAR['sequence_sessions'])
-        reasons = {a['effective_date']: a.get('provider_code') for a in actions.get(sid, []) if a['type'] == 'delisting'}
-        reason = reasons[max(reasons)] if reasons else 'NOT_RECORDED'
+        reason = rows['delisting'] or 'NOT_RECORDED'
+        if rows['delisting'] is None and sessions and last_stored and sessions[-1] < calendar.offset(last_stored, -(targets.MAX_HORIZON + 1)):
+            out['members_whose_bars_end_without_a_delisting_record'] += 1       # their last labels are not built; the failures among them are missing
         for t in index:
             s, name = sessions[t], segment[t]
             part = out['by_segment'][name]
@@ -140,6 +160,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
             part['sessions'].add(s)
             part['instruments'].add(sid)
             out['by_tier'][rows['tier'][t]] += 1
+            out['bars_held_at_the_time_rows'] += int(rows['bar_tier'][t] == HELD_AT_THE_TIME)
             year = out['by_year'].setdefault(s[:4], {'eligible_feature_rows': 0, 'instruments': set()})
             year['eligible_feature_rows'] += 1
             year['instruments'].add(sid)
@@ -151,6 +172,8 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
                     part[f'labelled_{h}'] += 1
                     if state == targets.DELISTED_EXIT and h == targets.MAX_HORIZON:
                         out['delisting_exits_by_reason'][reason] = out['delisting_exits_by_reason'].get(reason, 0) + 1
+                        by_year = out['delisting_exits_by_year'].setdefault(s[:4], {})
+                        by_year[reason] = by_year.get(reason, 0) + 1
                     k = dev_position.get(s)
                     if name == splits.DEVELOPMENT and k is not None and k % h == 0:      # non-overlapping windows, development only
                         value = float(rows['labels'][h]['value'][t])
@@ -158,6 +181,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
                         total = totals[h].setdefault(k // h, [0.0, 0])
                         total[0] += value
                         total[1] += 1
+                    k = hold_position.get(s)
+                    if name == splits.HISTORICAL_HOLDOUT and k is not None and k % h == 0:
+                        hold_counts[h][k // h] = hold_counts[h].get(k // h, 0) + 1
         if progress and n % 200 == 0:
             progress(n, len(spans))
     out['sample_sessions_per_instrument_median'] = float(np.median(out.pop('sample_sessions_per_instrument'))) if spans else 0.0
@@ -166,8 +192,12 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     out['sequence_share'] = out.pop('sequence_ready') / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
     out['coarse_print_share'] = out['coarse_print_rows'] / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
     out['high_low_open_families_usable'] = out['coarse_print_share'] is not None and out['coarse_print_share'] <= COARSE_SHARE_MAXIMUM
-    out['strict_samples'] = {str(h): sum(p[f'labelled_{h}'] for p in out['by_segment'].values()) for h in targets.HORIZONS}
+    # Burn-in and purge sessions yield no sample. The total is the sum of the four sample segments, shown one by one.
+    out['strict_samples_by_segment'] = {str(h): {name: out['by_segment'][name][f'labelled_{h}'] for name in splits.SAMPLE_SEGMENTS} for h in targets.HORIZONS}
+    out['strict_samples'] = {h: sum(parts.values()) for h, parts in out['strict_samples_by_segment'].items()}
     out['retrospective_samples'] = 0            # this builder reads no retrospective input; Checkpoint 7's retrospective dataset is separate and not added
+    development = sorted(out['by_segment'][splits.DEVELOPMENT]['sessions'])
+    out['development_first_sample_session'], out['development_last_sample_session'] = (development[0], development[-1]) if development else (None, None)
     measured = {}
     for h in targets.HORIZONS:
         windows = sorted(totals[h])
@@ -177,21 +207,23 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
             for w, value in tables[h][sid].items():
                 table[column[w], j] = value - totals[h][w][0] / totals[h][w][1]          # excess over the equal-weighted mean of that window's rows
         b = sufficiency.breadth(table) if len(windows) else {'n_eff': None, 'instruments_per_window': 0.0, 'mean_squared_correlation': None, 'pairs': 0, 'measure': 'breadth_v2'}
-        dev_sessions = len(out['by_segment'][splits.DEVELOPMENT]['sessions'])
-        hold_sessions = len(out['by_segment'][splits.HISTORICAL_HOLDOUT]['sessions'])
-        e_dev = sufficiency.effective_observations(dev_sessions, h, b['n_eff'])
-        e_hold = sufficiency.effective_observations(hold_sessions, h, b['n_eff'])
-        measured[str(h)] = {'breadth': b, 'development_sessions': dev_sessions, 'development_windows': dev_sessions / h, 'effective_observations_development': e_dev,
-                            'detectable_ic_development': sufficiency.detectable_ic(e_dev), 'holdout_sessions': hold_sessions, 'holdout_windows': hold_sessions / h,
+        m = b['mean_squared_correlation'] if b['n_eff'] is not None else None
+        e_dev = sufficiency.effective_by_window([totals[h][w][1] for w in windows], m)
+        e_hold = sufficiency.effective_by_window(hold_counts[h].values(), m)
+        measured[str(h)] = {'breadth': b, 'development_windows': len(windows), 'effective_observations_development': e_dev,
+                            'detectable_ic_development': sufficiency.detectable_ic(e_dev), 'holdout_windows': len(hold_counts[h]),
                             'effective_observations_holdout': e_hold, 'detectable_ic_holdout': sufficiency.detectable_ic(e_hold),
+                            'development_testability': sufficiency.testability(sufficiency.detectable_ic(e_dev)),
                             'holdout_testability': sufficiency.testability(sufficiency.detectable_ic(e_hold)),
-                            'note': 'breadth is measured on development sessions only and applied to the holdout session count; no holdout label value is read'}
+                            'note': 'the correlation between instruments is measured on development labels only; each window counts the instruments it holds; '
+                                    'for the holdout only how many labels can be built is counted, no value is read'}
     out['effective'] = measured
     for part in out['by_segment'].values():
         part['sessions'], part['instruments'] = len(part['sessions']), len(part['instruments'])
     for year in out['by_year'].values():
         year['instruments'] = len(year['instruments'])
     out['by_year'] = dict(sorted(out['by_year'].items()))
+    out['delisting_exits_by_year'] = dict(sorted(out['delisting_exits_by_year'].items()))
     out['manifest'] = manifest(store, chosen['manifest'])
     return out
 
@@ -203,7 +235,8 @@ def manifest(store, universe_manifest) -> dict:
             'feature_set_version': features.FEATURE_SET_VERSION, 'feature_versions': sorted({d['version'] for d in features.DEFINITIONS}),
             'feature_code_hash': features.code_hash(), 'feature_names': list(features.NAMES), 'core_features': list(CORE_FEATURES),
             'target_version': targets.TARGET_VERSION, 'horizons': list(targets.HORIZONS), 'split_version': splits.SPLIT_VERSION,
-            'minimum_history_bars': MINIMUM_HISTORY_BARS, 'source_blocks_hash': universe_manifest['source_blocks_hash'], 'captures': _sources(store)}
+            'minimum_history_bars': MINIMUM_HISTORY_BARS, 'source_blocks_hash': universe_manifest['source_blocks_hash'],
+            'actions_hash': universe_manifest['actions_hash'], 'captures': _sources(store)}
     body['dataset_spec_hash'] = content_hash(body)
     return body
 
@@ -217,7 +250,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     """The rows of the named segments as arrays, with a manifest and one dataset hash. Refuses a sealed segment."""
     if any(not splits.labels_allowed(s) for s in segments):
         raise ValueError('SEALED_SEGMENT')
-    chosen = universe.load(store, universe_hash)
+    chosen = universe.load(store, universe_hash, require_current=True)
     if chosen['manifest'] is None:
         raise ValueError('NO_STORED_UNIVERSE')
     spans = universe.membership(chosen['records'])
@@ -227,7 +260,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     raw = {h: [] for h in targets.HORIZONS}
     states = {h: [] for h in targets.HORIZONS}
     for sid in sorted(spans):
-        rows = security_rows(store, sid, securities[sid], spans[sid], actions.get(sid, []), source=source)
+        rows = security_rows(store, sid, securities.get(sid), spans[sid], actions.get(sid, []), source=source)
         keep = rows['eligible'] & np.isin(rows['segment'], list(segments))
         if years is not None:
             keep &= np.array([s[:4] in years for s in rows['sessions']], bool)
@@ -263,7 +296,8 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
             excess[h][finite] = y[h][finite] - (sums / np.maximum(counts, 1))[group[finite]]
     body = manifest(store, chosen['manifest'])
     parts = {'rows': content_hash([list(pair) for pair in zip(ids, sessions)]), 'features': _array_hash(X),
-             'labels': content_hash({str(h): [_array_hash(y[h]), _array_hash(excess[h])] for h in targets.HORIZONS}), 'blocks': content_hash(sorted(blocks))}
+             'labels': content_hash({str(h): [_array_hash(y[h]), _array_hash(excess[h]), _array_hash(y_state[h].astype(float))] for h in targets.HORIZONS}),
+             'tiers': content_hash(list(tiers)), 'blocks': content_hash(sorted(blocks))}
     body.update({'segments': list(segments), 'years': sorted(years) if years else None, 'rows': len(ids), 'hashes': parts,
                  'coarse_print_share': share, 'high_low_open_families_usable': usable})
     body['dataset_hash'] = content_hash({'spec': body['dataset_spec_hash'], 'segments': body['segments'], 'years': body['years'], 'hashes': parts})

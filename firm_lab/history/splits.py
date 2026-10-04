@@ -5,11 +5,14 @@
     DEVELOPMENT           1999-01-04 .. 26 sessions before the holdout   training and purged walk-forward validation
     PURGE                 the 26 sessions before the holdout             no samples: label windows and an embargo
     HISTORICAL_HOLDOUT    2021-01-04 .. 2025-03-28                       sealed; read once, by a registered Checkpoint 9 plan
-    BURNED_CHECKPOINT7    2025-03-31 .. 2026-10-02                       Checkpoint 7's whole window; never a pristine test set
+    BURNED_CHECKPOINT7    2025-03-31 .. 2026-09-02                       Checkpoint 7's window; never a pristine test set
+    PURGE                 2026-09-03 .. 2026-10-02                       no samples: a label from here would end inside the forward holdout
     FORWARD_HOLDOUT       2026-10-05 onward                              sealed; data that did not exist when this was written
 
-The Checkpoint 7 holdout lies inside BURNED_CHECKPOINT7 and is not reused. A holdout sample whose label window would
-end after the holdout's last session is dropped, so the historical holdout never touches the burned window.
+The Checkpoint 7 holdout lies inside the burned window and is not reused. At every boundary the sessions whose longest
+label would end in the next segment are purged: the historical holdout never touches the burned window, and no label
+that can be read is built from a price of a sealed segment. Label values are readable in DEVELOPMENT and in
+BURNED_CHECKPOINT7 only.
 
 Checkpoint 8 has no way to unseal a holdout: ``labels_allowed`` refuses both, and no code path here records an unseal.
 """
@@ -44,8 +47,19 @@ def holdout_last_sample() -> str:
     return calendar.offset(HOLDOUT_LAST, -(MAX_HORIZON + 1))
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=1)
+def burned_last_sample() -> str:
+    """The last burned session whose longest label still ends before the forward holdout begins."""
+    return calendar.offset(BURNED_LAST, -(MAX_HORIZON + 1))
+
+
 def segment(session) -> str:
+    calendar.position(session)                                          # only an exchange session has a segment
+    return _segment(session)
+
+
+@lru_cache(maxsize=None)
+def _segment(session) -> str:
     if session < FIRST_SAMPLE:
         return BURN_IN
     if session <= development_last():
@@ -54,15 +68,17 @@ def segment(session) -> str:
         return PURGED
     if session <= HOLDOUT_LAST:
         return HISTORICAL_HOLDOUT if session <= holdout_last_sample() else PURGED
-    if session <= BURNED_LAST:
-        return BURNED
     if session < FORWARD_FIRST:
-        return BURNED
+        return BURNED if session <= burned_last_sample() else PURGED
     return FORWARD_HOLDOUT
 
 
+SAMPLE_SEGMENTS = (DEVELOPMENT, HISTORICAL_HOLDOUT, BURNED, FORWARD_HOLDOUT)       # burn-in and purge sessions yield no sample
+
+
 def labels_allowed(name) -> bool:
-    """Whether label values of this segment may be read in Checkpoint 8. A sealed segment never."""
+    """Whether label values of this segment may be read in Checkpoint 8. A sealed segment never; a purge or burn-in
+    session never either, because its label would reach into the segment after it."""
     return name in (DEVELOPMENT, BURNED)
 
 
@@ -71,6 +87,7 @@ def reservation() -> dict:
     return {'kind': 'holdout_reservation', 'split_version': SPLIT_VERSION, 'reserved_on': '2026-10-04',
             'segments': {DEVELOPMENT: [FIRST_SAMPLE, development_last()], PURGED: [calendar.offset(development_last(), 1), calendar.offset(HOLDOUT_FIRST, -1)],
                          HISTORICAL_HOLDOUT: [HOLDOUT_FIRST, HOLDOUT_LAST], BURNED: [BURNED_FIRST, BURNED_LAST], FORWARD_HOLDOUT: [FORWARD_FIRST, None]},
+            'last_burned_sample_session': burned_last_sample(), 'label_values_readable_in': [DEVELOPMENT, BURNED],
             'purge_sessions': PURGE, 'embargo_sessions': EMBARGO, 'max_horizon_sessions': MAX_HORIZON, 'last_holdout_sample_session': holdout_last_sample(),
             'sealed': list(SEALED), 'checkpoint7_holdout_reused_as_pristine': False,
             'walk_forward': {'minimum_folds': MINIMUM_FOLDS, 'minimum_validation_sessions_per_fold': MINIMUM_FOLD_SESSIONS, 'method': 'expanding, purged, chronological'},

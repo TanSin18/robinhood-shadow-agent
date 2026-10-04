@@ -8,6 +8,7 @@ strategy: these describe research data, and the model rows (ml_ranker and the re
 from __future__ import annotations
 
 from .capabilities import AVAILABLE, PARTIAL_EXISTING, UNAVAILABLE, set_status
+from .history_view import problem
 
 ROWS = ('historical_ohlcv', 'historical_universe', 'pit_fundamentals', 'pit_earnings', 'pit_macro', 'strict_pit_training_data')
 HISTORY_PROVIDER = 'Firm Lab historical research database'
@@ -19,21 +20,25 @@ def _met(report, *ids) -> bool:
 
 
 def statuses(report) -> dict:
-    """{capability: (status, provider, detail, evidence or None)} from a readiness report."""
+    """{capability: (status, provider, detail, evidence or None)} from a readiness report. A report that is damaged,
+    incomplete or not a readiness report is refused; the registry is never written from one."""
+    reason = problem(report)
+    if reason:
+        raise ValueError(reason)
     market, strict = report['market_data'], report['strict_training']
     stored = market.get('status') == 'STORED'
     decision = report['provider_decision']
     fundamentals, earnings, macro = report.get('fundamentals') or {}, report.get('earnings') or {}, report.get('macro') or {}
     universe = report.get('universe') or {}
-    samples = (strict.get('strict_samples') or {}).get('20', 0)
+    samples = ((strict.get('strict_samples_by_segment') or {}).get('20') or {}).get('DEVELOPMENT', 0)      # what a model may learn from today
     at = report.get('generated_at')
     out = {}
     if not stored:
-        out['historical_ohlcv'] = (UNAVAILABLE, None, 'No validated historical daily bars are stored. ' + decision.get('status', '') + ': ' + str(decision.get('selected_provider'))
+        out['historical_ohlcv'] = (UNAVAILABLE, None, 'No historical daily bars are stored. ' + decision.get('status', '') + ': ' + str(decision.get('selected_provider'))
                                    + ' ' + str(decision.get('product')) + '. Storage, validation and the new feature versions are built and tested on synthetic files only.', None)
     else:
         good = _met(report, 'H1', 'O4', 'O6')
-        detail = (f'{market["bars"]:,} validated daily bars for {market["securities_with_bars"]:,} securities, {market["history_range"][0]} to {market["history_range"][1]}; '
+        detail = (f'{market["bars"]:,} daily bars stored (each passed the row checks) for {market["securities_with_bars"]:,} securities, {market["history_range"][0]} to {market["history_range"][1]}; '
                   f'{market["delisted_with_bars"]:,} delisted. Split-adjusted price basis; a bar is usable from the next session open. '
                   + ('' if good else 'Not every bar of the sufficiency specification is met (history start, rejected rows, independent cross-check).'))
         out['historical_ohlcv'] = (AVAILABLE if good else PARTIAL_EXISTING, market.get('provider'), detail,
@@ -67,8 +72,9 @@ def statuses(report) -> dict:
     else:
         state = PARTIAL_EXISTING if samples else UNAVAILABLE
     out['strict_pit_training_data'] = (state, HISTORY_PROVIDER if samples else None,
-                                       (f'{samples:,} strict point-in-time samples with a 20-session label (held at the time {tiers.get("HELD_AT_THE_TIME", 0):,}; publisher-dated '
-                                        f'historical {tiers.get("PUBLISHER_DATED_HISTORICAL", 0):,}). Sufficiency per model family is reported separately; a count is not sufficiency. ')
+                                       (f'{samples:,} strict point-in-time samples in the development period with a 20-session label (rows held at the time '
+                                        f'{tiers.get("HELD_AT_THE_TIME", 0):,}; publisher-dated historical {tiers.get("PUBLISHER_DATED_HISTORICAL", 0):,}). '
+                                        'Both holdouts are sealed and are not part of this number. Sufficiency per model family is reported separately; a count is not sufficiency. ')
                                        if samples else '0 strict point-in-time samples. The 6,490 retrospective samples of the modeling laboratory are a separate dataset and are '
                                                        'not counted. Both holdouts are reserved and sealed.',
                                        {'provider': HISTORY_PROVIDER, 'records': samples, 'validation_passed': True, 'validated_at': at} if state == AVAILABLE else None)
@@ -77,8 +83,6 @@ def statuses(report) -> dict:
 
 def record(store, report, *, now=None) -> dict:
     """Writes the rows from a readiness report. Returns {capability: status}. Touches no other row."""
-    if report.get('kind') != 'historical_data_readiness':
-        raise ValueError('NOT_A_READINESS_REPORT')
     rows = statuses(report)
     for name, (status, provider, detail, evidence) in rows.items():
         set_status(store, name, status, provider, detail, now, evidence=evidence, reason='Checkpoint 8 historical data readiness ' + str(report.get('report_hash', ''))[:12])

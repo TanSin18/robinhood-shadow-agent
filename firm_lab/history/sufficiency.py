@@ -31,20 +31,30 @@ def required_observations(ic=REFERENCE_IC) -> int:
     return math.ceil(round((POWER_FACTOR / ic) ** 2, 6))
 
 
+MINIMUM_SHARED_WINDOWS = 24               # a pair of instruments is compared only over at least this many windows it shares
+MINIMUM_MEDIAN_SHARED = 60                # below this the chance correlation is too large a part of what is measured to subtract reliably
+MINIMUM_PAIR_COVERAGE = 0.5               # at least half of all pairs must be measurable, or the measured ones do not speak for the rest
+E_AT_LONGEST_HORIZON = ('multi_task',)    # a network with one head per horizon is judged on the fewest observations any head has
+
+
 def breadth(table) -> dict:
     """Effective independent instruments of a [non-overlapping window, instrument] label table (NaN = not a member then).
 
-    ``breadth_v2``: N / (1 + (N - 1) * m), where N is the median number of instruments with a label per window and m is
-    the mean squared correlation between pairs, less the 1/(n - 1) a pair of unrelated series shows by chance over the n
-    windows they share. Pairs sharing fewer than 24 windows are left out. Measured on development sessions only."""
+    ``breadth_v2``: m is the mean squared correlation between pairs of instruments, less the 1/(n - 1) a pair of
+    unrelated series shows by chance over the n windows they share. For N instruments with a label in a window, the
+    effective number is N / (1 + (N - 1) * m). Breadth is NOT measurable, and is not assumed, when fewer than half of
+    all pairs share 24 windows or when the typical pair shares fewer than 60. Measured on development sessions only."""
     table = np.asarray(table, float)
     present = np.isfinite(table)
     per_window = present.sum(axis=1)
     n = float(np.median(per_window[per_window > 0])) if (per_window > 0).any() else 0.0
-    unmeasured = {'n_eff': None, 'instruments_per_window': n, 'mean_squared_correlation': None, 'pairs': 0, 'measure': 'breadth_v2',
-                  'note': 'no pair of instruments shares 24 non-overlapping windows: breadth is not measurable, and it is not assumed'}
+
+    def unmeasured(why, pairs=0):
+        return {'n_eff': None, 'instruments_per_window': n, 'mean_squared_correlation': None, 'pairs': pairs, 'measure': 'breadth_v2',
+                'note': why + ': breadth is not measurable, and it is not assumed'}
+
     if table.shape[0] < 3 or table.shape[1] < 2:
-        return unmeasured
+        return unmeasured('fewer than three windows or two instruments')
     mean = np.nanmean(np.where(present, table, np.nan), axis=0)
     centred = np.where(present, table - mean, 0.0)
     mask = present.astype(float)
@@ -53,12 +63,27 @@ def breadth(table) -> dict:
     squares = (centred ** 2).T @ mask                                  # sum of x_i^2 over the windows i shares with j
     with np.errstate(invalid='ignore', divide='ignore'):
         correlation = cross / np.sqrt(squares * squares.T)
-    use = (shared >= 24) & ~np.eye(table.shape[1], dtype=bool) & np.isfinite(correlation)
-    if not use.any():
-        return unmeasured
+    off = ~np.eye(table.shape[1], dtype=bool)
+    use = (shared >= MINIMUM_SHARED_WINDOWS) & off & np.isfinite(correlation)
+    pairs, possible = int(use.sum() // 2), table.shape[1] * (table.shape[1] - 1) // 2
+    if not pairs or pairs < MINIMUM_PAIR_COVERAGE * possible:
+        return unmeasured(f'only {pairs:,} of {possible:,} pairs of instruments share {MINIMUM_SHARED_WINDOWS} non-overlapping windows', pairs)
+    if float(np.median(shared[use])) < MINIMUM_MEDIAN_SHARED:
+        return unmeasured(f'the typical pair shares {int(np.median(shared[use]))} windows; {MINIMUM_MEDIAN_SHARED} are needed', pairs)
     m = max(0.0, float(np.mean(correlation[use] ** 2 - 1.0 / (shared[use] - 1.0))))
-    return {'n_eff': n / (1.0 + (n - 1.0) * m) if n > 1 else n, 'instruments_per_window': n, 'mean_squared_correlation': m, 'pairs': int(use.sum() // 2),
-            'measure': 'breadth_v2'}
+    return {'n_eff': n / (1.0 + (n - 1.0) * m) if n > 1 else n, 'instruments_per_window': n, 'mean_squared_correlation': m, 'pairs': pairs,
+            'pair_coverage': pairs / possible, 'median_shared_windows': float(np.median(shared[use])), 'measure': 'breadth_v2'}
+
+
+def effective_by_window(instruments_per_window, m):
+    """Effective independent observations summed window by window: each window contributes N / (1 + (N - 1) * m) for the
+    N instruments it holds. A period whose membership grows is not credited with its later breadth for its earlier
+    windows. None when m was not measurable."""
+    if m is None:
+        return None
+    counts = np.asarray(list(instruments_per_window), float)
+    counts = counts[counts > 0]
+    return float(np.sum(counts / (1.0 + (counts - 1.0) * m)))
 
 
 def effective_observations(sessions, horizon, n_eff):
@@ -79,37 +104,41 @@ def testability(ic) -> str:
     return TESTABLE if ic <= REFERENCE_IC else WEAKLY_TESTABLE if ic <= WEAK_IC else NOT_TESTABLE
 
 
-def family_verdict(family, *, e_train, holdout_ic, regimes_met, bear_markets_in_training=0, training_years=0.0, sequence_share=None) -> dict:
-    """SUFFICIENT / BORDERLINE / INSUFFICIENT for one family at one horizon, with the reason."""
+def family_verdict(family, *, e_train, holdout_ic, development_ic, regimes_met, bear_markets_in_training=0, training_years=0.0, sequence_share=None) -> dict:
+    """SUFFICIENT / BORDERLINE / INSUFFICIENT for one family at one horizon, with the reason. The horizon is as testable
+    as the weaker of its development period and its reserved holdout (bars P3 and P4)."""
     reference, smallest, network, sequence = FAMILIES[family]
-    test = testability(holdout_ic)
+    tests = [testability(development_ic), testability(holdout_ic)]
+    order = (TESTABLE, WEAKLY_TESTABLE, NOT_TESTABLE, NOT_MEASURABLE)
+    test = max(tests, key=order.index)
     if e_train is None or test == NOT_MEASURABLE:
         return {'family': family, 'verdict': INSUFFICIENT, 'holdout': test,
-                'reasons': ['breadth could not be measured, so neither the effective training observations nor the holdout can be shown to meet a bar']}
+                'reasons': ['breadth could not be measured, so neither the effective training observations nor the evaluation periods can be shown to meet a bar']}
     reasons = []
     if e_train < PER_PARAMETER * smallest:
         reasons.append(f'effective training observations {e_train:,.0f} are below {PER_PARAMETER} x the smallest configuration ({smallest:,} parameters)')
     if test == NOT_TESTABLE:
-        reasons.append(f'the reserved holdout cannot detect a rank correlation below {holdout_ic:.3f} (bar {WEAK_IC})')
+        worst = max(development_ic, holdout_ic)
+        reasons.append(f'development or the reserved holdout cannot detect a rank correlation below {worst:.3f} (bar {WEAK_IC})')
     if network:
         if bear_markets_in_training < NETWORK_BAR['bear_markets_in_training']:
             reasons.append(f'training holds {bear_markets_in_training} bear markets; a network needs {NETWORK_BAR["bear_markets_in_training"]}')
         if training_years < NETWORK_BAR['calendar_years_in_training']:
             reasons.append(f'training spans {training_years:.1f} years; a network needs {NETWORK_BAR["calendar_years_in_training"]}')
         if test != TESTABLE:
-            reasons.append('a network needs a holdout that is testable at the reference rank correlation, not merely weakly testable')
+            reasons.append('a network needs evaluation periods that are testable at the reference rank correlation, not merely weakly testable')
         if sequence and (sequence_share is None or sequence_share < NETWORK_BAR['sequence_share']):
             reasons.append(f'fewer than {NETWORK_BAR["sequence_share"]:.0%} of samples have {NETWORK_BAR["sequence_sessions"]} consecutive sessions')
     if reasons:
         return {'family': family, 'verdict': INSUFFICIENT, 'reasons': reasons, 'holdout': test}
     if e_train >= PER_PARAMETER * reference and test == TESTABLE and regimes_met:
         return {'family': family, 'verdict': SUFFICIENT, 'reasons': [f'{e_train:,.0f} effective training observations against {PER_PARAMETER} x {reference:,} parameters; '
-                                                                      'holdout testable; regime bar met'], 'holdout': test}
+                                                                      'development and holdout testable; regime bar met'], 'holdout': test}
     why = []
     if e_train < PER_PARAMETER * reference:
         why.append(f'{e_train:,.0f} effective training observations are below {PER_PARAMETER} x the reference configuration ({reference:,} parameters)')
     if test != TESTABLE:
-        why.append('the holdout is only weakly testable')
+        why.append('development or the holdout is only weakly testable')
     if not regimes_met:
         why.append('the regime bar is not met')
     return {'family': family, 'verdict': BORDERLINE, 'reasons': why, 'holdout': test}

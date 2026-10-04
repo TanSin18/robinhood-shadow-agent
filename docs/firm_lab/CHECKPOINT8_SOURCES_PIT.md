@@ -116,10 +116,14 @@ hand; the parsers for the current-period releases exist and are tested.
 ## Regime coverage
 
 Descriptive only (`firm_lab/history/regimes.py`): bear markets, corrections, volatility quintiles on an expanding
-window, rate periods from dated decisions. Measured today on the only series stored, the 378 closes of the
-Checkpoint 7 window: no bear market, one correction, two high-volatility episodes. That window is not a training
-period. Coverage of the reserved development period needs a stored broad-market fund series and the full record of
-policy decisions; until then it is `NOT MEASURABLE` and the regime bar is not met. No regime model exists.
+window, rate periods from dated decisions. An episode is at least 20 sessions in its class, and runs fewer than 5
+sessions apart are one episode. A period is described only from closes inside it. The result is counts; no date,
+level or size of a move is reported, because the series it would be measured on is licensed.
+
+The only series stored today is the 378 closes of the Checkpoint 7 window. That window is not a training period,
+and what it holds is shown on the readiness page as a description of that window only. Coverage of the reserved
+development period needs a stored broad-market fund series and the full record of policy decisions; until then it
+is `NOT MEASURABLE` and the regime bar is not met. No regime model exists.
 
 ## Intraday data: deferred
 

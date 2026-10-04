@@ -16,20 +16,32 @@ import numpy as np
 
 from . import (BAR_KNOWN_AT_BASIS, BAR_KNOWN_AT_VERSION, HELD_AT_THE_TIME, POLICY_VERSION, PUBLISHER_DATED_HISTORICAL, RETROSPECTIVE, RETURN_BASIS, SPLIT_ADJUSTED,
                TOTAL_RETURN_ADJUSTED, UNADJUSTED, WARNING, features, regimes, splits, sufficiency, targets, universe)
-from .store import BAR_TABLE, HistoryStore, content_hash, now_utc
+from .store import BAR_TABLE, HistoryStore, content_hash, now_utc, refuse_private_location
 
 REPORT_VERSION = 'historical-data-readiness-v1'
 MET, NOT_MET, NOT_MEASURABLE = 'MET', 'NOT_MET', 'NOT_MEASURABLE'
-PROVIDER_DECISION = {
-    'status': 'OPERATOR PURCHASE DECISION REQUIRED', 'selected_provider': 'Sharadar', 'product': 'Prices — Full History (Personal Use License)',
-    'price': '$39 per month or $299 per year, read on the vendor page 2026-10-04', 'purchased': False,
-    'licence': 'Personal use by a natural person. No redistribution. Raw data must be deleted within 30 days of cancelling; '
-               'models, backtest results and other derived work that cannot reproduce the data may be kept.',
-    'open_question': 'The terms do not name machine learning. They list "models" among what may be kept. The operator reads and accepts the terms.',
-    'not_selected': {'Massive': 'individual plans are display-use only; non-display use needs a separate licence', 'Alpaca': 'history from 2016; delisted coverage not documented',
-                     'Databento': 'daily history from 2018 or later', 'Norgate': 'the updater runs on Windows only',
-                     'EODHD / Tiingo': 'no delisting reasons or ticker-change events; delisted coverage partial'},
-    'document': 'docs/firm_lab/CHECKPOINT8_PROVIDER_DECISION.md'}
+def provider_decision(sources) -> dict:
+    """What the report can say about the provider. It can see which files are stored. It cannot see a subscription."""
+    selected = {'selected_provider': 'Sharadar', 'product': 'Prices — Full History (Personal Use License)',
+                'price': '$39 per month or $299 per year, read on the vendor page 2026-10-04',
+                'licence': 'Personal use by a natural person. No redistribution. Raw data must be deleted within 30 days of cancelling; '
+                           'models, backtest results and other derived work that cannot reproduce the data may be kept.',
+                'open_question': 'The terms do not name machine learning. They list "models" among what may be kept. The operator reads and accepts the terms.',
+                'not_selected': {'Massive': 'individual plans are display-use only; non-display use needs a separate licence',
+                                 'Alpaca': 'history from 2016; delisted coverage not documented', 'Databento': 'daily history from 2018 or later',
+                                 'Norgate': 'the updater runs on Windows only', 'EODHD / Tiingo': 'no delisting reasons or ticker-change events; delisted coverage partial'},
+                'document': 'docs/firm_lab/CHECKPOINT8_PROVIDER_DECISION.md'}
+    if sources:
+        return {'status': 'FILES_STORED_SUBSCRIPTION_NOT_VERIFIED', 'stored_sources': list(sources),
+                'statement': 'Files from ' + ', '.join(sources) + ' are stored. Whether a subscription is active is the operator\'s to confirm; this report cannot see it.',
+                **selected}
+    return {'status': 'OPERATOR PURCHASE DECISION REQUIRED', 'stored_sources': [], 'statement': 'No vendor file is stored. Nothing has been purchased by this system.', **selected}
+
+
+def worst_rejected_share(captures):
+    """The largest share of rejected rows in any one bar file. Ingesting a clean file again cannot dilute a bad one."""
+    shares = [c['rows_rejected'] / c['rows_read'] for c in captures if c.get('kind') == 'bars' and c.get('rows_read')]
+    return max(shares) if shares else None
 
 
 PROXY_SYMBOLS = ('SPY', 'VTI', 'IVV')
@@ -164,7 +176,12 @@ def history_sources(path, research_closes=None) -> dict:
         read = sum(c['rows_read'] or 0 for c in captures if c['kind'] == 'bars')
         rejected = sum(c['rows_rejected'] or 0 for c in captures if c['kind'] == 'bars')
         with_bars = set(store.security_ids())
-        chosen = universe.load(store)
+        stock_bars = set(store.security_ids(price_table='stocks'))
+        try:
+            chosen = universe.load(store)
+            stale = False
+        except ValueError:                                              # every stored universe was built from other bars: none is shown as current
+            chosen, stale = {'manifest': None}, True
         reports = [(created, payload) for _, payload, created in store.rows('history_reports') if payload.get('kind') == 'strict_count']
         reservation = [payload for _, payload, _ in store.rows('history_reservations') if payload.get('kind') == 'holdout_reservation']
         index_events = store.count('history_index_events')
@@ -186,21 +203,24 @@ def history_sources(path, research_closes=None) -> dict:
                 'securities': len(securities), 'securities_with_bars': len(with_bars), 'delisted_securities': sum(1 for s in securities.values() if s['is_delisted']),
                 'delisted_with_bars': sum(1 for sid in with_bars if securities.get(sid, {}).get('is_delisted')), 'last_bar_of_delisted_by_year': dict(sorted(last_by_year.items())),
                 'funds': sum(1 for s in securities.values() if s['price_table'] == 'funds'), 'sources': sorted({s['source'] for s in securities.values()}),
-                'actions_by_type': actions, 'index_events': index_events, 'universe': chosen['manifest'],
-                'strict_count': max(reports, key=lambda r: r[0])[1] if reports else None, 'holdout_reservation_stored': bool(reservation)}
+                'actions_by_type': actions, 'index_events': index_events, 'universe': chosen['manifest'], 'universe_stale': stale,
+                'stock_securities_with_bars': len(stock_bars),
+                'strict_count': next((r for _, r in sorted(reports, key=lambda r: r[0], reverse=True)
+                                      if chosen['manifest'] and r.get('universe_hash') == chosen['manifest']['universe_hash']), None),
+                'holdout_reservation_stored': bool(reservation)}
 
 
 def _bar(identity, name, target, minimum, measured, status, note=''):
     return {'id': identity, 'name': name, 'target': target, 'minimum': minimum, 'measured': measured, 'status': status, 'note': note}
 
 
-def _regimes(research, first=None, last=None) -> dict:
+def _regimes(research) -> dict:
     proxy = research.get('_proxy') or {}
     if len(proxy.get('sessions', [])) < regimes.VOL_MINIMUM_HISTORY:
         return {'status': NOT_MEASURABLE, 'reason': 'no broad-market close series of at least a year is stored'}
-    found = regimes.coverage(proxy['sessions'], proxy['closes'], research.get('_decisions', ()), first=first, last=last)
+    found = regimes.coverage(proxy['sessions'], proxy['closes'], research.get('_decisions', ()))
     return {'status': 'DESCRIBED', 'proxy': proxy['instrument'], 'proxy_tier': RETROSPECTIVE, **found,
-            'note': 'the only close series stored today; it covers the Checkpoint 7 window, not a historical training period'}
+            'note': 'the only close series held outside the historical database; it covers the Checkpoint 7 window, not a historical training period'}
 
 
 def build(research_database, history_database=None, *, now=None) -> dict:
@@ -208,38 +228,46 @@ def build(research_database, history_database=None, *, now=None) -> dict:
     history = history_sources(history_database, research.get('_closes'))
     stored = history['exists'] and history['bars']['bars'] > 0
     check = history.get('_cross_check') if stored else None
-    development = None
-    if stored and history.get('_proxy'):
-        segment = splits.reservation()['segments']
-        development = regimes.coverage(history['_proxy']['sessions'], history['_proxy']['closes'], research.get('_decisions', ()),
-                                       first=segment[splits.DEVELOPMENT][0], last=segment[splits.DEVELOPMENT][1])
-    regime_bar = None if development is None else (len(development['bear_markets']) >= sufficiency.REGIME_BAR['bear_markets']
-                                                   and len(development['corrections']) >= sufficiency.REGIME_BAR['corrections']
-                                                   and development['high_volatility_episodes'] >= sufficiency.REGIME_BAR['high_volatility_episodes']
-                                                   and len(development['rising_rate_periods']) >= sufficiency.REGIME_BAR['rising_rate_periods']
-                                                   and len(development['falling_rate_periods']) >= sufficiency.REGIME_BAR['falling_rate_periods'])
-    years = None if development is None or not development['sessions'] else development['sessions'] / 252.0
     counted = history.get('strict_count') if stored else None
+    development = None
+    if stored and history.get('_proxy') and counted and counted.get('development_first_sample_session'):
+        # regimes are counted where development samples exist, not over the whole calendar period
+        development = regimes.coverage(history['_proxy']['sessions'], history['_proxy']['closes'], research.get('_decisions', ()),
+                                       first=counted['development_first_sample_session'], last=counted['development_last_sample_session'])
+    regime_bar = None if development is None else all(development[key] >= value for key, value in sufficiency.REGIME_BAR.items())
+    years = None if development is None or not development['sessions'] else development['sessions'] / 252.0
     strict = {str(h): 0 for h in targets.HORIZONS}
+    by_segment = {str(h): {name: 0 for name in splits.SAMPLE_SEGMENTS} for h in targets.HORIZONS}
     tiers = {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0}
     if counted:
-        strict, tiers = counted['strict_samples'], counted['by_tier']
+        strict, tiers, by_segment = counted['strict_samples'], counted['by_tier'], counted['strict_samples_by_segment']
     reservation = splits.reservation()
     holdout = {'checkpoint7_holdout_reused_as_pristine': False, 'split_version': splits.SPLIT_VERSION, 'segments': reservation['segments'],
-               'historical_holdout': 'RESERVED_NO_DATA_YET' if not stored else 'RESERVED_SEALED', 'forward_holdout': 'RESERVED_SEALED_ACCUMULATING',
+               'historical_holdout': 'RESERVED_NO_DATA_YET' if not stored else 'RESERVED_SEALED',
+               'forward_holdout': 'RESERVED_NO_DATA_YET' if not stored else 'RESERVED_SEALED_ACCUMULATING',
                'reservation_stored_in_database': bool(history.get('holdout_reservation_stored')), 'rules': reservation['rules'],
+               'label_values_readable_in': reservation['label_values_readable_in'],
                'purge_sessions': reservation['purge_sessions'], 'document': 'docs/firm_lab/CHECKPOINT8_HOLDOUT_DESIGN.md'}
     verdicts = {}
     if counted and counted.get('effective'):
+        longest = counted['effective'][str(targets.MAX_HORIZON)]
         for h in ('5', '20'):
             m = counted['effective'][h]
-            verdicts[h] = {f: sufficiency.family_verdict(f, e_train=m['effective_observations_development'], holdout_ic=m['detectable_ic_holdout'],
-                                                         regimes_met=bool(regime_bar), bear_markets_in_training=len(development['bear_markets']) if development else 0,
-                                                         training_years=years or 0.0, sequence_share=counted.get('sequence_share')) for f in sufficiency.FAMILIES}
+            verdicts[h] = {}
+            for f in sufficiency.FAMILIES:
+                used = longest if f in sufficiency.E_AT_LONGEST_HORIZON else m      # one head per horizon: judged on the fewest observations any head has
+                verdicts[h][f] = sufficiency.family_verdict(
+                    f, e_train=used['effective_observations_development'], development_ic=used['detectable_ic_development'], holdout_ic=used['detectable_ic_holdout'],
+                    regimes_met=bool(regime_bar), bear_markets_in_training=development['bear_markets'] if development else 0, training_years=years or 0.0,
+                    sequence_share=counted.get('sequence_share'))
     else:
         verdicts = {h: sufficiency.no_data_verdicts() for h in ('5', '20')}
     bars = history['bars'] if stored else {}
-    rejected = history['rows_rejected'] / history['rows_read'] if stored and history['rows_read'] else None
+    rejected = worst_rejected_share(history['captures']) if stored else None
+    fundamentals, earnings, macro = research.get('fundamentals') or {}, research.get('earnings') or {}, research.get('macro') or {}
+    held = research.get('closes_held') or {}
+    members = (history.get('universe') or {}).get('member_count_max') if stored else None
+    distinct = history.get('stock_securities_with_bars', 0) if stored else 0
     # E1, E2, E3 and F2 are coverage shares against the historical universe. Until the collectors have been run for that
     # universe there is nothing to divide by, so they are not met; the number shown is what is stored today.
     spec = [
@@ -247,19 +275,21 @@ def build(research_database, history_database=None, *, now=None) -> dict:
              MET if stored and bars['first_session'] <= sufficiency.HISTORY['minimum_first_session'] else NOT_MET),
         _bar('H3', 'Instruments per reconstitution', 1000, 500, (history.get('universe') or {}).get('member_count_min') if stored else None,
              MET if stored and history.get('universe') and history['universe']['member_count_min'] >= sufficiency.HISTORY['minimum_members'] else NOT_MET),
-        _bar('H4', 'Delisted securities stored', 'counted', 'more than 0', history.get('delisted_with_bars') if stored else 0,
-             MET if stored and history['delisted_with_bars'] > 0 else NOT_MET),
+        _bar('H4', 'Distinct securities over the history, delisted included', 'counted', 'at least twice the members per reconstitution, and delisted ones among them',
+             {'securities_with_bars': distinct, 'delisted_with_bars': history.get('delisted_with_bars', 0) if stored else 0},
+             MET if stored and members and distinct >= 2 * members and history['delisted_with_bars'] > 0 else NOT_MET,
+             'a universe that never loses a member is a survivor list'),
         _bar('H5', 'Sectors', '11 groups, 20 names each', 'reported', None, NOT_MEASURABLE, 'no historical sector classification is stored'),
         _bar('H6', 'Regimes inside training plus development', '2 bear markets, 4 corrections, rising and falling rates, 3 high-volatility episodes', 'the same',
-             None if development is None else {'bear_markets': len(development['bear_markets']), 'corrections': len(development['corrections']),
-                                               'high_volatility_episodes': development['high_volatility_episodes'],
-                                               'rising_rate_periods': len(development['rising_rate_periods']), 'falling_rate_periods': len(development['falling_rate_periods'])},
+             None if development is None else {key: development[key] for key in sufficiency.REGIME_BAR},
              (MET if regime_bar else NOT_MET) if development is not None else NOT_MEASURABLE if stored else NOT_MET,
-             'measured on a stored broad-market fund over the development period; rate periods need the full record of policy decisions'),
-        _bar('P1', 'Strict point-in-time samples (tier B, 20-session label)', 'reported', 'more than 0', strict[str(targets.MAX_HORIZON)],
-             MET if strict[str(targets.MAX_HORIZON)] > 0 else NOT_MET),
-        _bar('O4', 'Rejected bar rows', 'at most 0.1%', 'at most 0.5%', None if rejected is None else f'{rejected:.3%}',
-             NOT_MET if rejected is None else MET if rejected <= sufficiency.COVERAGE['rejected_minimum'] else NOT_MET),
+             'counted on a stored broad-market fund over the sessions that have development samples; rate periods need the full record of policy decisions'),
+        _bar('P1', 'Strict point-in-time samples in development (tier B, 20-session label)', 'reported', 'more than 0',
+             by_segment[str(targets.MAX_HORIZON)][splits.DEVELOPMENT], MET if by_segment[str(targets.MAX_HORIZON)][splits.DEVELOPMENT] > 0 else NOT_MET,
+             'development is the only segment a model may learn from; the sealed holdouts are counted, never read'),
+        _bar('O4', 'Rejected bar rows, worst file', 'at most 0.1%', 'at most 0.5%', None if rejected is None else f'{rejected:.3%}',
+             NOT_MET if rejected is None else MET if rejected <= sufficiency.COVERAGE['rejected_minimum'] else NOT_MET,
+             'the largest share in any one bar file, so ingesting a clean file again cannot dilute a bad one'),
         _bar('O7', 'Print precision of adjusted prices', 'at most 1% of member rows coarser than 0.05% of price', 'at most 5%',
              None if not counted or counted.get('coarse_print_share') is None else f'{counted["coarse_print_share"]:.3%}',
              NOT_MET if not counted or counted.get('coarse_print_share') is None else MET if counted['high_low_open_families_usable'] else NOT_MET,
@@ -268,19 +298,19 @@ def build(research_database, history_database=None, *, now=None) -> dict:
              None if not check or not check['compared'] else f'{check["share_agreeing"]:.3%} of {check["compared"]:,}',
              NOT_MET if not check or not check['compared'] else MET if check['share_agreeing'] >= sufficiency.COVERAGE['cross_check_minimum'] else NOT_MET,
              'compares stored closes with the closes Firm Lab already holds from the registered read path, one instrument and session at a time'),
-        _bar('E1', 'Earnings events with acceptance time', '80% of member-quarters from 2010', '60%', (research.get('earnings') or {}).get('events'), NOT_MET,
-             'five companies, four events each; no universe to measure coverage against'),
-        _bar('E2', 'Periodic filings with acceptance time', '90% of member periods from 2011', '75%', (research.get('fundamentals') or {}).get('filings'), NOT_MET,
-             'five companies, four filings each'),
+        _bar('E1', 'Earnings events with acceptance time', '80% of member-quarters from 2010', '60%', earnings.get('events'), NOT_MET,
+             f'{earnings.get("events") or 0} events of {earnings.get("companies") or 0} companies are stored; coverage of a historical universe is not measured'),
+        _bar('E2', 'Periodic filings with acceptance time', '90% of member periods from 2011', '75%', fundamentals.get('filings'), NOT_MET,
+             f'{fundamentals.get("filings") or 0} filings of {fundamentals.get("companies") or 0} companies are stored; coverage of a historical universe is not measured'),
         _bar('E3', 'Macro releases, first-published value and official time', '98% of scheduled releases', '95%',
-             sum(s['observations'] for s in (research.get('macro') or {}).get('series', {}).values()), NOT_MET,
-             'Fed target and PCE for mid-2026 only; CPI, labor and Treasury yields are not stored'),
+             sum(v['observations'] for v in macro.get('series', {}).values()), NOT_MET,
+             'stored series: ' + (', '.join(sorted(macro.get('series', {}))) or 'none') + '; coverage of the scheduled releases of the period is not measured'),
         _bar('F2', 'Restatement history', 'every reporting filing kept in acceptance order; one real restatement shown', 'the same',
-             (research.get('fundamentals') or {}).get('restatements'), NOT_MET,
-             'versions are stored and tested on synthetic filings; no real restatement is in the five-company sample'),
+             fundamentals.get('restatements'), NOT_MET,
+             f'versions are stored and tested on synthetic filings; {fundamentals.get("restatements") or 0} real restatements are stored'),
     ]
     provenance = [
-        {'name': 'Historical daily OHLCV', 'provider': ', '.join(history.get('sources', [])) if stored else 'none stored (Sharadar selected, not purchased)',
+        {'name': 'Historical daily OHLCV', 'provider': ', '.join(history.get('sources', [])) if stored else 'none stored',
          'date_range': [bars.get('first_session'), bars.get('last_session')] if stored else None, 'version': POLICY_VERSION,
          'known_at_methodology': f'{BAR_KNOWN_AT_VERSION}: a bar is usable no earlier than the open of the next exchange session ({BAR_KNOWN_AT_BASIS}); '
                                  'the time Firm Lab received it is stored separately',
@@ -294,19 +324,22 @@ def build(research_database, history_database=None, *, now=None) -> dict:
         {'name': 'Closes already held', 'provider': (research.get('closes_held') or {}).get('source'),
          'date_range': [(research.get('closes_held') or {}).get('first_session'), (research.get('closes_held') or {}).get('last_session')], 'version': 'Checkpoint 2 capture',
          'known_at_methodology': (research.get('closes_held') or {}).get('known_at_methodology'), 'adjustment_basis': 'split-adjusted closes as the read path reported them',
-         'pit_eligibility': RETROSPECTIVE, 'limitations': ['Close only.', '23 instruments chosen today: a survivor list.', 'This is the burned Checkpoint 7 window.']},
+         'pit_eligibility': RETROSPECTIVE, 'limitations': ['Close only.', f'{held.get("instruments") or 0} instruments chosen today: a survivor list.',
+                                                             'This is the burned Checkpoint 7 window.']},
         {'name': 'Fundamentals', 'provider': 'SEC EDGAR', 'date_range': [(research.get('fundamentals') or {}).get('first_acceptance'), (research.get('fundamentals') or {}).get('last_acceptance')],
          'version': (research.get('fundamentals') or {}).get('version'), 'known_at_methodology': (research.get('fundamentals') or {}).get('known_at_methodology'),
          'adjustment_basis': 'as filed; a later filing never replaces an earlier value', 'pit_eligibility': (research.get('fundamentals') or {}).get('tier'),
-         'limitations': ['Five companies, four periodic reports each.', 'XBRL exists from 2009 to 2011 onward only.', 'Debt is unresolved for two of the five companies.']},
+         'limitations': [f'{fundamentals.get("companies") or 0} companies, {fundamentals.get("filings") or 0} filings: a sample, not a history.',
+                         'XBRL exists from 2009 to 2011 onward only.', 'The reader takes recent filings of companies listed today; a history needs a reader keyed by CIK.']},
         {'name': 'Earnings events', 'provider': 'SEC EDGAR', 'date_range': [(research.get('earnings') or {}).get('first_acceptance'), (research.get('earnings') or {}).get('last_acceptance')],
          'version': (research.get('earnings') or {}).get('version'), 'known_at_methodology': (research.get('earnings') or {}).get('known_at_methodology'),
          'adjustment_basis': 'not applicable', 'pit_eligibility': (research.get('earnings') or {}).get('tier'),
-         'limitations': ['Five companies, four events each.', 'No consensus estimate, so no surprise.', 'No transcript.']},
+         'limitations': [f'{earnings.get("events") or 0} events of {earnings.get("companies") or 0} companies: a sample, not a history.',
+                         'No consensus estimate, so no surprise.', 'No transcript.']},
         {'name': 'Macro', 'provider': (research.get('macro') or {}).get('source'), 'date_range': None, 'version': (research.get('macro') or {}).get('version'),
          'known_at_methodology': (research.get('macro') or {}).get('known_at_methodology'), 'adjustment_basis': 'as first published; revisions are later rows',
          'pit_eligibility': (research.get('macro') or {}).get('tier'),
-         'limitations': ['Fed target and PCE for mid-2026 only.', 'CPI, labor and Treasury yields are not stored.',
+         'limitations': ['Stored series: ' + (', '.join(sorted(macro.get('series', {}))) or 'none') + '.', 'CPI, labor and Treasury yields are not stored.',
                          'FRED and ALFRED are not used: their terms prohibit storing the data and using it to train models without written consent.']},
         {'name': 'Historical universe', 'provider': 'formed by Firm Lab from stored bars', 'date_range': [history['universe']['first_formation'], history['universe']['last_formation']]
          if stored and history.get('universe') else None, 'version': universe.UNIVERSE_VERSION,
@@ -320,7 +353,7 @@ def build(research_database, history_database=None, *, now=None) -> dict:
             'Earnings transcripts: no licensed source selected; none is collected.',
             'Historical news: no adequate licensed point-in-time archive identified.',
             'Macro vintages: CPI, labor and Treasury yields need collectors against BLS, BEA, Treasury and the Philadelphia Fed real-time data set.',
-            'Fundamentals and earnings history: five companies only; the collectors must be run for the historical universe.',
+            'Fundamentals and earnings history: a small sample only; a reader keyed by CIK must be built and run for the historical universe.',
             'Post-delisting returns: no source.',
             'Intraday history: deferred; not needed before a daily tournament.']
     report = {
@@ -330,6 +363,7 @@ def build(research_database, history_database=None, *, now=None) -> dict:
                         'bars': bars.get('bars', 0), 'funds': history.get('funds', 0), 'delisted_with_bars': history.get('delisted_with_bars', 0),
                         'last_bar_of_delisted_by_year': history.get('last_bar_of_delisted_by_year', {}), 'block_versions': bars.get('block_versions', {}),
                         'rows_read': history.get('rows_read', 0), 'rows_rejected': history.get('rows_rejected', 0), 'captures': history.get('captures', []),
+                        'universe_stale': bool(history.get('universe_stale')), 'stock_securities_with_bars': history.get('stock_securities_with_bars', 0),
                         'adjustment_basis': SPLIT_ADJUSTED, 'return_basis': RETURN_BASIS, 'known_at_version': BAR_KNOWN_AT_VERSION,
                         'closes_held': research.get('closes_held')},
         'corporate_actions': {'historical_by_type': history.get('actions_by_type', {}), 'held_rows': (research.get('corporate_actions_held') or {}).get('rows', 0),
@@ -339,7 +373,10 @@ def build(research_database, history_database=None, *, now=None) -> dict:
                              'features': len(features.DEFINITIONS), 'code_hash': features.code_hash(), 'computed_on_stored_bars': bool(counted),
                              'close_based_fibonacci_preserved': True},
         'fundamentals': research.get('fundamentals'), 'earnings': research.get('earnings'), 'macro': research.get('macro'),
-        'strict_training': {'strict_samples': strict, 'by_tier': tiers, 'retrospective_samples_in_this_dataset': 0,
+        'strict_training': {'strict_samples': strict, 'strict_samples_by_segment': by_segment, 'by_tier': tiers,
+                            'bars_held_at_the_time_rows': (counted or {}).get('bars_held_at_the_time_rows', 0), 'retrospective_samples_in_this_dataset': 0,
+                            'delisting_exits_by_year': (counted or {}).get('delisting_exits_by_year'),
+                            'members_whose_bars_end_without_a_delisting_record': (counted or {}).get('members_whose_bars_end_without_a_delisting_record'),
                             'checkpoint7_retrospective_samples': 6490, 'checkpoint7_note': 'a separate close-only dataset; never added to the strict count',
                             'raw_member_rows': (counted or {}).get('raw_member_rows', 0), 'unique_sessions': (counted or {}).get('unique_sessions', 0),
                             'unique_instruments': (counted or {}).get('unique_instruments', 0), 'by_segment': (counted or {}).get('by_segment'),
@@ -351,8 +388,9 @@ def build(research_database, history_database=None, *, now=None) -> dict:
                             'target_version': targets.TARGET_VERSION, 'dataset_spec_hash': ((counted or {}).get('manifest') or {}).get('dataset_spec_hash')},
         'holdout': holdout, 'sufficiency': {'reference_ic': sufficiency.REFERENCE_IC, 'observations_needed': sufficiency.required_observations(), 'verdicts': verdicts},
         'specification_bars': spec, 'regimes': {'held_today': _regimes(research), 'development_period': development if development is not None else
-                                                {'status': NOT_MEASURABLE, 'reason': 'no broad-market series is stored for the development period'}},
-        'cross_check': check, 'provider_decision': PROVIDER_DECISION, 'provenance': provenance, 'gaps': [g for g in gaps if g],
+                                                {'status': NOT_MEASURABLE, 'reason': 'no broad-market series with development samples is stored'}},
+        'cross_check': check, 'provider_decision': provider_decision(history.get('sources', []) if stored else []),
+        'integrity': 'The report hash detects accidental damage to this file. It is an integrity check, not a signature: it does not prove who wrote the file.', 'provenance': provenance, 'gaps': [g for g in gaps if g],
         'limitations': ['Nothing on this page is a forecast, a ranking or a recommendation.', 'A row count is not evidence. The bars that matter are the effective observations.',
                         'Tier B says an authoritative source dates the value. It does not say Firm Lab held it at the time.'],
         'capabilities': {k: v for k, v in (research.get('capabilities') or {}).items()},
@@ -366,8 +404,9 @@ def write(report, path) -> str:
     """Writes the small summary file the dashboard reads. Refuses anything that is not a readiness report."""
     if report.get('kind') != 'historical_data_readiness' or report.get('warning') != WARNING:
         raise ValueError('NOT_A_READINESS_REPORT')
+    target = refuse_private_location(path)              # never the registered database, never beside it, never inside a repository
     body = json.dumps(report, sort_keys=True, indent=1, allow_nan=False, default=_plain)
-    Path(path).write_text(body)
+    target.write_text(body)
     return str(path)
 
 

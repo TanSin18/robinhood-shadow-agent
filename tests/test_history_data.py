@@ -187,8 +187,9 @@ def test_a_changed_source_row_is_a_new_version_and_the_old_one_stays(tmp_path):
         early = store.bars('100009', through_capture_time='2026-10-03T12:05:00+00:00')
         assert early['sessions'][-1] == '2019-03-29' and early['close'][0] == base[0][5]               # the first capture can still be read exactly
         assert store.bars('100009')['close'][20] == revised[20][5]
-        seen = store.first_seen('100009')
-        assert seen['2019-03-29'] == '2026-10-03T12:00:00+00:00' and seen['2019-06-28'] == '2026-10-03T12:10:00+00:00'
+        held = store.held_since('100009')                                                              # a rescale is not a change; a revision is
+        assert held['2019-03-29'] == '2026-10-03T12:00:00+00:00' and held['2019-06-28'] == '2026-10-03T12:10:00+00:00'
+        assert held[revised[20][1]] == '2026-10-03T12:30:00+00:00'                                     # the revised bar was not held before its revision
 
 
 def test_change_classification():

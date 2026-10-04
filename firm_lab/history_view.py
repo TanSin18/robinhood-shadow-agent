@@ -29,6 +29,26 @@ def _hash(report) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
+def problem(report):
+    """Why this is not a readiness report the page or the capability registry may use; None when it is one. The hash is
+    an integrity check against accidental damage. It is not a signature and does not prove who wrote the file."""
+    if not isinstance(report, dict) or report.get('kind') != KIND or report.get('warning') != WARNING:
+        return 'NOT_A_READINESS_REPORT'
+    if any(not isinstance(report.get(key), kind) for key, kind in REQUIRED_PARTS):
+        return 'READINESS_REPORT_INCOMPLETE'
+    try:
+        if _hash(report) != report['report_hash']:
+            return 'READINESS_REPORT_HASH_MISMATCH'
+    except (TypeError, ValueError):
+        return 'READINESS_REPORT_INCOMPLETE'
+    for families in (report['sufficiency'].get('verdicts') or {}).values():
+        if not isinstance(families, dict) or any(not isinstance(v, dict) or v.get('verdict') not in VERDICTS for v in families.values()):
+            return 'UNEXPECTED_SUFFICIENCY_VERDICT'
+    if any(not isinstance(b, dict) or b.get('status') not in BAR_STATES for b in report['specification_bars']):
+        return 'UNEXPECTED_BAR_STATUS'
+    return None
+
+
 def summary(research_database) -> dict:
     """{'exists', 'warning', 'report', 'file'} for the readiness file beside ``research_database``."""
     path = Path(research_database).with_name(FILE_NAME)
@@ -38,17 +58,9 @@ def summary(research_database) -> dict:
         if path.stat().st_size > MAXIMUM_BYTES:
             return empty('READINESS_FILE_TOO_LARGE')
         report = json.loads(path.read_text())
-        if not isinstance(report, dict) or report.get('kind') != KIND or report.get('warning') != WARNING:
-            return empty('NOT_A_READINESS_REPORT')
-        if any(not isinstance(report.get(key), kind) for key, kind in REQUIRED_PARTS):
-            return empty('READINESS_REPORT_INCOMPLETE')
-        if _hash(report) != report['report_hash']:
-            return empty('READINESS_REPORT_HASH_MISMATCH')
-        for families in (report['sufficiency'].get('verdicts') or {}).values():
-            if not isinstance(families, dict) or any(not isinstance(v, dict) or v.get('verdict') not in VERDICTS for v in families.values()):
-                return empty('UNEXPECTED_SUFFICIENCY_VERDICT')
-        if any(not isinstance(b, dict) or b.get('status') not in BAR_STATES for b in report['specification_bars']):
-            return empty('UNEXPECTED_BAR_STATUS')
+        reason = problem(report)
+        if reason:
+            return empty(reason)
         return {'exists': True, 'warning': WARNING, 'report': report, 'file': '/'.join(path.parts[-3:])}
     except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError) as error:
         return empty('READINESS_FILE_UNREADABLE:' + type(error).__name__)

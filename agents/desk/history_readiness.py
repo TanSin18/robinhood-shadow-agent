@@ -54,27 +54,39 @@ def _measured(value):
     return _count(value)
 
 
+SEGMENT_NAMES = (('DEVELOPMENT', 'development'), ('HISTORICAL_HOLDOUT', 'historical holdout, sealed'), ('BURNED_CHECKPOINT7', 'burned Checkpoint 7 window'),
+                 ('FORWARD_HOLDOUT', 'forward holdout, sealed'))
+
+
 def _stands(r):
     market, strict, holdout, decision = r['market_data'], r['strict_training'], r['holdout'], r['provider_decision']
     tiers = strict.get('by_tier') or {}
     samples = strict.get('strict_samples') or {}
+    parts = (strict.get('strict_samples_by_segment') or {}).get('20') or {}
     verdicts = [v.get('verdict') for families in (r['sufficiency'].get('verdicts') or {}).values() for v in families.values()]
+    unmet = sum(1 for b in r['specification_bars'] if b.get('status') != 'MET')
+    stored = market.get('status') == 'STORED'
     items = []
-    if market.get('status') == 'STORED':
-        items.append(f'<b>Historical market data:</b> {_count(market.get("bars"))} validated daily bars for {_count(market.get("securities_with_bars"))} securities, '
-                     f'{_span(market.get("history_range"))}; {_count(market.get("delisted_with_bars"))} of them delisted.')
+    if stored:
+        items.append(f'<b>Historical market data:</b> {_count(market.get("bars"))} daily bars stored; each passed the row checks. '
+                     f'{_count(market.get("securities_with_bars"))} securities, {_span(market.get("history_range"))}; {_count(market.get("delisted_with_bars"))} of them delisted. '
+                     f'{_count(unmet)} of {_count(len(r["specification_bars"]))} sufficiency bars are not met. {esc(str(decision.get("statement", "")))}')
     else:
-        items.append('<b>No validated historical market data is stored.</b> The only prices held are '
+        items.append('<b>No historical market data is stored.</b> The only prices held are '
                      f'{_count((market.get("closes_held") or {}).get("closes"))} closes for {_count((market.get("closes_held") or {}).get("instruments"))} instruments, '
                      'close only, captured after the fact.')
         items.append(f'<b>{esc(decision.get("status", ""))}:</b> {esc(decision.get("selected_provider", ""))} {esc(decision.get("product", ""))}, '
-                     f'{esc(decision.get("price", ""))}. Nothing has been purchased.')
+                     f'{esc(decision.get("price", ""))}. {esc(str(decision.get("statement", "")))}')
+    split = '; '.join(f'{esc(label)} {_count(parts.get(key))}' for key, label in SEGMENT_NAMES)
     items.append(f'<b>Strict point-in-time samples:</b> {_count(samples.get("20"))} with a 20-session label ({_count(samples.get("10"))} at 10, {_count(samples.get("5"))} at 5). '
-                 f'Held at the time: {_count(tiers.get("HELD_AT_THE_TIME"))}. Publisher-dated historical: {_count(tiers.get("PUBLISHER_DATED_HISTORICAL"))}. '
-                 f'The {_count(strict.get("checkpoint7_retrospective_samples"))} retrospective samples of the Modeling Laboratory are a separate dataset and are not counted here.')
+                 f'By segment: {split}. Held at the time: {_count(tiers.get("HELD_AT_THE_TIME"))}. Publisher-dated historical: {_count(tiers.get("PUBLISHER_DATED_HISTORICAL"))}. '
+                 f'The {_count(strict.get("checkpoint7_retrospective_samples"))} retrospective samples of the Modeling Laboratory (its closing report) are a separate '
+                 'dataset and are not counted here.')
+    first = esc(str(((holdout.get("segments") or {}).get("FORWARD_HOLDOUT") or [""])[0]))
+    state = ('are sealed: label values of both are removed before any row leaves the dataset builder, and no model has been measured on either' if stored
+             else 'are reserved; no data exists for either yet')
     items.append('<b>Fresh holdout:</b> the Checkpoint 7 holdout is not reused. Historical holdout '
-                 f'{_span((holdout.get("segments") or {}).get("HISTORICAL_HOLDOUT"))} and forward holdout from '
-                 f'{esc(str(((holdout.get("segments") or {}).get("FORWARD_HOLDOUT") or [""])[0]))} are sealed; no model has been measured on either.')
+                 f'{_span((holdout.get("segments") or {}).get("HISTORICAL_HOLDOUT"))} and forward holdout from {first} {state}.')
     if verdicts and all(v == 'INSUFFICIENT' for v in verdicts):
         items.append('<b>Data sufficiency:</b> INSUFFICIENT for every model family. A larger model does not change that; more historically truthful data does.')
     else:
@@ -98,7 +110,9 @@ def _coverage(r):
                            f'{_count(market.get("rows_read"))} read'),
         ('Corporate actions', ('; '.join(f'{esc(k.replace("_", " "))} {_count(v)}' for k, v in sorted((actions.get('historical_by_type') or {}).items())) or 'none stored')
          + f'. Held today: {_count(actions.get("held_rows"))} rows ({esc(actions.get("held_note", ""))}).'),
-        ('Delisted coverage', f'{_count(market.get("delisted_with_bars"))} delisted securities with bars'),
+        ('Delisted coverage', f'{_count(market.get("delisted_with_bars"))} delisted securities with bars; '
+                              f'{_count((r["strict_training"] or {}).get("members_whose_bars_end_without_a_delisting_record"))} members whose bars end with no delisting record'),
+        ('Stored versions', '; '.join(f'{esc(k.replace("_", " ").lower())} {_count(v)}' for k, v in sorted((market.get('block_versions') or {}).items())) or 'none'),
         ('Universe history', f'{esc(universe.get("universe_version", "none stored"))}'
                              + (f': {_count(universe.get("formation_sessions"))} monthly formations, {_count(universe.get("distinct_members"))} distinct members, '
                                 f'{_count(universe.get("members_later_delisted"))} later delisted' if universe else '')),
@@ -138,16 +152,17 @@ def _holdout(r):
 
 def _regimes(r):
     out = []
-    for title, key in (('Development period of the reserved chronology', 'development_period'), ('Closes held today (the burned Checkpoint 7 window)', 'held_today')):
+    for title, key in (('Development period, where samples exist', 'development_period'), ('Closes held outside the historical database (the burned Checkpoint 7 window)', 'held_today')):
         g = (r.get('regimes') or {}).get(key) or {}
         if g.get('status') == 'NOT_MEASURABLE' or 'sessions' not in g:
-            out.append(f'<p class="small"><b>{esc(title)}:</b> not measurable — {esc(g.get("reason", "no series stored"))}.</p>')
+            out.append(f'<p class="small"><b>{esc(title)}:</b> not measurable — {esc(str(g.get("reason", "no series stored")))}.</p>')
             continue
         out.append(f'<p class="small"><b>{esc(title)}</b> ({_span([g.get("first"), g.get("last")])}, {_count(g.get("sessions"))} sessions)</p>'
-                   + _facts([('Bear markets (20% or more)', _count(len(g.get('bear_markets') or []))), ('Corrections (10% to 20%)', _count(len(g.get('corrections') or []))),
+                   + _facts([('Bear markets (20% or more)', _count(g.get('bear_markets'))), ('Corrections (10% to 20%)', _count(g.get('corrections'))),
                              ('High-volatility episodes', _count(g.get('high_volatility_episodes'))), ('Low-volatility episodes', _count(g.get('low_volatility_episodes'))),
-                             ('Rising-rate periods', _count(len(g.get('rising_rate_periods') or []))), ('Falling-rate periods', _count(len(g.get('falling_rate_periods') or [])))]))
-    return ''.join(out) + '<p class="small">A description of the past made with hindsight. It is not a regime model and feeds nothing.</p>'
+                             ('Rising-rate periods', _count(g.get('rising_rate_periods'))), ('Falling-rate periods', _count(g.get('falling_rate_periods')))]))
+    return ''.join(out) + ('<p class="small">A description of the past made with hindsight, as counts. An episode is at least 20 sessions. '
+                           'It is not a regime model and feeds nothing.</p>')
 
 
 def _provenance(r):
@@ -164,8 +179,8 @@ def _provenance(r):
 def _decision(r):
     d = r['provider_decision']
     rows = [[esc(name), esc(why)] for name, why in (d.get('not_selected') or {}).items()]
-    return (_facts([('Status', _chip(d.get('status'))), ('Selected provider', esc(str(d.get('selected_provider')))), ('Product', esc(str(d.get('product')))),
-                    ('Price', esc(str(d.get('price')))), ('Purchased', 'YES' if d.get('purchased') else 'NO'), ('Licence', esc(str(d.get('licence')))),
+    return (_facts([('Status', _chip(d.get('status'))), ('What this report can see', esc(str(d.get('statement')))), ('Selected provider', esc(str(d.get('selected_provider')))),
+                    ('Product', esc(str(d.get('product')))), ('Price', esc(str(d.get('price')))), ('Licence', esc(str(d.get('licence')))),
                     ('Open question', esc(str(d.get('open_question'))))]) + _table(['Not selected', 'Why'], rows))
 
 
@@ -197,7 +212,8 @@ def _render(state):
             + _fold('Remaining gaps', '<ul class="small">' + ''.join(f'<li>{esc(g)}</li>' for g in r['gaps']) + '</ul>'
                     + '<ul class="small">' + ''.join(f'<li>{esc(x)}</li>' for x in r.get('limitations') or []) + '</ul>', f'{len(r["gaps"])} named')
             + f'<p class="small fl-sub">Report {esc(str(r.get("report_hash", ""))[:12])}, specification {esc(str(r.get("spec_version", "")))}, '
-              f'generated {esc(str(r.get("generated_at", ""))[:19])} UTC. File {esc(str(state.get("file", "")))}.</p>')
+              f'generated {esc(str(r.get("generated_at", ""))[:19])} UTC. File {esc(str(state.get("file", "")))}. '
+              'The hash is an integrity check, not a signature: it detects a damaged file, not who wrote it.</p>')
 
 
 def render_history(fl):

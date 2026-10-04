@@ -198,3 +198,22 @@ lowered. One bar was added:
   adjusted prints; O7 bounds how much of the dataset may be affected before those feature families are withheld
   from every row. Withholding them row by row would itself mark the rows of future splitters, so above the minimum
   they are withheld from all rows.
+
+**Amendment 2, 2026-10-04, after the second independent review and still before any data was collected.** No bar was
+lowered and none was added. Four measurement rules that the text left open are fixed, each in the stricter direction:
+
+* **When breadth can be measured.** A pair of instruments is compared only over at least 24 non-overlapping windows
+  it shares. `N_eff` is reported only when at least half of all pairs can be compared and the typical compared pair
+  shares at least 60 windows. Otherwise breadth is `NOT MEASURABLE` and is not assumed: with few shared windows the
+  chance correlation is too large a part of what is measured to subtract reliably, and a measured minority of pairs
+  does not speak for the rest.
+* **`E` is summed window by window.** Each non-overlapping window contributes `N / (1 + (N - 1) * m)` for the `N`
+  instruments it holds. A period whose membership grows is not credited with its later breadth for its earlier
+  windows. For a constant `N` this is `W * N_eff`, as in §2.
+* **A separate high-volatility episode** (H6) is at least 20 sessions in the class; runs separated by fewer than 5
+  sessions are one episode. A decline is measured only on closes inside the period being described.
+* **H4** also requires that delisted securities with bars are among the distinct securities. Twice the member count
+  made up only of survivors does not meet it.
+
+The verdict code was also brought into line with §5 and §8 as written: a horizon is as testable as the weaker of
+development (P3) and the reserved holdout (P4), and a multi-task network is judged at its longest horizon.

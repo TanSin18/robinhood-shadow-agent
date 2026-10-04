@@ -141,7 +141,7 @@ def test_detectable_rank_correlation_and_the_family_verdicts():
     assert sufficiency.detectable_ic(6889) == pytest.approx(0.03, abs=1e-5) and sufficiency.detectable_ic(34) == pytest.approx(0.427, abs=1e-3)
     assert sufficiency.effective_observations(1000, 20, 50) == 2500
     assert [sufficiency.testability(x) for x in (0.02, 0.03, 0.04, 0.05, 0.06)] == ['TESTABLE', 'TESTABLE', 'WEAKLY_TESTABLE', 'WEAKLY_TESTABLE', 'NOT_TESTABLE']
-    good = dict(holdout_ic=0.025, regimes_met=True, bear_markets_in_training=3, training_years=20.0, sequence_share=0.99)
+    good = dict(holdout_ic=0.025, development_ic=0.02, regimes_met=True, bear_markets_in_training=3, training_years=20.0, sequence_share=0.99)
     assert sufficiency.family_verdict('xgboost', e_train=55000, **good)['verdict'] == 'SUFFICIENT'
     assert sufficiency.family_verdict('xgboost', e_train=13000, **good)['verdict'] == 'BORDERLINE'       # above the smallest configuration, below the reference
     assert sufficiency.family_verdict('xgboost', e_train=3000, **good)['verdict'] == 'INSUFFICIENT'
@@ -175,7 +175,7 @@ def test_regimes_are_described_from_the_past_only_and_score_nothing():
     assert rates == {'rising': [['2004-06-30', '2006-06-29'], ['2015-12-16', '2015-12-16']], 'falling': [['2007-09-18', '2008-12-16']]}
     days = list(calendar.sessions('2019-01-02', '2022-07-29'))
     out = regimes.coverage(days, series[:len(days)], [('2019-07-31', -0.25), ('2022-03-16', 0.25)], first='2020-01-02', last='2021-12-31')
-    assert out['descriptive_only'] is True and out['first'] == '2020-01-02' and out['last'] == '2021-12-31' and out['rising_rate_periods'] == []
+    assert out['descriptive_only'] is True and out['first'] == '2020-01-02' and out['last'] == '2021-12-31' and out['rising_rate_periods'] == 0
     assert not {'score', 'signal', 'rank', 'weight'} & set(out)
 
 
@@ -190,7 +190,7 @@ def test_with_nothing_stored_every_market_bar_is_unmet_the_count_is_zero_and_eve
     assert {v['verdict'] for families in report['sufficiency']['verdicts'].values() for v in families.values()} == {'INSUFFICIENT'}
     bars = {b['id']: b['status'] for b in report['specification_bars']}
     assert all(bars[i] == 'NOT_MET' for i in ('H1', 'H3', 'H4', 'H6', 'P1', 'O4', 'O6', 'O7', 'E1', 'E2', 'E3', 'F2')) and bars['H5'] == 'NOT_MEASURABLE'
-    assert report['provider_decision']['status'] == 'OPERATOR PURCHASE DECISION REQUIRED' and report['provider_decision']['purchased'] is False
+    assert report['provider_decision']['status'] == 'OPERATOR PURCHASE DECISION REQUIRED' and report['provider_decision']['stored_sources'] == []
     assert report['holdout']['checkpoint7_holdout_reused_as_pristine'] is False and report['holdout']['historical_holdout'] == 'RESERVED_NO_DATA_YET'
     assert report['market_data']['closes_held']['tier'] == 'RETROSPECTIVE' and report['fundamentals']['tier'] == 'PUBLISHER_DATED_HISTORICAL'
     assert report['regimes']['development_period']['status'] == 'NOT_MEASURABLE' and report['regimes']['held_today']['proxy_tier'] == 'RETROSPECTIVE'
@@ -276,10 +276,10 @@ def test_the_page_shows_the_warning_the_strict_count_provenance_and_limitations_
         assert not [w for w in ACTION_WORDS if re.search(rf'\b{w}\b', words)]
         assert not re.search(r'\$\s?\d+\.\d{2}\b', re.sub(r'\$39 per month or \$299 per year', '', html))       # the only dollar amounts are the subscription's
         if name == 'empty':
-            assert 'No validated historical market data is stored' in html and 'OPERATOR PURCHASE DECISION REQUIRED' in html and 'Nothing has been purchased' in html
+            assert 'No historical market data is stored' in html and 'OPERATOR PURCHASE DECISION REQUIRED' in html and 'Nothing has been purchased by this system' in html
             assert '0 with a 20-session label' in html
         else:
-            assert 'validated daily bars for 13 securities' in html and 'liquid-us-listed-v1' in html and 'Tier B — publisher-dated historical' in html
+            assert 'daily bars stored; each passed the row checks. 13 securities' in html and 'liquid-us-listed-v1' in html and 'Tier B — publisher-dated historical' in html
     none = history_readiness.render_history({'history': history_view.empty()})
     assert history.WARNING in none and 'No historical data readiness report is stored' in none
     broken = history_readiness.render_history({'history': {'exists': True, 'report': {'market_data': 7}}})
@@ -316,6 +316,9 @@ def test_capability_rows_follow_the_report_and_nothing_is_available_without_vali
     for b in passing['specification_bars']:
         if b['id'] in ('H1', 'H3', 'H4', 'O4', 'O6'):
             b['status'] = 'MET'
+    with pytest.raises(ValueError, match='READINESS_REPORT_HASH_MISMATCH'):
+        history_capability.statuses(passing)                                                          # an edited report is refused
+    passing['report_hash'] = history_view._hash(passing)                                              # as a new report with these bars met would be
     rows = history_capability.statuses(passing)
     assert rows['historical_ohlcv'][0] == rows['historical_universe'][0] == rows['strict_pit_training_data'][0] == 'AVAILABLE'
     assert rows['historical_ohlcv'][3]['records'] == full['market_data']['bars'] and rows['historical_ohlcv'][3]['validation_passed'] is True
@@ -349,7 +352,7 @@ def test_the_history_package_cannot_reach_a_broker_the_network_a_model_or_the_tr
             assert word not in text, (path.name, word)
     relative = {path.name: {n.module for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.ImportFrom) and n.level and n.module} for path in files}
     assert not [name for name, modules in relative.items() if modules & {'modeling', 'research_features', 'boundary', 'providers', 'ingest_official'}]
-    assert relative['history_capability.py'] == {'capabilities'}                                      # the one bridge to the research database's registry
+    assert relative['history_capability.py'] == {'capabilities', 'history_view'}                      # the registry, and the check that a report is intact
     for name in ('dataset.py', 'universe.py', 'targets.py', 'features.py', 'pivots.py', 'sufficiency.py', 'regimes.py', 'splits.py'):
         assert 'sqlite3' not in _imports(PACKAGE / name), name                                        # they reach data only through the checked store
     assert 'fit(' not in ''.join(p.read_text() for p in files) and 'predict(' not in ''.join(p.read_text() for p in files)
