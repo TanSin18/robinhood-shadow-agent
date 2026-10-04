@@ -154,36 +154,52 @@ a stock that later split many times the early adjusted prices are small numbers 
 depends on the future. Two rules close that channel:
 
 * **The exact close.** Across sessions, the close is rebuilt from the unadjusted close (the price printed on the day)
-  and the confirmed split ratios. The vendor's adjusted prints are used only within one bar: its open, high and low
-  relative to its own close. A test reprints a history at three decimals after a large later split and shows that no
-  close-based feature before the split moves.
-* **Print precision: all rows or none.** Where the adjusted close is printed more coarsely than 0.05% of its value,
-  the shape of the bar cannot be trusted. Withholding the features that read a high, low or open only on those rows
-  would mark exactly the stocks that split later, which is information from the future. So those feature families
-  are used for every row of a dataset or for none: as soon as one row of the dataset would read a coarsely printed
-  bar, they are withheld from every row. The share of coarse rows is reported (sufficiency bar O7); the decision
-  does not wait for a threshold. A test prints one stock as after a 40-for-1 split six years later and shows that
-  the rows of that stock cannot be told from the others by what is missing.
+  and the recorded split ratios. Every close-based feature and every label uses it. A test reprints a history at
+  two decimals after a large later split and shows that no close-based feature and no label before the split moves.
+* **The shape of a bar** (its open, high and low against its close, and highs and lows against those of other bars)
+  is read from the vendor's own prints, untouched. For a correct record they stand on one share basis, and a price
+  that tied on the day still ties. They are not multiplied bar by bar onto the exact close: one rounding unit per
+  bar is enough to turn two equal highs into a swing high or not.
+* **Print precision: all rows or none.** A bar's print cannot give its shape when either (a) the adjusted close is
+  printed more coarsely than 0.05% of its value, or (b) the bar was re-adjusted for a later split and its print,
+  taken back to the day's own dollars, is coarser than a twentieth of a cent: two prices that differed by a cent on
+  the day could then come out equal. A bar no later split touched is printed as on the day and passes (b) whatever
+  its decimals. Withholding the features that read a high, low or open only on such bars would mark exactly the
+  stocks that split later, which is information from the future. So those feature families are used for every row
+  of a dataset or for none: as soon as one row of the dataset would read such a bar, they are withheld from every
+  row. The share of coarse rows is reported (sufficiency bar O7); the decision does not wait for a threshold. Tests
+  print one stock as after a 40-for-1 split six years later and show that its rows cannot be told from the others by
+  what is missing; and print a history of whole-cent prices as after later splits of 2, 200, 40, 1.5, 7 and a
+  reverse 1-for-10 and show that every swing and every leg falls on the same session.
 
-What remains is bounded and stated: on rows that are used, a reprinted high, low or open can be off by up to 0.05%
-of the price, and how far depends on later splits. The measure is deliberately blunt: a vendor that prints two
-decimals makes every bar under $10 coarse by it, whether or not a split followed.
-
-* **Volume: the same rule.** The vendor supplies volume only on today's share basis. After a large later reverse
-  split, the volume of an early session is a small number of today's shares, and a volume is a whole number of
-  shares at best: below 100 re-counted shares its rounding is more than 0.5% of it, and it can round to nothing. A
-  bar no later split touched is exact and is never flagged. The features that read volume are used for every row of
-  a dataset or for none, and for none as soon as one row would read such a bar. In the universe, a security whose
-  liquidity window holds such a bar cannot be ranked; it is screened out under its own reason
-  (`VOLUME_REPRINT_TOO_COARSE`) and counted, so that the candidates lost this way are a known number. They are
-  stocks that later collapsed, so the count is a measure of a survivorship gap the vendor's format leaves.
-* **Whether a row exists** is decided from the exact close only (the core features are the 20-session return and the
-  20-session realized volatility). Nothing the vendor reprints can add or remove a row.
+  What remains is bounded and stated. On rows that are used, a reprinted high, low or open is within a twentieth of
+  a cent of the day's price for a re-adjusted bar, and within 0.05% of the price for any bar; a distance measured in
+  units of the average true range carries that error divided by the range. With split ratios that are not whole
+  numbers (3-for-2 and the like), two prices closer than a third of a cent on the common basis can still change
+  order; that is rare and is not followed further. The measure is deliberately blunt in one direction: a vendor that
+  prints two decimals makes every bar under $10 coarse by (a), and every bar with a later forward split coarse by
+  (b), so with such a vendor these families are never used.
+* **Volume: the same rule.** The vendor supplies volume only on today's share basis. A bar no later split touched is
+  exact. After a forward split the re-count is exact too. After a reverse split it is not: many different volumes of
+  the day re-count into the same small number of today's shares, and a volume can round to nothing. The day's
+  volume is then known only as a range. Where the range is wider than 0.5% of the volume either way, the features
+  that read volume are withheld; and, as above, for every row of a dataset or for none. On rows that are used, each
+  re-counted volume is within 0.5% of the day's (so a ratio of two volumes within about 1%, and a rank among 252
+  within a step or two).
+* **Volume in the universe.** The liquidity rank uses the middle of that range, and the builder counts the
+  memberships the range leaves undecided (it reaches across the cut): `security_months_undecided_by_volume_recount`.
+  A test re-counts one stock as after a later 1-for-20 and a later 1-for-5,000 reverse split and shows the same
+  members at every formation. An undecided membership is a stock that later collapsed; the count is the measure of
+  what the vendor's format cannot settle.
+* **Whether a row exists** is decided from universe membership and from the exact close (the core features are the
+  20-session return and the 20-session realized volatility). The vendor's reprints cannot add or remove a row except
+  through an undecided membership, which is counted, and through one extreme: a reprinted price that rounds to zero
+  fails the row checks and the bar is rejected (`NON_POSITIVE_PRICE`, counted per file). At three or more decimals
+  that needs a later cumulative split of several thousand for one.
 * **What a coarse reprint may not decide.** Whether a recorded split is applied, whether a distribution is large,
   whether a row exists and what a label is worth are all taken from numbers a later split cannot change: the
   recorded actions and the unadjusted close (§3, and the label below). The vendor's reprinted numbers are read for
-  three things only: the shape of a bar (its open, high and low relative to its own close) and its volume, both under
-  an all-or-none rule, and the audit of §3.
+  three things only: the shape of a bar and its volume, both under an all-or-none rule, and the audit of §3.
 
 The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 

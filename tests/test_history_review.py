@@ -718,7 +718,7 @@ def test_two_builds_never_share_records_and_every_bar_a_universe_reads_makes_it_
         original = universe.formation_stats
 
         def other(panel, formations, rule=universe.RULE, actions=()):   # the screening code changes; the bars do not
-            return {r: (('NO_DOLLAR_VOLUME', None) if panel['security_id'] == '100002' else found) for r, found in original(panel, formations, rule, actions).items()}
+            return {r: (('NO_DOLLAR_VOLUME', None, None) if panel['security_id'] == '100002' else found) for r, found in original(panel, formations, rule, actions).items()}
 
         monkeypatch.setattr(universe, 'formation_stats', other)
         second = universe.build(store, fx.FIRST, '2019-12-31', rule=RULE, version=fx.VERSION)
@@ -1185,59 +1185,103 @@ def test_a_tiny_volume_confirms_nothing_and_a_capture_pair_expires(tmp_path, mon
         store.close()
 
 
-def test_a_volume_a_later_reverse_split_made_unreadable_is_counted_and_marks_no_row(tmp_path, monkeypatch):
+def test_a_later_reverse_split_decides_no_membership_and_marks_no_row(tmp_path):
     """The vendor re-counts volume after every later split. After a large later reverse split an early volume is a
-    handful of today's shares: its rows lost their volume features (and, through a core feature, existed or not), and
-    the security dropped out of the universe as if it had not traded."""
+    handful of today's shares. Rows of that stock lost their volume features (and, through a core feature, existed or
+    not), and screening it out of the universe removed exactly a stock that collapsed later."""
     from firm_lab.history import features
-    day = '2019-06-03'
-    monkeypatch.setattr(fx, 'SPLIT', ('AAA', day, 0.1))                 # a 1-for-10 reverse split: every earlier volume is re-counted
 
-    def thin(row):                                                      # before it, AAA's volume is a few dozen of today's shares
-        if row[0] == 'AAA' and row[1] < day:
-            row[6] = '40.0'
-        return row
-
-    def build(folder, edit):
-        folder.mkdir(parents=True)
+    def world(name, factor):                                            # AAA as the vendor prints it after a later 1-for-(1/factor) reverse split
+        folder = tmp_path / name
+        folder.mkdir()
         fx.write_tickers(folder / 'T.csv')
-        rows = [list(r) for r in fx.price_rows(None, through='2020-12-31')]
-        fx.write_prices(folder / 'P.csv', [edit(r) for r in rows] if edit else rows)
+        rows = []
+        for ticker in fx.SECURITIES:
+            rows += [list(r) for r in fx.price_rows([ticker], through='2020-12-31', rescale=('AAA', factor) if factor and ticker == 'AAA' else None)]
+        for r in rows:
+            if factor and r[0] == 'AAA':
+                r[6] = str(int(round(float(r[6]))))                     # re-counted into whole shares of today
+        fx.write_prices(folder / 'P.csv', rows)
         fx.write_actions(folder / 'A.csv')
-        text = (folder / 'A.csv').read_text().replace('2020-06-15,split,AAA,AAA Corp,2.0', f'{day},split,AAA,AAA Corp,0.1')
-        (folder / 'A.csv').write_text(text)
         store = HistoryStore(folder / 'firm_lab_history.db', create=True)
         ingest.ingest_securities(store, sf.securities(folder / 'T.csv'), file=ingest.describe_file(folder / 'T.csv'), at=AT, **COMMON)
         ingest.ingest_bars(store, sf.prices(folder / 'P.csv'), file=ingest.describe_file(folder / 'P.csv'), at=AT, **COMMON)
         ingest.ingest_actions(store, sf.actions(folder / 'A.csv'), file=ingest.describe_file(folder / 'A.csv'), at=AT, **COMMON)
-        manifest = universe.build(store, fx.FIRST, '2020-12-31', rule={**universe.RULE, 'size': 12}, version='liquid-top12-test')
-        return store, manifest
+        manifest = universe.build(store, fx.FIRST, '2020-12-31', rule=RULE, version=fx.VERSION)
+        try:
+            members = [(r['formation_session'], r['members']) for r in universe.load(store)['records']]
+            return manifest, members, dataset.materialise(store), dataset.count(store), adjust.coarse_volume(panel.load(store, '100001'), ())
+        finally:
+            store.close()
 
-    plain, m0 = build(tmp_path / 'plain', None)
-    marked, m1 = build(tmp_path / 'marked', thin)
-    try:
-        assert m0['security_months_screened_out_for_unreadable_volume'] == 0 and m1['security_months_screened_out_for_unreadable_volume'] > 0
-        p = panel.load(marked, '100001')
-        k = p['sessions'].index(day)
-        unreadable = adjust.coarse_volume(p, [(k, 0.1)])
-        assert unreadable[:k].all() and not unreadable[k:].any()
-        assert not adjust.coarse_volume(panel.load(marked, '100009'), ()).any()       # no later split: exact, whatever the volume
-        a, b = dataset.materialise(plain), dataset.materialise(marked)
-        ca, cb = dataset.count(plain), dataset.count(marked)
-    finally:
-        plain.close()
-        marked.close()
+    plain, mild, severe = world('plain', None), world('mild', 1 / 20.0), world('severe', 1 / 5000.0)
     volume = [n for n, d in enumerate(features.DEFINITIONS) if d['uses_volume']]
     rest = [n for n, d in enumerate(features.DEFINITIONS) if not d['uses_volume'] and not d['uses_high_low_open']]
-    assert len(volume) == 7 and dataset.CORE_FEATURES == ('return20', 'realized_vol20')
-    ka, kb = list(zip(a['security_id'], a['session'])), list(zip(b['security_id'], b['session']))
-    late = [n for n, key in enumerate(kb) if key[0] == '100001']
-    assert late and b['manifest']['rows_reading_an_unreadable_volume'] > 0 and not b['manifest']['volume_features_usable'] and not cb['volume_features_usable']
-    assert np.isnan(b['X'][:, volume]).all()                            # all rows or none: AAA's rows cannot be told apart by what is missing
-    assert a['manifest']['volume_features_usable'] and ca['volume_features_usable'] and np.isfinite(a['X'][:, volume]).any()
-    common = sorted(set(ka) & set(kb))
-    ia, ib = {key: n for n, key in enumerate(ka)}, {key: n for n, key in enumerate(kb)}
-    np.testing.assert_array_equal(a['X'][[ia[key] for key in common]][:, rest], b['X'][[ib[key] for key in common]][:, rest])      # nothing close-based moved
-    # once AAA can be ranked again its rows exist as before: whether a row exists is decided from the exact close alone
-    after = [key for key in ka if key[0] == '100001' and key[1] > '2019-10-31']
-    assert after and set(after) <= set(kb)
+    assert len(volume) == 7 and dataset.CORE_FEATURES == ('return20', 'realized_vol20')        # whether a row exists is decided from the exact close alone
+    keys = lambda data: list(zip(data['security_id'], data['session']))
+    for later in (mild, severe):
+        assert later[1] == plain[1]                                     # every formation has the same members
+        assert later[0]['security_months_undecided_by_volume_recount'] == 0
+        assert keys(later[2]) == keys(plain[2])                         # the same rows exist
+        np.testing.assert_allclose(later[2]['X'][:, rest], plain[2]['X'][:, rest], rtol=1e-9, atol=1e-12, equal_nan=True)
+        for h in targets.HORIZONS:
+            np.testing.assert_allclose(later[2]['y'][h], plain[2]['y'][h], rtol=1e-9, atol=1e-12, equal_nan=True)
+    aaa = np.array(plain[2]['security_id']) == '100001'
+    assert aaa.sum() > 100 and not plain[4].any() and not mild[4].any() and severe[4].all()
+    # 1-for-20: the day's shares are still known to a small part of a percent, and the volume features stand, close to what they were
+    assert mild[2]['manifest']['volume_features_usable'] and mild[3]['volume_features_usable']
+    rvol = features.NAMES.index('rvol20')
+    np.testing.assert_allclose(mild[2]['X'][aaa, rvol], plain[2]['X'][aaa, rvol], rtol=0.011, equal_nan=True)
+    # 1-for-5000: eight shares of today cannot say what traded. All rows or none: AAA's rows cannot be told apart by what is missing
+    assert not severe[2]['manifest']['volume_features_usable'] and severe[2]['manifest']['rows_reading_an_unreadable_volume'] > 0 and not severe[3]['volume_features_usable']
+    assert np.isnan(severe[2]['X'][:, volume]).all() and np.isfinite(plain[2]['X'][:, volume]).any()
+    # a forward split re-counts exactly, and a bar no split touched is exact whatever its volume
+    forward = {'sessions': ('2024-03-04', '2024-03-05'), 'present': np.array([True, True]), 'volume': np.array([40.0, 0.0]), 'close': np.array([10.0, 10.0]),
+               'close_unadjusted': np.array([20.0, 20.0]), 'half_ulp': np.array([1e-4, 1e-4]), 'print_error': np.array([1e-4, 1e-4])}
+    assert not adjust.coarse_volume(forward, ()).any() and [list(b) for b in adjust.volume_bounds(forward, ())] == [[20.0, 0.0], [20.0, 0.0]]
+    # where the range does reach across the cut, the membership is counted as undecided, not passed off as known
+    ranked = [(-100.0, 'a', 100.0, 100.0), (-90.0, 'b', 85.0, 95.0), (-88.0, 'c', 88.0, 88.0), (-50.0, 'd', 40.0, 60.0)]
+    assert universe.undecided(ranked, 2) == 1 and universe.undecided(ranked, 3) == 0 and universe.undecided(ranked[:2], 2) == 0
+
+
+# ------------------------------------------------------ review round 6 (a seventh, fresh reviewer; commit dac1522)
+def _cent_world(later=1.0, decimals=2, n=900, ticker='III'):
+    """A history whose prices are whole cents on the day, as the vendor prints it after a later split by ``later``."""
+    d = fx.series(ticker)
+    cents = {name: np.round(d[name][:n], 2) for name in ('open', 'high', 'low', 'close')}
+    cents['high'] = np.maximum(cents['high'], np.maximum(cents['open'], cents['close']))
+    cents['low'] = np.minimum(cents['low'], np.minimum(cents['open'], cents['close']))
+    text = lambda values, places: [f'{v:.{places}f}' for v in values]
+    return {'sessions': d['sessions'][:n], **{name: text(cents[name] / later, decimals) for name in ('open', 'high', 'low', 'close')},
+            'volume': [str(int(round(v * later))) for v in d['volume'][:n]], 'close_unadjusted': text(cents['close'], 2),
+            'close_total_return': text(cents['close'] / later, decimals)}
+
+
+def test_a_later_split_moves_no_swing_and_a_tie_on_the_day_stays_a_tie():
+    """Each bar's open, high and low were multiplied by its own exact-close-over-printed-close: one rounding unit per
+    bar, enough to turn two equal highs into a swing high or not, so pivots, legs and every level built on them moved
+    with a later split even when the reprint was exact."""
+    from firm_lab.history import features
+    shape = [d['name'] for d in features.DEFINITIONS if d['uses_high_low_open'] and not d['uses_volume']]       # volume has its own rule and its own test
+    plain = panel.from_columns(_cent_world())
+    base = features.compute(plain)['values']
+    highs = plain['high'][np.isfinite(plain['high'])]
+    assert (np.diff(highs) == 0).sum() + sum(highs[k] == highs[k + 2] for k in range(len(highs) - 2)) > 0       # the day's prices do tie
+    counted = [name for name in shape if name.endswith(('_age', '_sessions', '_direction'))]        # where a swing is, not how far away: whole numbers
+    assert len(counted) == 5
+    for later, decimals, exact in ((2.0, 6, True), (200.0, 6, True), (0.1, 2, True), (40.0, 6, True), (7.0, 8, False), (1.5, 7, False)):
+        other = panel.from_columns(_cent_world(later, decimals))
+        assert not adjust.coarse_print(other).any(), later
+        again = features.compute(other)['values']
+        for name in counted:                                            # the same swings and the same legs, to the session
+            np.testing.assert_array_equal(again[name], base[name], err_msg=f'{name} after a later split by {later}')
+        for name in shape:                                              # and every distance to them: the same number, or within the stated bound of the reprint
+            tolerance = 1e-9 if exact else 2e-3
+            np.testing.assert_allclose(again[name], base[name], rtol=tolerance, atol=tolerance, equal_nan=True, err_msg=f'{name} after a later split by {later}')
+    # a reprint too coarse to hold the day's cents is a coarse print, and the all-or-none rule takes it from there
+    assert adjust.coarse_print(panel.from_columns(_cent_world(2.0, 2))).all() and adjust.coarse_print(panel.from_columns(_cent_world(40.0, 4))).all()
+    assert not adjust.coarse_print(panel.from_columns(_cent_world(1.0, 2))).any()        # untouched by any split: printed as on the day
+    flat = {'sessions': ['2024-03-04', '2024-03-05'], 'open': ['30.00', '30.00'], 'high': ['30.00', '30.00'], 'low': ['30.00', '30.00'], 'close': ['30.00', '30.00'],
+            'volume': ['200', '200'], 'close_unadjusted': ['60.01', '60.00'], 'close_total_return': ['30.00', '30.00']}
+    assert adjust.coarse_print(panel.from_columns(flat)).all()          # 60.00/60.01 on the day, 30.00 after the reprint: the range of the bar is gone
+    assert adjust.TICK_BOUND == 0.0005 and adjust.PRECISION_BOUND == 5e-4

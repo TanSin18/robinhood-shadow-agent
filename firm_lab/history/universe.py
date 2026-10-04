@@ -36,20 +36,18 @@ UNIVERSE_VERSION = 'liquid-us-listed-v1'
 RULE = {'size': 1000, 'minimum_unadjusted_close': 5.0, 'minimum_history_bars': 252, 'liquidity_window_sessions': 63, 'minimum_bars_in_window': 60,
         'price_table': 'stocks', 'ranking': 'median daily dollar volume over the liquidity window, descending; security identifier ascending on ties',
         'formation': 'last exchange session of each calendar month', 'effective': 'from the next session through the next formation session'}
-REASONS = ('NO_BAR_ON_FORMATION_SESSION', 'INSUFFICIENT_HISTORY', 'PRICE_BELOW_MINIMUM', 'VOLUME_REPRINT_TOO_COARSE', 'TOO_FEW_BARS_IN_WINDOW', 'NO_DOLLAR_VOLUME',
-           'RANKED_BELOW_SIZE')
-UNREADABLE_VOLUME = 'VOLUME_REPRINT_TOO_COARSE'
+REASONS = ('NO_BAR_ON_FORMATION_SESSION', 'INSUFFICIENT_HISTORY', 'PRICE_BELOW_MINIMUM', 'TOO_FEW_BARS_IN_WINDOW', 'NO_DOLLAR_VOLUME', 'RANKED_BELOW_SIZE')
 
 
 def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
-    """{formation session: (reason or None, median dollar volume)} for the formation sessions inside this security's span.
-    Dollar volume is the unadjusted close times the shares traded on the day (the vendor's adjusted volume divided by the
-    split factor), so it does not depend on how the vendor rounded prices it reprinted after a later split.
+    """{formation session: (reason or None, median dollar volume, (lowest, highest) it can have been)} for the formation
+    sessions inside this security's span.
 
-    One thing a later split can still take away is the volume itself: after a large later reverse split the re-counted
-    volume of an early session can be too small a number to read (``adjust.coarse_volume``). A security cannot be ranked
-    on such a window. It is screened out under its own reason and counted, so that the candidates lost this way (they
-    are stocks that later collapsed) are a known number and not a silent gap."""
+    Dollar volume is the unadjusted close times the shares traded on the day. The vendor supplies the shares only
+    re-counted on today's basis (``adjust.volume_bounds``): exact when no later split touched the bar and after a
+    forward split, a range of whole numbers after a reverse split. The rank uses the middle of the range; the range
+    itself is kept so that the builder can say where a later reverse split left a membership undecided. Nothing here
+    reads a reprinted price."""
     sessions = panel['sessions']
     if not sessions:
         return {}
@@ -58,32 +56,42 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
     history = np.cumsum(present)
     window = rule['liquidity_window_sessions']
     splits = adjust.breaks(panel, actions)['splits'] if actions else ()
+    fewest, most = adjust.volume_bounds(panel, splits)
     with np.errstate(invalid='ignore', divide='ignore'):
-        dollars = panel['close_unadjusted'] * panel['volume'] / adjust.share_divisor(panel, splits)
-    unreadable = np.cumsum(adjust.coarse_volume(panel, splits))
+        low, high = panel['close_unadjusted'] * fewest, panel['close_unadjusted'] * most
+        dollars = (low + high) / 2
     out = {}
     for r in formations:
         k = slot.get(r)
         if k is None:
             continue
         if not present[k]:
-            out[r] = ('NO_BAR_ON_FORMATION_SESSION', None)
+            out[r] = ('NO_BAR_ON_FORMATION_SESSION', None, None)
         elif history[k] < rule['minimum_history_bars']:
-            out[r] = ('INSUFFICIENT_HISTORY', None)
+            out[r] = ('INSUFFICIENT_HISTORY', None, None)
         elif not panel['close_unadjusted'][k] >= rule['minimum_unadjusted_close']:
-            out[r] = ('PRICE_BELOW_MINIMUM', None)
-        elif unreadable[k] - (unreadable[k - window] if k >= window else 0) > 0:
-            out[r] = (UNREADABLE_VOLUME, None)
+            out[r] = ('PRICE_BELOW_MINIMUM', None, None)
         else:
-            recent = dollars[max(0, k - window + 1):k + 1]
-            valid = recent[np.isfinite(recent)]
-            if len(valid) < rule['minimum_bars_in_window']:
-                out[r] = ('TOO_FEW_BARS_IN_WINDOW', None)
-            elif not np.median(valid) > 0:
-                out[r] = ('NO_DOLLAR_VOLUME', None)
-            else:
-                out[r] = (None, float(np.median(valid)))
+            recent = slice(max(0, k - window + 1), k + 1)
+            valid = np.isfinite(dollars[recent])
+            if valid.sum() < rule['minimum_bars_in_window']:
+                out[r] = ('TOO_FEW_BARS_IN_WINDOW', None, None)
+            elif not np.median(high[recent][valid]) > 0:
+                out[r] = ('NO_DOLLAR_VOLUME', None, None)
+            else:                                                       # the median of the lowest (highest) values bounds the median from below (above)
+                out[r] = (None, float(np.median(dollars[recent][valid])), (float(np.median(low[recent][valid])), float(np.median(high[recent][valid]))))
     return out
+
+
+def undecided(ranked, size) -> int:
+    """How many of the ranked candidates a later reverse split left undecided: their dollar volume is only known as a
+    range, and the range reaches across the cut. ``ranked`` is [(-dollars, security, lowest, highest)], best first."""
+    inside, outside = ranked[:size], ranked[size:]
+    if not outside:
+        return 0
+    weakest_in, strongest_out = min(low for _, _, low, _ in inside), max(high for _, _, _, high in outside)
+    return (sum(1 for _, _, low, high in inside if high > low and low < strongest_out)
+            + sum(1 for _, _, low, high in outside if high > low and high > weakest_in))
 
 
 def actions_hash(store, source=None) -> str:
@@ -115,9 +123,9 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
     screened_out = {r: {} for r in formations}
     for n, sid in enumerate(screened):
         p = panels.load(store, sid, source=source)
-        for r, (reason, dollars) in formation_stats(p, formations, rule, by_security.get(sid, ())).items():
+        for r, (reason, dollars, bounds) in formation_stats(p, formations, rule, by_security.get(sid, ())).items():
             if reason is None:
-                eligible[r].append((-dollars, sid))
+                eligible[r].append((-dollars, sid, bounds[0], bounds[1]))
             else:
                 screened_out[r][reason] = screened_out[r].get(reason, 0) + 1
         if progress and n % 500 == 0:
@@ -127,7 +135,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
     records, ever = [], set()
     for k, r in enumerate(formations):
         ranked = sorted(eligible[r])
-        members = sorted(sid for _, sid in ranked[:rule['size']])
+        members = sorted(sid for _, sid, _, _ in ranked[:rule['size']])
         below = len(ranked) - len(members)
         if below:
             screened_out[r]['RANKED_BELOW_SIZE'] = below
@@ -136,7 +144,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
                         'effective_to': formations[k + 1] if k + 1 < len(formations) else calendar.month_ends(effective_from, calendar.offset(effective_from, 30))[0],
                         'known_at': calendar.eligible_from(r), 'known_at_basis': 'every input is a bar on or before the formation session (bar-known-at-v1)',
                         'tier': PUBLISHER_DATED_HISTORICAL, 'members': members, 'member_count': len(members), 'eligible_count': len(ranked),
-                        'screened_out': screened_out[r],
+                        'screened_out': screened_out[r], 'membership_undecided_by_volume_recount': undecided(ranked, rule['size']),
                         'smallest_member_median_dollar_volume': -ranked[len(members) - 1][0] if members else None})
         ever.update(members)
     delisted = sum(1 for sid in ever if master.get(sid, {}).get('is_delisted'))
@@ -148,7 +156,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
                 'securities_screened': len(screened), 'distinct_members': len(ever), 'members_later_delisted': delisted,
                 'member_count_min': min((r['member_count'] for r in records), default=0), 'member_count_max': max((r['member_count'] for r in records), default=0),
                 'member_count_min_by_year': by_year,
-                'security_months_screened_out_for_unreadable_volume': sum(r['screened_out'].get(UNREADABLE_VOLUME, 0) for r in records),
+                'security_months_undecided_by_volume_recount': sum(r['membership_undecided_by_volume_recount'] for r in records),
                 'first_formation_with_members': {str(n): next((r['formation_session'] for r in records if r['member_count'] >= n), None) for n in (500, 1000)},
                 'source_blocks_hash': blocks, 'actions_hash': acts, 'records_hash': content_hash([content_hash(r) for r in records]),
                 'survivorship': 'formed from every stored stock-file security including delisted ones; no present-day list, classification, master row or market '

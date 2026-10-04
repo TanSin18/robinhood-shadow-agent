@@ -9,12 +9,19 @@ from firm_lab import history
 from firm_lab.history import calendar, dataset, features, regimes, splits, store, sufficiency, targets, universe, validate
 
 DOCS = Path(__file__).resolve().parents[1] / 'docs' / 'firm_lab'
-POLICY = (DOCS / 'historical_market_data_policy.md').read_text()
-HOLDOUT = (DOCS / 'CHECKPOINT8_HOLDOUT_DESIGN.md').read_text()
-UNIVERSE = (DOCS / 'historical_universe.md').read_text()
+
+
+class Text(str):
+    """A document in which a phrase is found wherever the lines happen to break."""
+    def __contains__(self, phrase):
+        return ' '.join(str(phrase).split()) in ' '.join(self.split())
+
+POLICY = Text((DOCS / 'historical_market_data_policy.md').read_text())
+HOLDOUT = Text((DOCS / 'CHECKPOINT8_HOLDOUT_DESIGN.md').read_text())
+UNIVERSE = Text((DOCS / 'historical_universe.md').read_text())
 SPEC = (DOCS / 'CHECKPOINT8_DATA_SUFFICIENCY_SPEC.md').read_text()
-SOURCES = (DOCS / 'CHECKPOINT8_SOURCES_PIT.md').read_text()
-PROVIDER = (DOCS / 'CHECKPOINT8_PROVIDER_DECISION.md').read_text()
+SOURCES = Text((DOCS / 'CHECKPOINT8_SOURCES_PIT.md').read_text())
+PROVIDER = Text((DOCS / 'CHECKPOINT8_PROVIDER_DECISION.md').read_text())
 
 
 def test_the_holdout_document_states_the_reserved_chronology():
@@ -58,9 +65,11 @@ def test_the_policy_document_lists_every_rejection_reason_and_every_change_class
     assert adjust.DIVIDEND_VALUE_MEANS == 'unadjusted' and "a dividend's value\n  is the amount paid per share on the day" in POLICY
     assert "taken from the decimals of **that\n  bar's own row**" in POLICY and '`splits_unchecked`' in POLICY
     assert f'`{targets.TARGET_VERSION}`' in POLICY and 'the label starts at the close of T+1' in POLICY
-    assert f'`{universe.UNREADABLE_VOLUME}`' in POLICY and f'`{universe.UNREADABLE_VOLUME}`' in UNIVERSE and universe.UNREADABLE_VOLUME in universe.REASONS
-    assert adjust.VOLUME_PRECISION_BOUND == 0.005 and 'below 100 re-counted shares its rounding is more than 0.5% of it' in POLICY
-    assert dataset.CORE_FEATURES == ('return20', 'realized_vol20') and 'the core features are the 20-session return and the\n  20-session realized volatility' in POLICY
+    assert '`security_months_undecided_by_volume_recount`' in POLICY and '`security_months_undecided_by_volume_recount`' in UNIVERSE
+    assert adjust.VOLUME_PRECISION_BOUND == 0.005 and 'Where the range is wider than 0.5% of the volume either way' in POLICY
+    assert adjust.TICK_BOUND == 0.0005 and 'is coarser than a twentieth of a cent' in POLICY and adjust.PRECISION_BOUND == 5e-4
+    assert dataset.CORE_FEATURES == ('return20', 'realized_vol20') and 'the core features are the\n  20-session return and the 20-session realized volatility' in POLICY
+    assert 'VOLUME_REPRINT_TOO_COARSE' not in POLICY + UNIVERSE and 'NO_DOLLAR_VOLUME' in universe.REASONS
     for name in (adjust.UNSIZED, adjust.NO_ACTION, adjust.NO_FACTOR, 'SPLIT_VALUE_CONVENTION_CONTRADICTED', 'DIVIDEND_AMOUNT_BASIS_CONTRADICTED'):
         assert f'`{name}`' in POLICY, name
     assert dataset.contradictions({'old_per_new': 1}, {}) == ['SPLIT_VALUE_CONVENTION_CONTRADICTED']

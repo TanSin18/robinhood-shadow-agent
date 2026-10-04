@@ -154,7 +154,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
     delisting = targets.delisted_at_last_bar(p, actions, data_end)
     labels = targets.build(p, mask, delisted=delisting, splits=audit['splits'])
     readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
-    coarse = adjust.coarse_print(p)
+    coarse = adjust.coarse_print(p, audit['splits'])
     reads_coarse = _window_sum(coarse, oldest.clip(0, max(count - 1, 0)), np.arange(count)) > 0 if count else np.zeros(0, bool)
     thin = adjust.coarse_volume(p, audit['splits'])
     t = np.arange(count)

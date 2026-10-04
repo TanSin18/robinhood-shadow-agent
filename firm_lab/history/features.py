@@ -212,29 +212,31 @@ def compute(panel, break_mask=None, splits=()) -> dict:
     count = len(panel['close'])
     present = np.asarray(panel['present'], bool)
     broken = np.zeros(count, bool) if break_mask is None else np.asarray(break_mask, bool)
-    coarse = adjust.coarse_print(panel)
+    coarse = adjust.coarse_print(panel, splits)
     c = adjust.exact_close(panel, splits)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        basis = c / np.asarray(panel['close'], float)                   # puts a bar's printed open, high and low on the exact close's share basis
-    o, h, l = (np.asarray(panel[k], float) * basis for k in ('open', 'high', 'low'))
+    # The shape of a bar is read from the vendor's own prints of that bar: open, high, low and close as printed, which
+    # stand on one basis and keep the order they had on the day. ``scale`` is exactly 1 for a correct record, so the
+    # prints are compared untouched; everything measured across sessions on the close uses the exact close ``c``.
+    scale = adjust.reprint_scale(panel, splits)
+    o, h, l, cp = (np.asarray(panel[k], float) * scale for k in ('open', 'high', 'low', 'close'))
     v = np.asarray(panel['volume'], float)
     out = {}
     with np.errstate(invalid='ignore', divide='ignore'):
         span = h - l
         positive = np.where(span > 0, span, np.nan)
-        out['body_fraction'] = np.abs(c - o) / positive
-        out['upper_wick_fraction'] = (h - np.maximum(o, c)) / positive
-        out['lower_wick_fraction'] = (np.minimum(o, c) - l) / positive
-        out['clv'] = (2 * c - h - l) / positive
-        out['open_close_return'] = c / o - 1
-        out['range_fraction'] = span / c
-        pc, ph, pl = _shift(c, 1), _shift(h, 1), _shift(l, 1)
-        out['gap_close'], out['gap_high'], out['gap_low'] = o / pc - 1, o / ph - 1, o / pl - 1
-        tr = np.maximum(span, np.maximum(np.abs(h - pc), np.abs(l - pc)))
+        out['body_fraction'] = np.abs(cp - o) / positive
+        out['upper_wick_fraction'] = (h - np.maximum(o, cp)) / positive
+        out['lower_wick_fraction'] = (np.minimum(o, cp) - l) / positive
+        out['clv'] = (2 * cp - h - l) / positive
+        out['open_close_return'] = cp / o - 1
+        out['range_fraction'] = span / cp
+        pc, pcp, ph, pl = _shift(c, 1), _shift(cp, 1), _shift(h, 1), _shift(l, 1)
+        out['gap_close'], out['gap_high'], out['gap_low'] = o / pcp - 1, o / ph - 1, o / pl - 1
+        tr = np.maximum(span, np.maximum(np.abs(h - pcp), np.abs(l - pcp)))
         tr = np.where(broken | coarse, np.nan, tr)                      # the smoothing restarts after a break, and after prices too coarse to give a range
         atr = _wilder(tr, 14)
-        out['true_range_fraction'] = tr / c
-        out['atr14_fraction'] = atr / c
+        out['true_range_fraction'] = tr / cp
+        out['atr14_fraction'] = atr / cp
         out['range_expansion'] = tr / _shift(atr, 1)
         logs = np.log(c / pc)
         for n in (20, 63):
@@ -258,8 +260,8 @@ def compute(panel, break_mask=None, splits=()) -> dict:
             out[f'sma{n}_distance'] = c / _rolling(c, n, np.mean) - 1
         out['rsi14_wilder'] = _rsi(c, restart=broken)
     starts, audit = {}, {}
-    for prefix, hi, lo in (('ohlc', h, l), ('close', c, c)):
-        first, info = _structure_features(prefix, c, hi, lo, atr, out)
+    for prefix, last, hi, lo in (('ohlc', cp, h, l), ('close', c, c, c)):
+        first, info = _structure_features(prefix, last, hi, lo, atr, out)
         starts.update(first)
         audit[prefix] = info
     # What each value's window must not contain: a break after its first bar, a missing bar, and (for features that read

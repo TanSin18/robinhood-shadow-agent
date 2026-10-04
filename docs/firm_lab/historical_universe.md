@@ -15,14 +15,16 @@ not decide who is screened.
 3. A bar on at least 60 of the last 63 exchange sessions.
 4. Ranked by the median daily dollar volume of those 63 sessions, highest first; the security identifier breaks
    ties. The first 1,000 are members. Dollar volume is the **unadjusted** close times the shares traded on the day
-   (the vendor's adjusted volume divided by the confirmed split factor). It is not the product of two adjusted
-   numbers, so for a split that is recorded and confirmed it does not depend on how the vendor rounded the prices it
-   reprinted afterwards. Where a later split is not confirmed by the stored actions, the vendor's own factor is used
-   and the rounding of its reprint remains (measured at up to 0.2% of dollar volume in a test).
+   (the vendor's re-counted volume taken back through the recorded split ratios). It is not the product of two
+   adjusted numbers, so it does not depend on how the vendor rounded the prices it reprinted after a later split.
+   Where the vendor has adjusted for a split the stored actions do not hold, the ratio is taken once for the whole
+   stretch of sessions, not bar by bar.
 
-A security whose 63-session window holds a volume that a later reverse split made unreadable
-(`historical_market_data_policy.md` §4) cannot be ranked. It is screened out as `VOLUME_REPRINT_TOO_COARSE` and
-counted in the manifest (`security_months_screened_out_for_unreadable_volume`).
+The shares traded on a day come from the vendor re-counted on today's basis (`historical_market_data_policy.md`
+§4): exact when no later split touched the bar and after a forward split, a range after a reverse split. The rank
+uses the middle of the range. Where the range of a candidate reaches across the cut, its membership is counted as
+undecided (`membership_undecided_by_volume_recount` per formation,
+`security_months_undecided_by_volume_recount` in the manifest); it is not screened out.
 
 Membership takes effect on the session after R and lasts through the next formation session. The 1,000 is the
 sufficiency target; the minimum acceptable is 500.
@@ -84,9 +86,9 @@ that do not match their manifest are refused (`UNIVERSE_RECORDS_DO_NOT_MATCH_MAN
 ## Limitations
 
 * The provider's coverage of delisted securities is its claim ("about 99% free of survivorship bias") until measured.
-* A stock that later went through very large reverse splits can be missing from the universe of the years before,
-  because its re-counted volume is too small to read. The manifest counts those security-months. With the vendor's
-  format this cannot be repaired, only measured.
+* For a stock that later went through very large reverse splits, the volume of the years before is known only as a
+  range. Its rank uses the middle of the range; where the range reaches across the cut the membership is undecided
+  and counted. With the vendor's format this cannot be repaired, only measured.
 * Share classes are separate securities: both classes of a dual-class company can be members.
 * American depositary receipts in the stock table are included; the rule does not classify.
 * No sector balance is enforced or claimed. Sector bar H5 is `NOT MEASURABLE` until a historical classification

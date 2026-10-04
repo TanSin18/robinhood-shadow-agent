@@ -413,8 +413,8 @@ def build(research_database, history_database=None, *, now=None) -> dict:
          'known_at_methodology': 'membership is formed on the last session of a month from bars up to that session and takes effect on the next session',
          'adjustment_basis': 'the minimum-price screen reads the unadjusted close', 'pit_eligibility': PUBLISHER_DATED_HISTORICAL if stored and history.get('universe') else None,
          'limitations': ['No sector, market value or index membership is read.', 'S&P 500 membership events are stored as a reference only.',
-                         'A security whose volume a later reverse split left unreadable cannot be ranked and is screened out: '
-                         f'{manifest.get("security_months_screened_out_for_unreadable_volume", 0):,} security-months. They are stocks that later collapsed.']},
+                         'After a later reverse split the vendor\'s re-counted volume gives the day\'s shares only as a range. Memberships that range leaves '
+                         f'undecided: {manifest.get("security_months_undecided_by_volume_recount", 0):,} security-months. They are stocks that later collapsed.']},
     ]
     gaps = ['No licensed historical market data is stored: operator purchase decision required.' if not stored else None,
             'Historical sector classification: none stored; the vendor classification describes companies as they are today.',

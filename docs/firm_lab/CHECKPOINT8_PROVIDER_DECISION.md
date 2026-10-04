@@ -98,13 +98,15 @@ eodhd.com (pricing, terms-conditions, delisted data); sharadar.com (subscribe, p
 * **Whether the vendor's bulk file layout matches its documentation.** The reader refuses a file whose columns are
   not the documented ones; the validation sample is where this is found out.
 * **How the vendor prints re-counted volume.** Volume comes only on today's share basis. If it is rounded to whole
-  shares, the early volume of a stock that later went through very large reverse splits is too small to read: the
-  stock cannot be ranked for the universe of those years, and the volume features are withheld from every row of a
-  dataset that would read such a bar. The first file shows how many security-months are affected.
+  shares, the early volume of a stock that later went through very large reverse splits is known only as a range:
+  its universe membership can be undecided, and the volume features are withheld from every row of a dataset that
+  would read such a bar. The first file shows how many security-months are affected.
 * **How finely the vendor prints adjusted prices.** Open, high and low come only split-adjusted. For a stock that
-  later split many times, the reprinted early prices are small numbers; if they are printed coarsely, the features
-  that read a high, low or open are withheld from every row of the dataset (`historical_market_data_policy.md` §4),
-  and only the close-based features remain for that period. This cannot be known before a file is read. It is the
+  later split, the reprinted early prices must still hold the day's price to a twentieth of a cent; otherwise the
+  features that read a high, low or open are withheld from every row of the dataset
+  (`historical_market_data_policy.md` §4), and only the close-based features remain. Two decimals never suffice once
+  any member has a later forward split; four decimals carry a cumulative later split of about 10, six decimals about
+  1,000. This cannot be known before a file is read. It is the
   first thing the validation sample measures (bar O7), and a reason to take one month before the annual plan. If it
   fails, the remedy is a second source of unadjusted open, high and low, which is a new provider decision.
 

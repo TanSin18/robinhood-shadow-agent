@@ -261,5 +261,7 @@ named here so that the record is in one place:
   new shares per old; dividend value as the amount paid per share on the day). That is a gate before any bar is
   measured, not a bar.
 * **Whether a row exists is decided from the exact close only**, and the features that read volume follow the same
-  all-or-none rule as those that read a high, low or open (amendment 3). A security the universe cannot rank
-  because a later reverse split left its volume unreadable is counted; H3 and H4 are measured on what remains.
+  all-or-none rule as those that read a high, low or open (amendment 3). A universe membership that a later reverse
+  split leaves undecided is counted; H3 and H4 are measured on the universe as formed.
+* **O7 has a second test for a re-adjusted bar**: its print, taken back to the day's dollars, must hold the price to
+  a twentieth of a cent. A bar that fails either test counts as coarse. This can only make O7 harder to meet.

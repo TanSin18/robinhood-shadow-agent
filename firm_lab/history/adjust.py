@@ -27,7 +27,8 @@ from .panel import first_session_on_or_after
 TOLERANCE = 0.005
 LARGE_DISTRIBUTION = 0.05
 PRECISION_BOUND = 5e-4                    # an adjusted price printed more coarsely than 0.05% of itself cannot support high/low/open features
-VOLUME_PRECISION_BOUND = 0.005            # a re-counted volume known to worse than 0.5% of itself cannot support a volume feature or a liquidity rank
+TICK_BOUND = 0.0005                       # a re-adjusted print must hold the day's price to a twentieth of a cent, or prices that differed on the day can merge
+VOLUME_PRECISION_BOUND = 0.005            # a re-counted volume known to worse than 0.5% of itself cannot support a volume feature
 DIRECTION_FROM = 0.2                      # a split of at least about 1.22-for-1 is large enough to check which way the factor stepped
 SPIN_OFF, LARGE, NO_ACTION, NO_FACTOR = 'SPIN_OFF', 'LARGE_DISTRIBUTION', 'SPLIT_FACTOR_WITHOUT_ACTION', 'ACTION_WITHOUT_SPLIT_FACTOR'
 UNSIZED = 'DISTRIBUTION_WITHOUT_AMOUNT'
@@ -43,10 +44,20 @@ def split_factor(panel) -> np.ndarray:
         return panel['close_unadjusted'] / panel['close']
 
 
-def coarse_print(panel) -> np.ndarray:
-    """True where the adjusted close is printed more coarsely than PRECISION_BOUND of its own value."""
+def coarse_print(panel, splits=()) -> np.ndarray:
+    """True where the vendor's print of a bar cannot give the shape of that bar. Two tests:
+
+    * the adjusted close is printed more coarsely than PRECISION_BOUND of its own value; or
+    * the bar was re-adjusted for a later split and its print, taken back to the day's own dollars, is coarser than
+      TICK_BOUND. A re-adjusted price is the day's price divided by the later splits and rounded again; unless the
+      rounding is much finer than a cent of the day, two prices that differed on the day can come out equal (or two
+      equal ones different), and a swing high is decided by exactly such comparisons.
+
+    A bar no later split touched is printed as it was on the day and passes the second test whatever its decimals."""
     with np.errstate(invalid='ignore'):
-        return np.asarray(panel['present'], bool) & (panel['print_error'] > PRECISION_BOUND)
+        readjusted = np.abs(share_divisor(panel, splits) - 1.0) > 1e-9
+        in_day_dollars = panel['print_error'] * panel['close_unadjusted']
+        return np.asarray(panel['present'], bool) & ((panel['print_error'] > PRECISION_BOUND) | (readjusted & (in_day_dollars > TICK_BOUND * (1 + 1e-9))))
 
 
 def _number(text):
@@ -186,28 +197,73 @@ def exact_close(panel, splits=()) -> np.ndarray:
     return panel['close_unadjusted'] / divisor
 
 
-def share_divisor(panel, splits=()) -> np.ndarray:
-    """How many of today's shares one share of each session became: what the vendor's adjusted volume was multiplied by.
-    Where the confirmed splits explain the vendor's own factor (unadjusted over adjusted close) the exact product of
-    their ratios is used, so that rounding in the reprinted prices plays no part; elsewhere the vendor's factor stands."""
-    count = len(panel['sessions'])
-    exact = np.ones(count)
+def _applied(panel, splits=()) -> np.ndarray:
+    """The product of the applied split ratios after each session."""
+    out = np.ones(len(panel['sessions']))
     for k, ratio in splits:
-        exact[:k] *= ratio
-    printed = split_factor(panel)
+        out[:k] *= ratio
+    return out
+
+
+def reprint_scale(panel, splits=()) -> np.ndarray:
+    """What the vendor's adjusted prices of each bar must be multiplied by to stand on the exact close's share basis.
+
+    Exactly 1 wherever the vendor's factor (unadjusted over adjusted close) is the product of the applied splits after
+    the session, within what its rounding explains. That is every bar of a correct record, with or without later
+    splits, so the vendor's own prints are compared with each other untouched and a tie on the day stays a tie.
+
+    Elsewhere the vendor has adjusted for something the applied splits do not hold. The true ratio is the same over a
+    whole stretch of sessions; it is taken as the median over the stretch, so that the rounding of one bar's close
+    cannot tilt that bar against its neighbours."""
+    count = len(panel['sessions'])
+    scale = np.ones(count)
     with np.errstate(invalid='ignore', divide='ignore'):
-        agrees = np.abs(np.log(printed / exact)) <= TOLERANCE + panel['half_ulp']
-    return np.where(agrees, exact, printed)
+        ratio = split_factor(panel) / _applied(panel, splits)
+        off = np.asarray(panel['present'], bool) & np.isfinite(ratio) & ~(np.abs(np.log(ratio)) <= TOLERANCE + panel['half_ulp'])
+    index = np.flatnonzero(off)
+    if not len(index):
+        return scale
+    valid = np.flatnonzero(panel['present'])
+    order = {int(k): n for n, k in enumerate(valid)}
+    start = 0
+    for n in range(1, len(index) + 1):
+        a = int(index[n - 1])
+        ends = n == len(index) or order[int(index[n])] != order[a] + 1 or \
+            abs(math.log(ratio[index[n]] / ratio[a])) > TOLERANCE + panel['half_ulp'][index[n]] + panel['half_ulp'][a]
+        if ends:                                                        # a stretch ends where the bars stop being neighbours or the ratio steps
+            scale[index[start:n]] = float(np.median(ratio[index[start:n]]))
+            start = n
+    return scale
+
+
+def share_divisor(panel, splits=()) -> np.ndarray:
+    """How many of today's shares one share of each session became: what the vendor's volume was multiplied by. The
+    product of the applied split ratios after the session, times ``reprint_scale`` where the vendor adjusted for more."""
+    return _applied(panel, splits) * reprint_scale(panel, splits)
+
+
+def volume_bounds(panel, splits=()) -> tuple:
+    """(fewest, most) shares that can have traded on the day, given the vendor's re-counted volume. The vendor supplies
+    volume on today's share basis: the day's shares times the divisor, a whole number of today's shares at best. A bar no
+    later split touched is exact. After a forward split the re-count is exact too (one whole number of the day's shares
+    fits). After a reverse split many do: the re-count has lost them."""
+    divisor, volume = share_divisor(panel, splits), np.asarray(panel['volume'], float)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        low, high = np.ceil((volume - 0.5) / divisor - 1e-9).clip(0), np.floor((volume + 0.5) / divisor + 1e-9)
+        loose = high < low                                              # no whole number fits: the vendor did not round to whole shares
+        low = np.where(loose, ((volume - 0.5) / divisor).clip(0), low)
+        high = np.where(loose, (volume + 0.5) / divisor, high)
+    exact = np.abs(divisor - 1.0) <= 1e-9
+    return np.where(exact, volume, low), np.where(exact, volume, high)
 
 
 def coarse_volume(panel, splits=()) -> np.ndarray:
-    """True where the volume was re-counted for a later split and is too small a number to be read. The vendor supplies
-    volume only on today's share basis. After a later reverse split an early volume is a small number of today's shares,
-    and a volume is a whole number of shares at best: below 100 re-counted shares its rounding is more than 0.5% of it,
-    and it can round to nothing at all. A bar no later split touched is exact and is never flagged, whatever its volume."""
+    """True where the day's volume is known only to worse than VOLUME_PRECISION_BOUND of itself, because a later reverse
+    split re-counted it into too few of today's shares (it can round to nothing at all). A bar no later split touched,
+    and a bar re-counted for a forward split, are exact and are never flagged, whatever their volume."""
+    low, high = volume_bounds(panel, splits)
     with np.errstate(invalid='ignore'):
-        recounted = np.abs(share_divisor(panel, splits) - 1.0) > 1e-9
-        return np.asarray(panel['present'], bool) & recounted & ~(panel['volume'] * VOLUME_PRECISION_BOUND >= 0.5)
+        return np.asarray(panel['present'], bool) & ((high - low) / 2 > VOLUME_PRECISION_BOUND * (high + low) / 2)
 
 
 def total_return_audit(panel, actions) -> dict:
