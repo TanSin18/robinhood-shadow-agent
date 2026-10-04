@@ -43,7 +43,7 @@ python -m pytest -q -p no:cacheprovider
 | Cloud, full suite (`7792a2f`) | **1147 passed, 1 skipped** (225 s). The skip is `tests/test_installed_isolation.py`, which needs the operator's installed Codex |
 | Cloud, full suite from a plain source export with no git metadata (`f6f605c`) | 1143 passed, 1 skipped: the suite does not need a git checkout |
 | Cloud, modeling tests with torch, xgboost, lightgbm and catboost made unimportable | 63 passed, 1 module skipped (`test_modeling_report.py`, the end-to-end run): what the Mac's environment will do |
-| Native Mac | see below |
+| Native Mac, Python 3.14.6, source export of `7292a4d` | **1129 passed, 3 failed, 1 skipped, 27 warnings** (86 s); see below |
 
 After 2026-10-04 13:10 UTC the full suite shows two failures that have nothing to do with this checkpoint:
 `tests/test_dashboard.py::test_decision_room_links_pending_approval_and_marks_failed_boundary` and
@@ -86,12 +86,52 @@ exact set of capability states; `RESEARCH_ONLY` was added to it.
 `CHECKPOINT7_REVIEW.md` says which of the first set failed on behaviour and which because the old code could not
 express the rule.
 
-## Native Mac run
+## Native Mac run (2026-10-04 11:34 ET, run by the operator)
 
-**NOT RUN at the time of writing.** The Mac was not reachable from this session on 2026-10-04 (the link dropped
-before deployment). The native environment has numpy, pandas, scipy, scikit-learn and exchange_calendars and none of
-xgboost, lightgbm, catboost or torch, so the expected native result is the full suite with the end-to-end modeling
-module skipped, plus the one known Checkpoint 6 failure
-(`tests/test_installed_isolation.py::test_installed_child_filters_tools_and_denies_unexpected_server`, the installed
-Codex `configWarning`; Codex maintenance stays PREPARED_AND_PROVEN_NOT_INSTALLED). That is an expectation, not
-evidence. `CHECKPOINT7_DEPLOYMENT.md` has the command.
+| | |
+|---|---|
+| Interpreter | Python 3.14.6, the primary `.venv` (`~/LocalProjects/robinhood-shadow-agent/.venv/bin/python`) |
+| Commit | `7292a4d` (`claude/checkpoint7-modeling`), a plain source export at `robinhood-diagnostics/checkpoint7-modeling-20261003/src/`; its code is what is installed in the overlay, except one later stylesheet property |
+| Command | `python -m pytest -q -p no:cacheprovider`, from that folder |
+| Result | **1129 passed, 3 failed, 1 skipped, 27 warnings in 86.04 s** |
+| Skipped | `tests/test_modeling_report.py` (16 end-to-end tests): the native environment has no xgboost, lightgbm, catboost or torch, as intended. Cloud runs them |
+| Warnings | 27, all one `DeprecationWarning` from the installed `agents` library (`asyncio.get_event_loop_policy`), as in Checkpoint 6 |
+| Output | `robinhood-diagnostics/checkpoint7-modeling-20261003/native-tests.txt` |
+
+The three failures, none caused by this checkpoint:
+
+1. `tests/test_installed_isolation.py::test_installed_child_filters_tools_and_denies_unexpected_server` — the installed
+   Codex emits `configWarning` and the unchanged guard rejects it. The same known failure as in Checkpoint 6. The guard
+   is not weakened and nothing is whitelisted. An independent maintenance issue; Codex maintenance stays
+   PREPARED_AND_PROVEN_NOT_INSTALLED.
+2. `tests/test_dashboard.py::test_decision_room_links_pending_approval_and_marks_failed_boundary`
+3. `tests/test_dashboard.py::test_historical_pending_proposal_never_claims_no_proposal`
+
+   Tests 2 and 3 issue an approval card at a fixed time (2026-09-27 14:30 UTC) with a 10,000-minute expiry and read
+   the registered dashboard with the real clock. The card expired at 2026-10-04 13:10 UTC, so both fail from then on
+   every branch; they fail on the Checkpoint 6 commit `3b34b97` in the cloud too. A wall-clock defect in two tests of
+   the registered dashboard. Not changed here: it belongs to a separate, operator-approved repair.
+
+Against the Checkpoint 6 native baseline (1068 passed, 1 failed): 61 more tests pass (the modeling tests that need no
+research library), and the two additional failures are the wall-clock tests.
+
+## Live page check (2026-10-04 11:34 ET)
+
+The operator restarted `com.openai.robinhood-inbox` and saved `http://127.0.0.1:8765/firm-lab` to
+`checkpoint7-modeling-20261003/page.html` (9.2 MB; the count of "MODEL RESEARCH ONLY" is 1). Checked on the saved page:
+
+- the section `#fl-modeling` is present; it is the full section, not the "could not be shown" or "no run stored" notice;
+- "No validated trading model exists" with 43 judged, 28 EXPERIMENTAL, 15 REJECTED; strict point-in-time samples 0;
+  all 6,490 samples retrospective; FIBONACCI ADDS INCREMENTAL OOS VALUE = INCONCLUSIVE; 13 of 13 network results
+  insufficient data; the holdout disclosure in the operator's words;
+- model tables with statuses and baselines, the walk-forward design and the holdout block, feature ablation,
+  calibration, model disagreement, explainability with its limits, data-sufficiency labels, plan v3.1 and the code hash;
+- no BUY, SELL, ENTER, EXIT, OVERWEIGHT or UNDERWEIGHT; no "we recommend", "conviction", "target price" or "position
+  size"; one neutral status style; no form, button or script in the section; "Trial 18" nowhere on the page;
+- the Firm Lab header still says fills 0 and trial NOT REGISTERED; four capability rows show RESEARCH_ONLY;
+- rendered with the deployed stylesheets at 1280 and 390 pixels: 18 tables, 15 folded sections, no horizontal page
+  scroll and no element past the right edge outside a table scroller. One long status token overflowed its box at 390
+  pixels; a one-property stylesheet fix (`overflow-wrap`) was installed and rechecked. A stylesheet is served from
+  disk, so no restart was needed;
+- **no database mutation from read-only access**: the research database (`f58b1d02…`) and the laboratory file
+  (`2d383629…`) have the same sha256 after the request as before it.

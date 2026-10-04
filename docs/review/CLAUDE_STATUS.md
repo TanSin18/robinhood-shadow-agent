@@ -1,6 +1,22 @@
 # Claude status and questions
 
-## 2026-10-04 — Checkpoint 7 research, validation and review complete; deployment to the Mac outstanding; STOP
+## 2026-10-04 11:40 ET — Checkpoint 7 deployed, natively verified and CLOSED; STOP
+
+CHECKPOINT 7 = CLOSED. The read-only laboratory is live on `/firm-lab`: one laboratory file, six overlay files, eight
+capability rows (four RESEARCH_ONLY, four NOT_STARTED). Native suite on Python 3.14.6 at `7292a4d`: 1129 passed,
+3 failed, 1 skipped; the failures are the known Codex `configWarning` test and two wall-clock tests of the registered
+dashboard, none caused by this checkpoint. Control A final recheck: Release N, fingerprint `901f7606…c876`, 240 files,
+no stop file, runner not restarted. No Checkpoint 8. Records: `docs/firm_lab/CHECKPOINT7_CLOSURE.md`,
+`CHECKPOINT7_DEPLOYMENT.md`, `CHECKPOINT7_VALIDATION.md`.
+
+Left for the operator to decide, outside this checkpoint: the two wall-clock tests in `tests/test_dashboard.py`
+(fixed issue time, 10,000-minute expiry, real clock) now fail on every branch; and the Codex maintenance fix remains
+PREPARED_AND_PROVEN_NOT_INSTALLED.
+
+The holdout of Checkpoint 7 is no longer an untouched final test set for future model selection. Future model research
+needs a newly accumulated or separately reserved untouched evaluation period, and strict point-in-time inputs.
+
+## 2026-10-04 (earlier) — Checkpoint 7 research, validation and review complete; deployment to the Mac outstanding
 
 Owner: Claude; branch `claude/checkpoint7-modeling`, based on `codex/checkpoint6-features` `3b34b97`. No merge to
 main. No Checkpoint 8. Codex maintenance stays PREPARED_AND_PROVEN_NOT_INSTALLED.
@@ -46,7 +62,7 @@ The Mac was not reachable when the work was ready (2026-10-04). Not done, and no
 3. The native Mac test run. Operator.
 4. The end-of-checkpoint Control A check on the Mac.
 
-Until these are done the checkpoint is not closed.
+Until these are done the checkpoint is not closed. (All four were done later the same day; see the entry above.)
 
 ### Questions for the operator
 

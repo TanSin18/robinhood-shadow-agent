@@ -4,8 +4,9 @@
 
 ## State (2026-10-04 11:31 ET)
 
-**INSTALLED on the Mac at 11:30 ET (15:30 UTC), under the operator's order of 09:51 ET.** The dashboard restart, the
-live page check and the native test run are the operator's and are recorded at the end of this note when done.
+**DEPLOYED AND VERIFIED.** Installed on the Mac at 11:30 ET (15:30 UTC) under the operator's order of 09:51 ET. The
+operator restarted the dashboard and ran the page check and the native suite at 11:34 ET; the final Control A recheck
+was at 11:40 ET. Operator-step evidence is at the end of this note.
 
 | Step | Evidence |
 |---|---|
@@ -24,7 +25,7 @@ live page check and the native test run are the operator's and are recorded at t
 | Source for the native run | `checkpoint7-modeling-20261003/src/`, a plain export of commit `7292a4d` (its overlay files are identical to `35d6656`) |
 
 The operator ran the three commands once at 11:27 ET, before the install: the dashboard restarted, the page check
-wrote 0, and the test command had no `src/` folder. Harmless; they are to be run again now.
+wrote 0, and the test command had no `src/` folder. Harmless. They were run again at 11:34 ET, after the install.
 
 ## What deployment consists of
 
@@ -42,7 +43,7 @@ that. `com.openai.robinhood-daily` is not touched.
    |---|---|---|
    | `agents/desk/firm_lab_page.py` | `1912d247ee4aaa1c9b70d51160bdd1e7e7f11f93e086b50361a3fbe28bbe81a3` | replaces `b092f1ea…` |
    | `agents/desk/modeling_lab.py` | `1907872e727990fe434eaebc3236e420a9512ddb3e24fe5e6328d12a3f6eadc8` | new |
-   | `agents/static/botfolio-theme.css` | `0b8b15490400bd79d59a3ea877ee8955f2e6292f80eb442c732bdd6a405137c9` | replaces `3aaa9193…` |
+   | `agents/static/botfolio-theme.css` | `17146bd3fee72b6ea369c721e770e26779a1b0592e81322e65905d3d2cdc6e67` | replaces `3aaa9193…`. First installed as `0b8b1549…`; one property (`overflow-wrap` on the opening list) was added after the phone-width check |
    | `firm_lab/view.py` | `1518b31a3e220f925b64096b4d017eaf2fd562a22e469283f5a6728463baa0a5` | replaces `54449760…` |
    | `firm_lab/modeling_view.py` | `edd7e0e50e69a101e75abc49273ab16439946ed3086e7c1fab3ce1b8ace07699` | new, standard library only |
    | `firm_lab/capabilities.py` | `6f29885976204a5f6fbc82c737671dab1821139014663f3a22e6f3aed1c93f9d` | replaces `cf317b14…`; adds the `RESEARCH_ONLY` state |
@@ -87,3 +88,19 @@ dashboard. Nothing else is affected. Control A is not involved at any step.
 
 A trading model, a strategy score into the runner, a portfolio optimizer, an automatic promotion, paper fills from
 these models, a scheduler entry for the modeling package, or the Codex maintenance fix (PREPARED_AND_PROVEN_NOT_INSTALLED).
+
+## Operator steps and final checks (2026-10-04)
+
+| Step | Evidence |
+|---|---|
+| Dashboard restart | `launchctl kickstart -k gui/$(id -u)/com.openai.robinhood-inbox`, by the operator, 11:34 ET. No other service |
+| Live page | `page-check.txt` = 1; `page.html` saved and checked (`CHECKPOINT7_VALIDATION.md`) |
+| Native suite | `native-tests.txt`: Python 3.14.6, 1129 passed, 3 failed, 1 skipped, 27 warnings; the three failures are independent of this checkpoint |
+| Overlay as installed | `overlay-installed.SHA256SUMS` in the checkpoint folder; equals the table above |
+| Research database | sha256 `f58b1d02…3015` after the page was served: unchanged by reading. BUILD_OBSERVE, experiment registry empty, 31 tables, none that could hold an order, fill, position, account or cash |
+| Capability states in use | AVAILABLE, BUILD_ONLY, NOT_STARTED, PARTIAL_EXISTING, RESEARCH_ONLY, UNAVAILABLE. No ACTIVE, PRODUCTION, LIVE or CHAMPION |
+| Control A final recheck, 11:40 ET | Release N; fingerprint `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876`, 240 files, match; no STOP_TRADING file; `daily.log` written at 15:39 UTC by the registered service, which was not restarted; 3 fills in the registered database as before; Lane B paper accounts empty |
+| Codex maintenance | PREPARED_AND_PROVEN_NOT_INSTALLED |
+
+A short record of the installation, with the rollback steps, is on the Mac at
+`robinhood-diagnostics/checkpoint7-modeling-20261003/DEPLOYED.txt`.

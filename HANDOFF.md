@@ -87,7 +87,9 @@ Branch `claude/checkpoint7-modeling` (on `codex/checkpoint6-features`). A modeli
 tournament, research only: `docs/firm_lab/CHECKPOINT7_CLOSURE.md`. Result: no feature family or model architecture is
 established on this data; no model has more than a research status; Fibonacci is INCONCLUSIVE. Control A is unchanged
 and was not restarted. The Firm trading trial is NOT REGISTERED and the October research stop is not superseded.
-Current state and anything left for the operator: `docs/review/CLAUDE_STATUS.md`. Checkpoint 8 is not started.
+Deployed read-only to the dashboard and closed on October 4 (native suite 1129 passed, 3 failed for reasons outside
+the checkpoint). The Checkpoint 7 holdout is no longer an untouched test set for future model selection. Current
+state and what is left for the operator: `docs/review/CLAUDE_STATUS.md`. Checkpoint 8 is not started.
 
 ## Important unfinished items
 

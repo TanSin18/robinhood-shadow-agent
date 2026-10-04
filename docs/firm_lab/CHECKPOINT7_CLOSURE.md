@@ -13,12 +13,16 @@ more sessions exist (5-session LightGBM and XGBoost on the holdout); it is recor
 
 ## Checkpoint
 
+**CHECKPOINT 7 = CLOSED** (2026-10-04 11:40 ET).
+
 | | |
 |---|---|
-| Research, validation and review | complete |
-| Stored result | report `de322bfd1ce6d44cff7a561896a89f52c0092f2db496e029ba84bd3c05f0c79d`, plan `checkpoint7-tournament-plan-v3.1`, code hash `dc7d5b4085357873e61bd9d7307c61c977a20fb9125cc40357a5b1b5032b63c0`; `cli verify` matches |
-| Deployment to the Mac (read-only page, laboratory file, capability rows) | see `CHECKPOINT7_DEPLOYMENT.md` |
-| Native Mac test run | see `CHECKPOINT7_VALIDATION.md` |
+| Research, validation and review | complete; the scientific result was accepted by the operator on 2026-10-04 09:51 ET |
+| Stored result | report `de322bfd1ce6d44cff7a561896a89f52c0092f2db496e029ba84bd3c05f0c79d`, plan `checkpoint7-tournament-plan-v3.1`, code hash `dc7d5b4085357873e61bd9d7307c61c977a20fb9125cc40357a5b1b5032b63c0`; `cli verify` matches. Not rerun after acceptance |
+| Deployment to the Mac | done 2026-10-04 11:30 ET: the laboratory file, six read-only dashboard files, eight capability rows. Nothing else. `CHECKPOINT7_DEPLOYMENT.md` |
+| Live page | `/firm-lab` served by the restarted dashboard carries the laboratory section; checked at desktop and phone width |
+| Native Mac test run | Python 3.14.6, source export of `7292a4d`: 1129 passed, 3 failed, 1 skipped, 27 warnings. The three failures are independent of this checkpoint. `CHECKPOINT7_VALIDATION.md` |
+| Control A final recheck | Release N, fingerprint `901f7606…c876`, 240 files, match; no stop file; the registered service not restarted |
 | Checkpoint 8 | not started |
 
 ### Four runs, one result
@@ -72,15 +76,17 @@ EXPERIMENTAL). EXPERIMENTAL means "not established".
 | | |
 |---|---|
 | Release | N |
-| Fingerprint | `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876` (240 files; verified at the start, 2026-10-03 ≈20:00 ET, and again 2026-10-03 22:36 ET) |
+| Fingerprint | `901f76060e481f50ea5a8ad4df84e16d5a90c013b552e0b8e9474cd045f5c876` (240 files; verified at the start, 2026-10-03 ≈20:00 ET; before and after the deployment, 2026-10-04 11:28 and 11:30 ET; and finally after the dashboard restart and the native run, 11:40 ET) |
 | Strategy changed | NO |
 | Runner restarted | NO |
 | Official Lane B | PAUSED |
 | Real execution | DISABLED |
 | Codex maintenance | PREPARED_AND_PROVEN_NOT_INSTALLED |
 
-Nothing in this checkpoint touches the registered runtime, its database or its schedule. The end-of-checkpoint
-fingerprint check is recorded in `CHECKPOINT7_DEPLOYMENT.md`.
+Nothing in this checkpoint touches the registered runtime, its database or its schedule. At the final recheck there
+was no STOP_TRADING file, `daily.log` was being written by the one registered service at its usual cadence, the
+registered database still held 3 fills as before, and Lane B's paper accounts were empty. The only service restarted
+was `com.openai.robinhood-inbox`, by the operator.
 
 ## Dataset
 
@@ -309,7 +315,11 @@ report only; the page loads no model code.
 | Explainability | family reliance and six traced examples, labelled research only |
 | Research-only warning | permanent: MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE; one neutral style for every status; no form, button or action wording |
 
-Whether it is live on the Mac is in `CHECKPOINT7_DEPLOYMENT.md`.
+Live on the Mac since 2026-10-04 11:34 ET. The section opens with what stands: no validated trading model exists;
+strict point-in-time samples 0 and the retrospective count; Fibonacci INCONCLUSIVE; networks insufficient data; the
+holdout disclosure. The highest scores are headed "research measurements, not recommended models". The served page was
+saved and checked: every required element present, no BUY/SELL wording, one neutral status style, no form or button,
+no horizontal overflow at 1280 or 390 pixels, and both database files byte-identical after the request.
 
 ## Tests
 
@@ -319,10 +329,10 @@ Whether it is live on the Mac is in `CHECKPOINT7_DEPLOYMENT.md`.
 |---|---|
 | Focused | 79 passed (six modeling test files) |
 | Firm Lab | included in the full suite |
-| Native | see `CHECKPOINT7_VALIDATION.md` |
+| Native | Python 3.14.6, `7292a4d`: **1129 passed, 3 failed, 1 skipped, 27 warnings** (86 s). Failures, all independent of this checkpoint: the installed Codex `configWarning` isolation test (guard not weakened; maintenance PREPARED_AND_PROVEN_NOT_INSTALLED) and two `tests/test_dashboard.py` tests whose approval card expired by the real clock on 2026-10-04 |
 | Cloud | **1147 passed, 1 skipped** (commit `7792a2f`); the Codex Checkpoint 6 baseline in the same environment was 1068 passed, 1 skipped |
 | Without the research libraries | 63 passed, 1 module skipped (what the Mac's environment will run) |
-| Known failures | none in the cloud. One Checkpoint 5 test was changed: it pinned the exact set of capability states, and `RESEARCH_ONLY` was added |
+| Known failures | the three native failures above; the two wall-clock tests also fail in the cloud from 2026-10-04 13:10 UTC (1145 passed, 2 failed, 1 skipped), on every branch including Checkpoint 6. One Checkpoint 5 test was changed: it pinned the exact set of capability states, and `RESEARCH_ONLY` was added |
 
 Independent review: three rounds by fresh reviewers plus a delta review (`CHECKPOINT7_REVIEW.md`). One critical and
 thirteen important findings, all repaired with a regression first; none deferred.
@@ -342,7 +352,7 @@ Research-specific states. Nothing is live or in production; `capabilities.requir
 | options_strategy | NOT_STARTED |
 | rl_policy | NOT_STARTED |
 
-Whether these rows are written to the live research database is in `CHECKPOINT7_DEPLOYMENT.md`.
+Written to the live research database on 2026-10-04 and verified there. No model is marked active, in production, live or champion; no such state exists.
 
 ## Experiment state
 
