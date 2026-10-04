@@ -57,7 +57,7 @@ def test_the_common_sample_and_the_design_are_what_the_plan_says():
     assert data.row_session[rows].min() == MINIMUM_HISTORY == 63 and data.row_session[rows].max() == 378 - 1 - 20      # history before, every label after
     design = tournament.design(data)
     assert (design['horizon'], design['embargo'], len(design['folds'])) == (20, 5, 5) and design['gap_before_holdout'] == 25
-    assert len(design['holdout'].validation) == 59 and tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v1'
+    assert len(design['holdout'].validation) == 59 and tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v2'
 
 
 def test_no_model_is_fitted_on_a_row_it_predicts_or_on_a_label_that_overlaps_the_block():
@@ -104,20 +104,21 @@ def test_a_planted_signal_is_found_and_noise_is_not_promoted():
     design = tournament.design(data)
     columns = list(range(len(NAMES)))
     from firm_lab.modeling.lab import summarize
-    ridge = summarize(tournament.run({'name': 'ridge', 'cls': models.Ridge, 'grid': models.GRIDS['ridge'], 'target': targets.PRIMARY, 'columns': columns}, data, design), data, draws=300)
-    zero = summarize(tournament.run({'name': 'zero', 'cls': models.Zero, 'grid': [{}], 'target': targets.PRIMARY, 'columns': columns}, data, design), data, draws=300)
-    momentum = summarize(tournament.run({'name': 'm', 'cls': models.SingleFeature, 'grid': [{'feature': 'return20'}], 'target': targets.PRIMARY, 'columns': columns}, data, design), data, draws=300)
+    ridge = summarize(tournament.run({'name': 'ridge', 'cls': models.Ridge, 'grid': models.GRIDS['ridge'], 'target': targets.PRIMARY, 'columns': columns}, data, design), data)
+    zero = summarize(tournament.run({'name': 'zero', 'cls': models.Zero, 'grid': [{}], 'target': targets.PRIMARY, 'columns': columns}, data, design), data)
+    momentum = summarize(tournament.run({'name': 'm', 'cls': models.SingleFeature, 'grid': [{'feature': 'return20'}], 'target': targets.PRIMARY, 'columns': columns}, data, design), data)
     assert ridge['dev_mean_ic'] > 0.3 and ridge['holdout_mean_ic'] > 0.3 and all(x > 0.2 for x in ridge['fold_ics'])
-    assert zero['dev_mean_ic'] is None or np.isnan(zero['dev_mean_ic'])                              # a constant forecast ranks nothing
-    assert selection.strongest_baseline({'zero': zero, 'momentum_20': momentum}) == 'momentum_20'
-    assert selection.status(ridge, momentum, holm_rejected=True)[0] == 'ELIGIBLE_FOR_FUTURE_REVIEW'
+    assert zero['dev_mean_ic'] == 0.0 and zero['dev']['ranking']['sessions_with_a_ranking'] == 0     # a constant forecast ranks nothing: zero skill
+    baselines = {'zero': zero, 'momentum_20': momentum}
+    status, reasons = selection.status(ridge, baselines, holm_rejected=True)
+    assert status == 'CHALLENGER' and 'too few for any interval' in reasons[-1]                      # a 59-session holdout cannot establish a 10-session edge
     noise = synthetic(strength=0.0, seed=2)
     design = tournament.design(noise)
     for seed in (0,):
-        nothing = summarize(tournament.run({'name': 'ridge', 'cls': models.Ridge, 'grid': models.GRIDS['ridge'], 'target': targets.PRIMARY, 'columns': columns}, noise, design), noise, draws=300)
-        base = summarize(tournament.run({'name': 'm', 'cls': models.SingleFeature, 'grid': [{'feature': 'return20'}], 'target': targets.PRIMARY, 'columns': columns}, noise, design), noise, draws=300)
+        nothing = summarize(tournament.run({'name': 'ridge', 'cls': models.Ridge, 'grid': models.GRIDS['ridge'], 'target': targets.PRIMARY, 'columns': columns}, noise, design), noise)
+        base = summarize(tournament.run({'name': 'm', 'cls': models.SingleFeature, 'grid': [{'feature': 'return20'}], 'target': targets.PRIMARY, 'columns': columns}, noise, design), noise)
         assert abs(nothing['dev_mean_ic']) < 0.06
-        assert selection.status(nothing, base, holm_rejected=False)[0] in ('REJECTED', 'EXPERIMENTAL')   # never a challenger on noise
+        assert selection.status(nothing, {'m': base}, holm_rejected=False)[0] in ('REJECTED', 'EXPERIMENTAL')   # never a challenger on noise
 
 
 def test_results_are_reproducible_and_baselines_do_what_they_say():

@@ -90,25 +90,32 @@ def _report():
     classifier = _row('logistic', dev_log_loss=0.6931, holdout_log_loss=0.6940)
     classifier.pop('dev_rmse')
     return {
-        'warning': modeling.WARNING, 'plan_version': 'checkpoint7-tournament-plan-v1', 'time_policy': 'SESSION_TIME_RETROSPECTIVE', 'code_hash': 'c' * 64,
+        'warning': modeling.WARNING, 'report_id': 'r' * 64, 'plan_version': 'checkpoint7-tournament-plan-v2', 'time_policy': 'SESSION_TIME_RETROSPECTIVE', 'code_hash': 'c' * 64,
+        'supersedes': {'report_id': 'e' * 64, 'reason': 'repairs after the independent review'},
         'dataset': {'dataset_hash': 'd' * 64, 'calculation_hash': 'f' * 64, 'instruments': ['AAPL', 'XLK'], 'usable_samples': 6468, 'usable_sessions': 294,
-                    'first_usable_session': '2025-06-30', 'last_usable_session': '2026-09-01', 'strict_point_in_time_samples': 0, 'features': 120, 'excluded_features': 60,
-                    'non_overlapping_windows': {'5': 58, '10': 29, '20': 14}, 'effective_independent_instruments': 6.2,
+                    'first_usable_session': '2025-06-30', 'last_usable_session': '2026-09-01', 'strict_point_in_time_samples': 0, 'closes_held_at_their_own_session_close': 0,
+                    'features': 159, 'features_in_a_model_group': 140, 'features_ever_available': 95, 'excluded_features': 60,
+                    'evaluation_windows': {'development': {'sessions': 131, 'non_overlapping_windows': {'5': 26, '10': 13, '20': 6}},
+                                           'holdout': {'sessions': 59, 'non_overlapping_windows': {'5': 11, '10': 5, '20': 2}},
+                                           'note': 'Non-overlapping is not the same as independent.'}, 'effective_independent_instruments': 5.8,
                     'limitations': ['Retrospective: every input was captured on 2026-10-01 to 2026-10-03.', 'Labels are price returns on both legs.']},
         'validation': {'split_method': 'expanding-walk-forward-purged-v1', 'walk_forward_folds': 5, 'purge_sessions': 20, 'embargo_sessions': 5, 'gap_before_holdout_sessions': 25,
                        'blocks': [block('fold_1', '2025-06-30', '2025-09-23', '2025-10-22', '2025-11-26', 60), block('final_holdout', '2025-06-30', '2026-04-30', '2026-06-08', '2026-09-01', 210)],
-                       'inner_tuning': 'the last quarter of each training window, purged', 'configurations_fitted': 1234, 'bootstrap': 'moving block', 'multiple_testing': 'Holm at 10%'},
-        'tables': {'excess_return_10': [_row('momentum_20', role='BASELINE', family='A_baseline'), _row('ridge'),
+                       'inner_tuning': 'the last quarter of each training window, purged', 'configurations_fitted': 1234,
+                       'interval_method': 'Student t on the means of consecutive batches', 'unranked_sessions': 'a session a model does not rank counts as rank correlation 0',
+                       'multiple_testing': 'Holm at 10%', 'holm_family_sizes': {'excess_return_10': 54, 'excess_return_5': 16, 'excess_return_20': 16}},
+        'tables': {'excess_return_10': [_row('momentum_20', role='BASELINE', family='A_baseline', dev_batches=6, dev_sessions=131, dev_sessions_ranked=104), _row('ridge'),
                                         _row('transformer_encoder', family='F_transformer', sufficiency='EXPERIMENTAL_INSUFFICIENT_DATA'),
                                         {'key': 'catboost/excess_return_10', 'name': 'catboost', 'role': 'CANDIDATE', 'status': None, 'not_run': 'dependency unavailable: catboost', 'target': 'excess_return_10'}],
                    'excess_return_5': [_row('ridge', status='REJECTED')], 'excess_return_20': [_row('ridge', status='CHALLENGER')], 'positive_excess_10': [classifier]},
-        'strongest_baseline': {'excess_return_5': 'momentum_20', 'excess_return_10': 'momentum_20', 'excess_return_20': 'momentum_63'},
+        'strongest_baseline': {'excess_return_5': 'momentum_20', 'excess_return_10': 'momentum_20', 'excess_return_20': 'momentum_63', 'positive_excess_10': 'momentum_20'},
+        'risk_baselines': {'close_mae_10': 'historical_mean'},
         'distribution': {'models': {'train_quantile': {'status': 'EXPERIMENTAL', 'mean_dev_pinball': 0.0101, 'mean_holdout_pinball': 0.0099,
                                                        'coverage': {k: {'coverage': 0.78} for k in ('10-90 dev', '10-90 holdout', '25-75 dev', '25-75 holdout')}},
                                     'lightgbm_quantile': {'not_run': 'dependency unavailable: lightgbm'}}},
         'risk': {'close_mae_10': {'historical_mean': {'role': 'BASELINE', 'status': 'EXPERIMENTAL', 'dev_rmse': 0.021, 'holdout_rmse': 0.02},
-                                  'ridge': {'role': 'CANDIDATE', 'status': 'REJECTED', 'dev_rmse': 0.022, 'holdout_rmse': 0.021}}},
-        'ablation': {'rows': [{'model': 'ridge', 'set': 'technical_baseline', 'features': 30, 'dev_mean_ic': 0.01, 'holdout_mean_ic': 0.0},
+                                  'ridge': {'role': 'CANDIDATE', 'status': 'REJECTED', 'dev_rmse': 0.022, 'holdout_rmse': 0.021, 'compared_with': 'historical_mean'}}},
+        'ablation': {'note': 'The "sector" set holds only trailing returns relative to VTI.', 'rows': [{'model': 'ridge', 'set': 'technical_baseline', 'features': 30, 'dev_mean_ic': 0.01, 'holdout_mean_ic': 0.0},
                               {'model': 'ridge', 'set': 'technical+fibonacci', 'features': 55, 'dev_mean_ic': 0.012, 'holdout_mean_ic': -0.01, 'dev_ic_change': 0.002,
                                'dev_ic_change_interval_90': [-0.02, 0.03], 'holdout_ic_change': -0.01}],
                      'fibonacci': {'answer': 'INCONCLUSIVE', 'statement': 'FIBONACCI ADDS INCREMENTAL OOS VALUE = INCONCLUSIVE', 'why': 'the intervals include both',
@@ -128,13 +135,19 @@ def _report():
         'importance': {'ridge': {'method': 'absolute standardised coefficients', 'family_share': {'momentum': 0.4, 'trend': 0.3}}, 'limits': 'Importance is not causal.'},
         'meta_label': {'note': 'Research diagnostic. Not a trade filter; nothing is acted on.', 'question': 'is the direction right?',
                        'dev': {'meta_model_auc': 0.51, 'prediction_size_rule_auc': 0.5, 'primary_direction_right_rate': 0.5}},
-        'conditional': {'note': 'No macro regime exists and none is created.', 'vti_volatility_terciles': {'groups': [{'group': 'low', 'sessions': 40, 'non_overlapping_windows': 4, 'mean_ic': 0.01, 'meaningful': False}]},
+        'conditional': {'note': 'No macro regime exists and none is created.',
+                        'vti_volatility_terciles': {'comparison_possible': False, 'result': 'INSUFFICIENT_DATA: Too few sessions fall in two groups.',
+                                                    'groups': [{'group': 'low', 'sessions': 40, 'non_overlapping_windows': 4, 'mean_ic': 0.01, 'meaningful': False}]},
                         'fed': {'result': 'INSUFFICIENT_DATA: too few sessions'}, 'pce': {'result': 'INSUFFICIENT_DATA: too few sessions'}},
         'economic': {'statement': 'Not net strategy P&L.', 'cost_range_round_trip_two_legs': [0.001, 0.004],
-                     'rows': [{'name': 'ridge', 'dev_spread': 0.0011, 'dev_interval_90': [-0.004, 0.006], 'holdout_spread': -0.0004, 'dev_interval_clears_upper_cost': False}]},
-        'champions': {'note': '"Best" is the highest development score. It is not a selection for use.', 'best_10d': {'name': 'momentum_20', 'status': 'EXPERIMENTAL', 'dev_mean_ic': 0.02, 'holdout_mean_ic': 0.0},
-                      'strongest_advanced_candidate': {'name': 'xgboost', 'status': 'REJECTED', 'dev_mean_ic': 0.0, 'holdout_mean_ic': 0.0}},
-        'examples': [{'instrument': 'XLK', 'session': '2026-09-01', 'label': 'RESEARCH ONLY — NOT A RECOMMENDATION', 'predicted_excess_return_10': 0.004, 'benchmark_prediction': 0.0,
+                     'rows': [{'name': 'ridge', 'dev_spread': 0.0011, 'dev_interval_90': [-0.004, 0.006], 'holdout_spread': -0.0004, 'development_interval_above_stated_cost_range': False}]},
+        'best_research_models': {'note': '"Highest" is the highest development score among the rows compared. It is not a selection for use.',
+                                 'best_10d': {'name': 'mlp_sequence_features', 'role': 'CANDIDATE', 'status': 'EXPERIMENTAL', 'dev_mean_ic': 0.12, 'holdout_mean_ic': 0.003,
+                                              'sufficiency': 'EXPERIMENTAL_INSUFFICIENT_DATA', 'highest_of': 25},
+                                 'strongest_baseline': {'name': 'momentum_20', 'role': 'BASELINE', 'status': 'EXPERIMENTAL', 'dev_mean_ic': 0.02, 'holdout_mean_ic': 0.0, 'highest_of': 7},
+                                 'strongest_advanced_candidate': {'name': 'xgboost', 'role': 'CANDIDATE', 'status': 'REJECTED', 'dev_mean_ic': 0.0, 'holdout_mean_ic': 0.0, 'highest_of': 14}},
+        'examples': [{'instrument': 'XLK', 'session': '2026-09-01', 'label': 'RESEARCH ONLY — NOT A RECOMMENDATION',
+                      'shown_because': 'the six rows of the last holdout session whose prediction is furthest from zero', 'predicted_excess_return_10': 0.004, 'benchmark_prediction': 0.0,
                       'interval_10_90': [-0.03, 0.04], 'predictions_by_model': {'ridge': 0.001, 'lightgbm': 0.004}, 'model_dispersion': 0.002, 'realized_excess_return_10': -0.01,
                       'family_contributions': {'momentum': 0.003, 'fibonacci': -0.0004}, 'largest_features': [{'feature': 'return20', 'contribution': 0.002}],
                       'explanation_model': 'LightGBM (TreeSHAP)', 'feature_snapshot_id': 'a' * 64, 'calculation_hash': 'f' * 64}],
@@ -151,7 +164,7 @@ def _lab_file(folder, report, statuses=('EXPERIMENTAL', 'REJECTED')):
             db.execute(f'CREATE TABLE {table} (id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at TEXT NOT NULL)')
         db.execute('INSERT INTO modeling_reports VALUES (?,?,?)', ('r1', json.dumps(report), '2026-10-03T23:00:00+00:00'))
         for k, status in enumerate(statuses):
-            db.execute('INSERT INTO modeling_models VALUES (?,?,?)', (f'm{k}', json.dumps({'status': status}), '2026-10-03T23:00:00+00:00'))
+            db.execute('INSERT INTO modeling_models VALUES (?,?,?)', (f'm{k}', json.dumps({'status': status, 'report_id': report.get('report_id')}), '2026-10-03T23:00:00+00:00'))
     db.close()
     return path
 
@@ -188,13 +201,20 @@ def test_the_page_shows_research_measurements_with_provenance_and_no_instruction
                  'expanding-walk-forward-purged-v1', '20 sessions before every predicted block', 'final_holdout', 'Strongest naive baseline on development sessions',
                  'EXPERIMENTAL_INSUFFICIENT_DATA', 'dependency unavailable: catboost', 'Feature-family ablation', 'technical+fibonacci', 'Specialist models and combinations',
                  'Neural models: is there enough data?', 'Return distribution', 'Calibration', 'Model disagreement', 'Uncertainty', 'Meta-label research',
-                 'Results by factual context', 'Prediction examples — research only', 'RESEARCH ONLY — NOT A RECOMMENDATION', 'checkpoint7-tournament-plan-v1',
-                 'It is not a selection for use', 'Not net strategy P&amp;L'):
+                 'Results by factual context', 'Prediction examples — research only', 'RESEARCH ONLY — NOT A RECOMMENDATION', 'checkpoint7-tournament-plan-v2',
+                 'It is not a selection for use', 'Not net strategy P&amp;L',
+                 # what the review asked the page to show
+                 '131 development, 59 holdout', 'development: 26 of 5 sessions, 13 of 10, 6 of 20; holdout: 11, 5, 2', 'Non-overlapping is not the same as independent',
+                 '6 batches', 'ranked 104 of 131 sessions', 'highest of 25 compared', 'What a research status means', 'Student t on the means of consecutive batches',
+                 'family sizes: excess_return_10 54', 'Which rows: the six rows of the last holdout session', 'a description, not a signal',
+                 'compared with historical_mean', 'eeeeeeeeeeeeeeee — repairs after the independent review', '159 encoded as numbers, 140 of them offered to a model'):
         assert text in html, text
     # provenance: dataset, feature calculation and code hashes, and the feature snapshot behind an example
     assert '<code>dddddddddddddddd</code>' in html and '<code>ffffffffffffffff</code>' in html and '<code>cccccccccccccccc</code>' in html and '<code>aaaaaaaaaaaaaaaa</code>' in html
     # one neutral style for every research status; nothing green or red says what to do
     assert set(re.findall(r'<span class="cat cat-(\w+)">(?:EXPERIMENTAL|CHALLENGER|REJECTED|ELIGIBLE_FOR_FUTURE_REVIEW|NOT RUN|EXPERIMENTAL_INSUFFICIENT_DATA)', html)) == {'neutral'}
+    best_row = html.split('10-session excess return</td>')[1].split('</tr>')[0]
+    assert 'mlp_sequence_features' in best_row and 'EXPERIMENTAL_INSUFFICIENT_DATA' in best_row and '+0.0030' in best_row      # a highest score is never shown without its gate label and its holdout
     assert 'cat-good' not in html and 'cat-stop' not in html and 'cat-warn' not in html
     words = re.sub(r'<[^>]+>', ' ', html)
     for word in ACTION_WORDS:

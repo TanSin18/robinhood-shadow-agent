@@ -40,7 +40,7 @@ class TorchModel(Model):
         if X.ndim == 3:
             flat = X.reshape(-1, X.shape[-1])
             if fit:
-                self.pre = Preprocessor(indicators=False).fit(flat)
+                self.pre = Preprocessor().fit(flat)             # median and a missing-value flag, as for every linear and neural model (plan section 3)
             return self.pre.transform(flat).reshape(X.shape[0], X.shape[1], -1)
         if fit:
             self.pre = Preprocessor().fit(X)
@@ -72,6 +72,7 @@ class TorchModel(Model):
             learn = sessions + horizon < cut
         else:
             stop, learn = np.zeros(len(sessions), dtype=bool), np.ones(len(sessions), dtype=bool)
+        self.learn_sessions = int(len(np.unique(sessions[learn])))      # the sessions gradient steps were taken on: fewer than the training window
         self.models, self.history = [], []
         for seed in self.params.get('seeds', SEEDS):
             torch.manual_seed(seed)
@@ -143,7 +144,7 @@ class TorchModel(Model):
         return mean[:, 0] if mean.shape[1] == 1 else mean
 
     def describe(self):
-        return {'training': self.history, 'parameters': self.parameter_count}
+        return {'training': self.history, 'parameters': self.parameter_count, 'learn_sessions': self.learn_sessions}
 
 
 class MLP(TorchModel):

@@ -24,6 +24,9 @@ SPECIALISTS = {'technical': ('technical_baseline', 'fibonacci', 'structure'), 'f
 # A plausible round-trip cost range for liquid funds and large stocks, per pair of legs, in return units. Stated, not fitted.
 COST_RANGE = (0.0010, 0.0040)
 RESEARCH_THRESHOLDS = (0.0, 0.005, 0.01)
+GATE_SEED = 5
+EXAMPLE_RULE = ('the six rows of the last holdout session whose LightGBM prediction is furthest from zero in either direction: chosen so that the contributions are '
+                'large enough to read, not because the predictions are good')
 
 
 def _spec(name, cls, target, columns, grid=None, **extra):
@@ -37,10 +40,10 @@ def _strip(record):
     return {k: _strip(v) for k, v in record.items() if k not in ('ic_series',)}
 
 
-def summarize(result, data, *, head=0, target=None, draws=2000) -> dict:
+def summarize(result, data, *, head=0, target=None) -> dict:
     name = target or (result['target'][head] if isinstance(result['target'], (tuple, list)) else result['target'])
-    dev = tournament.score(result, data, part='dev', head=head, target=name, draws=draws)
-    holdout = tournament.score(result, data, part='holdout', head=head, target=name, draws=draws)
+    dev = tournament.score(result, data, part='dev', head=head, target=name)
+    holdout = tournament.score(result, data, part='holdout', head=head, target=name)
     horizon = int(name.rsplit('_', 1)[1]) if name[-1].isdigit() else targets.RISK_HORIZON
     out = {'target': name, 'horizon': horizon, 'dev': _strip(dev), 'holdout': _strip(holdout), 'fold_ics': tournament.fold_ics(result, data, head=head, target=name),
            'dev_mean_ic': dev.get('ranking', {}).get('mean_ic'), 'holdout_mean_ic': holdout.get('ranking', {}).get('mean_ic'),
@@ -69,8 +72,8 @@ def rmse(y, prediction):
 
 
 class Lab:
-    def __init__(self, path, *, log=print, quick=False, draws=2000):
-        self.path, self.log, self.quick, self.draws = path, log, quick, draws
+    def __init__(self, path, *, log=print, quick=False):
+        self.path, self.log, self.quick = path, log, quick
         self.results, self.summaries, self.configurations = {}, {}, 0
         self.started = time.time()
 
@@ -91,26 +94,49 @@ class Lab:
         if result['status'] != 'RUN':
             self.summaries[key] = {'status': 'NOT_RUN', 'reason': result['reason']}
         else:
-            self.summaries[key] = summarize(result, self.data, draws=self.draws, **kw)
+            self.summaries[key] = summarize(result, self.data, **kw)
         return self.summaries[key]
 
     # ------------------------------------------------------------------ phases
     def prepare(self):
         self.data = dataset.build(self.path)
         dataset.register(self.path, self.data)
-        self.definition = tournament.design(self.data)
+        self.measure()
+
+    def measure(self):
+        """What is known about the sample before any model is fitted. Development sessions only: no holdout label is read."""
         d = self.data
-        rows = tournament.eligible_rows(d)
-        self.rows = rows
-        sessions = np.unique(d.row_session[rows])
-        table = np.full((len(sessions), len(d.instruments)), np.nan)
-        position = {s: k for k, s in enumerate(sessions)}
-        for r in rows:
-            table[position[d.row_session[r]], d.row_instrument[r]] = d.y[targets.PRIMARY][r]
-        self.breadth = selection.participation_ratio(table)
-        self.pair_correlation = tournament.average_pair_correlation(d)
-        self.log(f'dataset {d.manifest["dataset_hash"][:12]}: {len(rows)} samples, {len(sessions)} sessions, {len(d.feature_names)} features; '
-                 f'effective independent instruments {self.breadth:.1f}')
+        self.definition = tournament.design(d)
+        self.rows = tournament.eligible_rows(d)
+        development = range(self.definition['first'], self.definition['development_end'] + 1)
+        self.breadth = {t: selection.participation_ratio(tournament.label_table(d, t, development)) for t in targets.REGRESSION}
+        self.pair_correlation = tournament.average_pair_correlation(d, targets.PRIMARY, development)
+        self.strict_closes = self._strict_closes()
+        sessions = np.unique(d.row_session[self.rows])
+        self.log(f'dataset {d.manifest["dataset_hash"][:12]}: {len(self.rows)} samples, {len(sessions)} sessions, {len(d.feature_names)} features; '
+                 f'effective independent instruments on development sessions {self.breadth[targets.PRIMARY]:.1f}')
+
+    def _strict_closes(self):
+        """How many stored closes Firm Lab already held at their own session close (the strict known-at rule), counted from
+        the time view's record of every relabelled row. None if the record cannot be read."""
+        import json
+        import sqlite3
+        from pathlib import Path
+        try:
+            db = sqlite3.connect(Path(self.path).resolve().as_uri() + '?mode=ro', uri=True)
+        except (sqlite3.Error, ValueError):
+            return None
+        try:
+            count = 0
+            for (payload,) in db.execute('SELECT payload FROM modeling_time_view'):
+                entry = json.loads(payload)
+                if entry.get('table') == 'feature_observations' and entry['original_known_at'] <= entry['session_time_known_at']:
+                    count += 1
+            return count
+        except (sqlite3.Error, ValueError, KeyError, TypeError):
+            return None
+        finally:
+            db.close()
 
     def baselines(self):
         full = self.columns(ALL_GROUPS)
@@ -123,6 +149,7 @@ class Lab:
             self.run(f'registered_style_momentum/{target}', _spec('registered_style_momentum', models.SingleFeature, target, full,
                                                                  grid=[{'feature': 'return126', 'gate': 'sma200_distance'}]))
         self.run(f'base_rate/{targets.CLASSIFICATION}', _spec('base_rate', models.BaseRate, targets.CLASSIFICATION, full))
+        self.run(f'coin_flip/{targets.CLASSIFICATION}', _spec('coin_flip', models.CoinFlip, targets.CLASSIFICATION, full))
 
     def families(self):
         full = self.columns(ALL_GROUPS)
@@ -210,7 +237,7 @@ class Lab:
                    for name, groups in SPECIALISTS.items()]
         blocks = list(self.definition['folds']) + [self.definition['holdout']]
         out = {name: {'blocks': []} for name in ('specialist_equal_weight', 'specialist_linear_stacker', 'specialist_gating')}
-        weights_log, gate_log = [], []
+        weights_log, gate_log, self.gate_fits = [], [], {}
         context_columns = [d.feature_names.index(n) for n in ('realized_vol20', 'return20')]
         for block in blocks:
             outer = np.column_stack([next(b['prediction'] for b in self.results[key]['blocks'] if b['block'] == block.name) for key, _ in members])
@@ -224,14 +251,22 @@ class Lab:
             weights_log.append({'block': block.name, 'weights': dict(zip([k for k, _ in members], weights.tolist()))})
             stacked = outer @ weights
             # gating: weights that vary with two context descriptors, fitted on the inner predictions only
-            gated, note = self._gate(inner_predictions, y_inner, d.X[np.ix_(inner_rows, context_columns)], outer, d.X[np.ix_(rows, context_columns)])
+            gated, note, parameters = self._gate(inner_predictions, y_inner, d.X[np.ix_(inner_rows, context_columns)], outer, d.X[np.ix_(rows, context_columns)])
             gate_log.append({'block': block.name, 'note': note})
+            if parameters:
+                self.gate_fits[block.name] = {'parameters': parameters, 'rows': int(len(inner_rows)), 'sessions': int(len(np.unique(d.row_session[inner_rows])))}
             for name, prediction in (('specialist_equal_weight', equal), ('specialist_linear_stacker', stacked), ('specialist_gating', gated)):
                 out[name]['blocks'].append({'block': block.name, 'rows': rows, 'prediction': prediction, 'predicted': np.ones(len(rows), dtype=bool),
                                             'chosen': {}, 'tried': [], 'train_rows': 0, 'train_sessions': 0, 'parameters': 0, 'describe': {}})
         for name, body in out.items():
             self.results[f'ensemble/{name}'] = {'name': name, 'status': 'RUN', 'family': 'ensemble', 'kind': models.REGRESSION, 'target': targets.PRIMARY,
-                                               'columns': [], 'blocks': body['blocks'], 'seconds': 0.0, 'configurations_tried': 1, 'quantile': None}
+                                               'columns': [], 'blocks': body['blocks'], 'seconds': 0.0, 'configurations_tried': 1, 'quantile': None,
+                                               'members': [k for k, _ in members]}
+        for entry, log in zip(out['specialist_linear_stacker']['blocks'], weights_log):
+            entry['chosen'] = {'weights': log['weights']}
+        for entry, log in zip(out['specialist_gating']['blocks'], gate_log):
+            entry['chosen'] = {'gate': log['note'], 'seed': GATE_SEED}
+            entry['parameters'] = self.gate_fits.get(entry['block'], {}).get('parameters', 0)
         # an equal-weight average across model families, on the full feature set
         family_keys = [f'{m}/{targets.PRIMARY}' for m in ('ridge', 'elastic_net', 'xgboost', 'lightgbm', 'catboost', 'mlp') if self.results.get(f'{m}/{targets.PRIMARY}', {}).get('status') == 'RUN']
         blocks_out = []
@@ -242,7 +277,7 @@ class Lab:
                                'tried': [], 'train_rows': 0, 'train_sessions': 0, 'parameters': 0, 'describe': {'members': family_keys}})
         self.results['ensemble/family_equal_weight'] = {'name': 'family_equal_weight', 'status': 'RUN', 'family': 'ensemble', 'kind': models.REGRESSION,
                                                         'target': targets.PRIMARY, 'columns': [], 'blocks': blocks_out, 'seconds': 0.0,
-                                                        'configurations_tried': 1, 'quantile': None, 'scale': 'rank'}
+                                                        'configurations_tried': 1, 'quantile': None, 'scale': 'rank', 'members': family_keys}
         self.ensemble_notes = {'stacker_weights': weights_log, 'gating': gate_log, 'family_members': family_keys}
 
     def _standardised(self, block):
@@ -257,39 +292,47 @@ class Lab:
 
     @staticmethod
     def _nonnegative_weights(predictions, y, iterations=500):
-        """Projected-gradient least squares with weights >= 0 summing to 1. Equal weights if nothing can be learned."""
+        """Projected-gradient least squares with weights >= 0 summing to 1, over the members whose inner predictions vary.
+        A member that was constant in the inner block (its descriptors did not exist yet) shows nothing to learn from and
+        gets no learned weight. Equal weights over all members if nothing can be learned."""
         n = predictions.shape[1]
-        w = np.full(n, 1.0 / n)
-        if len(y) < 20 or not np.all(np.isfinite(predictions)):
-            return w
-        step = 1.0 / (np.linalg.norm(predictions, 2) ** 2 + 1e-12)
+        live = np.flatnonzero(np.ptp(predictions, axis=0) > 0) if np.all(np.isfinite(predictions)) else np.array([], dtype=int)
+        if len(y) < 20 or not len(live):
+            return np.full(n, 1.0 / n)
+        p = predictions[:, live]
+        w = np.full(len(live), 1.0 / len(live))
+        step = 1.0 / (np.linalg.norm(p, 2) ** 2 + 1e-12)
         for _ in range(iterations):
-            w = np.clip(w - step * predictions.T @ (predictions @ w - y), 0, None)
+            w = np.clip(w - step * p.T @ (p @ w - y), 0, None)
             total = w.sum()
-            w = w / total if total > 0 else np.full(n, 1.0 / n)
-        return w
+            w = w / total if total > 0 else np.full(len(live), 1.0 / len(live))
+        out = np.zeros(n)
+        out[live] = w
+        return out
 
     def _gate(self, inner_predictions, y, inner_context, outer_predictions, outer_context):
-        """A two-descriptor softmax gate over the specialists. Research prototype; returns equal weighting when torch or
-        the data are not there."""
-        if not models.available('torch') or len(y) < 200:
-            return outer_predictions.mean(axis=1), INSUFFICIENT_DATA + ': equal weights used'
+        """A two-descriptor softmax gate over the specialists whose inner predictions vary. Research prototype. Returns
+        (predictions, note, trainable parameters); equal weighting and 0 parameters when torch or the data are not there."""
+        live = np.flatnonzero(np.ptp(inner_predictions, axis=0) > 0) if np.all(np.isfinite(inner_predictions)) else np.array([], dtype=int)
+        if not models.available('torch') or len(y) < 200 or len(live) < 2:
+            return outer_predictions.mean(axis=1), INSUFFICIENT_DATA + ': equal weights used', 0
         import torch
-        torch.manual_seed(5)
+        torch.manual_seed(GATE_SEED)
         torch.set_num_threads(2)
         mean, std = np.nanmean(inner_context, axis=0), np.nanstd(inner_context, axis=0)
         std = np.where(std > 0, std, 1.0)
         prepare = lambda c: torch.tensor(np.nan_to_num((c - mean) / std), dtype=torch.float32)
-        gate = torch.nn.Linear(inner_context.shape[1], inner_predictions.shape[1])
+        gate = torch.nn.Linear(inner_context.shape[1], len(live))
         optimiser = torch.optim.Adam(gate.parameters(), lr=0.02, weight_decay=0.05)
-        p, t, c = torch.tensor(inner_predictions, dtype=torch.float32), torch.tensor(y, dtype=torch.float32), prepare(inner_context)
+        p, t, c = torch.tensor(inner_predictions[:, live], dtype=torch.float32), torch.tensor(y, dtype=torch.float32), prepare(inner_context)
         for _ in range(150):
             optimiser.zero_grad()
             torch.mean(((torch.softmax(gate(c), dim=1) * p).sum(dim=1) - t) ** 2).backward()
             optimiser.step()
         with torch.no_grad():
             weights = torch.softmax(gate(prepare(outer_context)), dim=1).numpy()
-        return (weights * outer_predictions).sum(axis=1), f'gate with {sum(p.numel() for p in gate.parameters())} parameters fitted on {len(y)} inner rows'
+        parameters = int(sum(p.numel() for p in gate.parameters()))
+        return (weights * outer_predictions[:, live]).sum(axis=1), f'gate with {parameters} parameters over {len(live)} members fitted on {len(y)} inner rows', parameters
 
     def meta_label(self):
         """Can a second model tell when the primary model's direction is right? Compared with a plain rule: trust larger
@@ -377,13 +420,11 @@ class Lab:
         block of each training window (never on the block being predicted)."""
         d, c = self.data, targets.CLASSIFICATION
         out = {}
-        for name in ('base_rate', 'logistic', 'xgboost', 'lightgbm', 'catboost', 'mlp'):
+        for name in ('base_rate', 'coin_flip', 'logistic', 'xgboost', 'lightgbm', 'catboost', 'mlp'):
             key = f'{name}/{c}'
             if self.results.get(key, {}).get('status') == 'RUN':
                 for part in ('dev', 'holdout'):
-                    rows, prediction = tournament.gather(self.results[key], part)
-                    record = metrics.classification(d.y[c][rows], prediction)
-                    out.setdefault(name, {})[part] = record
+                    out.setdefault(name, {})[part] = tournament.score(self.results[key], d, part=part)['classification']
         key = f'lightgbm/{c}'
         if self.results.get(key, {}).get('status') == 'RUN' and models.available('sklearn'):
             from sklearn.linear_model import LogisticRegression
@@ -545,6 +586,7 @@ class Lab:
             low, high = (tournament.gather(self.results[f'lightgbm_quantile/{q}'], 'holdout')[1][position] if self.results.get(f'lightgbm_quantile/{q}', {}).get('status') == 'RUN' else None for q in ('q10', 'q90'))
             top = np.argsort(-np.abs(contributions[n]))[:4]
             out.append({'instrument': d.instruments[d.row_instrument[r]], 'session': d.sessions[d.row_session[r]], 'label': 'RESEARCH ONLY — NOT A RECOMMENDATION',
+                        'shown_because': EXAMPLE_RULE,
                         'predicted_excess_return_10': others.get('lightgbm'), 'benchmark_prediction': 0.0, 'predictions_by_model': others,
                         'model_dispersion': float(np.std(list(others.values()))), 'interval_10_90': [low, high],
                         'family_contributions': {k: round(v, 5) for k, v in sorted(family.items(), key=lambda kv: -abs(kv[1]))},
@@ -558,7 +600,7 @@ class Lab:
         """Counts kept for later analysis of how many candidates a research threshold would leave. No threshold is chosen
         and none is tuned toward a trade count."""
         d = self.data
-        out = {'candidates_per_session': len(d.instruments), 'thresholds_are': 'research thresholds, not rules', 'models': {}}
+        out = {'instruments_per_session': len(d.instruments), 'thresholds_are': 'descriptive cut-offs for counting only; none is a rule and nothing is acted on', 'models': {}}
         for name in ('ridge', 'lightgbm'):
             result = self.results.get(f'{name}/{targets.PRIMARY}')
             if not result or result['status'] != 'RUN':
@@ -572,28 +614,51 @@ class Lab:
         self.frequency_record = out
 
     def sufficiency(self):
+        """The data-sufficiency gate for every result that was fitted as a network: families D to F, the gating network,
+        and any combination that contains a member which fails."""
         out = {}
         for key, result in self.results.items():
             if result.get('status') != 'RUN' or not result.get('family', '').startswith(('D_', 'E_', 'F_')):
                 continue
             block = result['blocks'][-2]            # the last development fold: the largest development training window
-            gate = deep.sufficiency(parameters=block['parameters'], training_rows=block['train_rows'], training_sessions=block['train_sessions'],
-                                    instruments=self.breadth, horizon=tournament.PURGE if isinstance(result['target'], (tuple, list)) else
-                                    int(str(result['target']).rsplit('_', 1)[1]) if str(result['target'])[-1].isdigit() else 10,
-                                    average_pair_correlation=0.0)
-            gate['effective_independent_instruments'] = round(self.breadth, 1)
-            gate['average_pair_correlation'] = round(self.pair_correlation, 3)
+            heads = list(result['target']) if isinstance(result['target'], (tuple, list)) else [result['target']]
+            labels = [targets.PRIMARY if t == targets.CLASSIFICATION else t for t in heads]
+            horizon = max(int(t.rsplit('_', 1)[1]) for t in labels)
+            breadth = min(self.breadth.get(t, self.breadth[targets.PRIMARY]) for t in labels)
+            # the sessions gradient steps were taken on, not the whole training window: early stopping holds some back
+            gate = deep.sufficiency(parameters=block['parameters'], training_rows=block['train_rows'], training_sessions=block['learn_sessions'],
+                                    instruments=breadth, horizon=horizon, average_pair_correlation=0.0)
+            gate.update({'training_window_sessions': block['train_sessions'], 'effective_independent_instruments': round(breadth, 1),
+                         'average_pair_correlation': round(self.pair_correlation, 3), 'breadth_measured_on': 'development sessions'})
             seeds = [b['seed_predictions'] for b in result['blocks'] if b['block'] != 'final_holdout' and 'seed_predictions' in b]
             if seeds:
-                stack = np.concatenate([s[:, :, 0] for s in seeds], axis=1)
                 rows = tournament.gather(result, 'dev')[0]
-                name = result['target'][0] if isinstance(result['target'], (tuple, list)) else result['target']
-                name = targets.PRIMARY if name == targets.CLASSIFICATION else name
-                ics = [float(np.nanmean(metrics.session_ic(self.data.y[name][rows], stack[k], self.data.row_session[rows])[1])) for k in range(stack.shape[0])]
-                gate['development_mean_ic_by_seed'] = ics
-                gate['seed_ic_range'] = float(max(ics) - min(ics))
+                ranges = {}
+                for head, label in enumerate(labels):
+                    stack = np.concatenate([s[:, :, head] for s in seeds], axis=1)
+                    ics = [float(metrics.filled(metrics.session_ic(self.data.y[label][rows], stack[k], self.data.row_session[rows])[1]).mean()) for k in range(stack.shape[0])]
+                    ranges[heads[head]] = {'development_mean_ic_by_seed': ics, 'range': float(max(ics) - min(ics))}
+                gate['development_mean_ic_by_seed'] = ranges[heads[0]]['development_mean_ic_by_seed']
+                gate['seed_ic_range'] = float(max(r['range'] for r in ranges.values()))
+                gate['seed_ic_range_by_head'] = {k: v['range'] for k, v in ranges.items()}
             gate['label'] = 'sufficient' if gate['sufficient'] else EXPERIMENTAL_INSUFFICIENT_DATA
             out[key] = gate
+        fits = getattr(self, 'gate_fits', {})
+        if fits:
+            name = self.definition['folds'][-1].name if self.definition['folds'][-1].name in fits else sorted(fits)[-1]
+            fit = fits[name]
+            breadth = self.breadth[targets.PRIMARY]
+            gate = deep.sufficiency(parameters=fit['parameters'], training_rows=fit['rows'], training_sessions=fit['sessions'], instruments=breadth,
+                                    horizon=10, average_pair_correlation=0.0)
+            gate.update({'training_window_sessions': fit['sessions'], 'effective_independent_instruments': round(breadth, 1), 'breadth_measured_on': 'development sessions',
+                         'fitted_on': f'the inner block of {name}', 'label': 'sufficient' if gate['sufficient'] else EXPERIMENTAL_INSUFFICIENT_DATA})
+            out['ensemble/specialist_gating'] = gate
+        for key, result in self.results.items():
+            failing = [m for m in result.get('members', []) if m in out and not out[m]['sufficient']] if result.get('status') == 'RUN' else []
+            if failing and key not in out:
+                worst = min(failing, key=lambda m: out[m]['observations_per_parameter'])
+                out[key] = {**out[worst], 'inherited_from': failing, 'label': EXPERIMENTAL_INSUFFICIENT_DATA, 'sufficient': False,
+                            'note': 'a combination that includes a network which fails the gate fails it too'}
         self.sufficiency_record = out
 
     def execute(self):

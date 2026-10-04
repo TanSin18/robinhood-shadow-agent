@@ -1,17 +1,28 @@
-"""Evaluation metrics and the statistics that keep them honest. numpy only.
+"""Evaluation metrics and the statistics that keep them honest. numpy, and scipy for the t distribution.
 
 Stock-session rows are not independent observations: instruments of one session share the market move, and a 10-session
 label overlaps the labels of the nine sessions before it. Uncertainty is therefore never computed as if every row were
-a fresh draw. Session-level statistics are bootstrapped in consecutive blocks at least one label horizon long, and the
-number of non-overlapping label windows is reported beside every result.
+a fresh draw. A per-session series is cut into consecutive batches two label horizons long, and the interval is a
+Student t interval on the batch means (``batch_interval``). With fewer than three batches there is no interval and no
+p-value: the data cannot support one, and saying so is the result.
+
+Plan v1 used a percentile moving-block bootstrap with blocks one horizon long. The independent review showed that it
+is anti-conservative at this sample size (a no-information ranking had a "90% interval" above zero 9% to 14% of the
+time on development sessions and up to 25% on the holdout, and its tail share could be exactly 0). It was replaced; see
+the plan's amendments.
+
+A session a model does not rank (every prediction equal) has rank correlation 0 for that model. Every model is
+therefore averaged, compared and paired over the same sessions.
 
 Sharpe is deliberately absent: no trading strategy is registered, so there is no return stream to take a ratio of.
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
+
+MINIMUM_BATCHES = 3
+BATCH_HORIZONS = 2
+INTERVAL_METHOD = 'Student t on the means of consecutive batches two label horizons long; no interval below three batches'
 
 
 def _finite(*arrays):
@@ -85,13 +96,18 @@ def roc_auc(y, score):
 
 
 def average_precision(y, score):
+    """Area under the precision-recall curve as a step function over distinct score thresholds. Rows that share a score
+    enter together, so the result does not depend on the order of the rows."""
     y, score = _finite(y, score)
-    if not (y == 1).any():
+    positives = float((y == 1).sum())
+    if not positives:
         return float('nan')
-    order = np.argsort(-score, kind='mergesort')
-    hits = y[order] == 1
-    precision = np.cumsum(hits) / np.arange(1, len(y) + 1)
-    return float(precision[hits].mean())
+    values, inverse = np.unique(-score, return_inverse=True)
+    hits = np.bincount(inverse, weights=(y == 1).astype(float), minlength=len(values))
+    counts = np.bincount(inverse, minlength=len(values))
+    true_positives, predicted = np.cumsum(hits), np.cumsum(counts)
+    precision, recall = true_positives / predicted, true_positives / positives
+    return float(np.sum(np.diff(np.concatenate([[0.0], recall])) * precision))
 
 
 def classification(y, probability, bins=10) -> dict:
@@ -126,6 +142,23 @@ def session_ic(y, prediction, session) -> tuple:
     return days, np.asarray(values, dtype=float)
 
 
+def _tail_mean(values, scores, k, highest):
+    """Mean of ``values`` over the k highest (or lowest) scores. Rows tied across the cut share the remaining places, so
+    the answer is the expected value under a random tie-break and does not depend on row order."""
+    order = -scores if highest else scores
+    total, taken = 0.0, 0
+    for level in np.unique(order):
+        group = values[order == level]
+        room = k - taken
+        if len(group) <= room:
+            total, taken = total + group.sum(), taken + len(group)
+        else:
+            total, taken = total + room * group.mean(), k
+        if taken >= k:
+            break
+    return total / k
+
+
 def top_bottom(y, prediction, session, *, k=5) -> dict:
     """Per session: mean realised target of the k highest-predicted instruments, of the k lowest, and of all. No weights,
     no costs, no holding: a description of the ranking, not a portfolio."""
@@ -135,12 +168,11 @@ def top_bottom(y, prediction, session, *, k=5) -> dict:
         mask = (session == day) & np.isfinite(y) & np.isfinite(prediction)
         if mask.sum() < 2 * k or np.all(prediction[mask] == prediction[mask][0]):
             continue
-        order = np.argsort(prediction[mask], kind='mergesort')
-        values = y[mask][order]
-        top.append(values[-k:].mean())
-        bottom.append(values[:k].mean())
+        values, scores = y[mask], prediction[mask]
+        top.append(_tail_mean(values, scores, k, True))
+        bottom.append(_tail_mean(values, scores, k, False))
         everything.append(values.mean())
-        hit.append(np.mean(values[-k:] > 0))
+        hit.append(_tail_mean((values > 0).astype(float), scores, k, True))
     if not top:
         return {'sessions': 0}
     top, bottom, everything = np.asarray(top), np.asarray(bottom), np.asarray(everything)
@@ -170,44 +202,54 @@ def non_overlapping(values, horizon) -> np.ndarray:
     return np.asarray(values, dtype=float)[::max(1, int(horizon))]
 
 
-def block_bootstrap(series, *, block, draws=2000, seed=7, statistic=np.nanmean) -> dict:
-    """A moving-block bootstrap of a per-session series (consecutive blocks of ``block`` sessions, drawn with replacement).
-    Returns the statistic, a 90% interval and the share of draws at or below zero. With few blocks the interval is wide,
-    and it should be: that is the information."""
+def filled(series) -> np.ndarray:
+    """A per-session series with "no ranking" counted as 0: the rank correlation of a model that ranked nothing."""
+    series = np.asarray(series, dtype=float)
+    return np.where(np.isfinite(series), series, 0.0)
+
+
+def batch_interval(series, *, horizon) -> dict:
+    """The mean of a per-session series with a 90% Student t interval on batch means, and the one-sided p-value of
+    "the mean is not above zero". Batches are consecutive, at least two label horizons long, so that neighbouring batch
+    means share little of any label window. Fewer than three batches: no interval and no p-value.
+
+    Under a worst-case series (a moving sum over the whole label window) the one-sided 5% test rejects 5% to 6% of the
+    time at every sample size used here; a regression test holds it to that."""
+    from scipy import stats
     series = np.asarray(series, dtype=float)
     series = series[np.isfinite(series)]
-    n = len(series)
-    if n < 2 * block or n < 8:
-        return {'n': int(n), 'blocks': int(n // max(1, block)), 'estimate': float(statistic(series)) if n else float('nan'), 'low': float('nan'),
-                'high': float('nan'), 'p_not_positive': float('nan'), 'note': 'too few sessions for a block bootstrap'}
-    generator = np.random.default_rng(seed)
-    starts = np.arange(0, n - block + 1)
-    needed = int(math.ceil(n / block))
-    estimates = np.empty(draws)
-    for d in range(draws):
-        picks = generator.choice(starts, size=needed, replace=True)
-        sample = np.concatenate([series[s:s + block] for s in picks])[:n]
-        estimates[d] = statistic(sample)
-    return {'n': int(n), 'blocks': int(n // block), 'block': int(block), 'estimate': float(statistic(series)),
-            'low': float(np.quantile(estimates, 0.05)), 'high': float(np.quantile(estimates, 0.95)),
-            'p_not_positive': float(np.mean(estimates <= 0))}
+    n, length = len(series), BATCH_HORIZONS * max(1, int(horizon))
+    batches = n // length
+    out = {'n': int(n), 'batches': int(batches), 'batch_length': int(length), 'estimate': float(series.mean()) if n else float('nan'),
+           'low': float('nan'), 'high': float('nan'), 'p_not_positive': float('nan'), 'method': INTERVAL_METHOD}
+    if batches < MINIMUM_BATCHES:
+        out['note'] = f'{batches} batches of {length} sessions: too few for an interval'
+        return out
+    means = np.array([chunk.mean() for chunk in np.array_split(series, batches)])
+    error = float(means.std(ddof=1) / np.sqrt(batches))
+    if error == 0:
+        out.update({'low': out['estimate'], 'high': out['estimate'], 'p_not_positive': 1.0, 'note': 'no variation between batches: nothing to test'})
+        return out
+    width = float(stats.t.ppf(0.95, batches - 1)) * error
+    out.update({'low': out['estimate'] - width, 'high': out['estimate'] + width, 'standard_error': error,
+                'p_not_positive': float(stats.t.sf(out['estimate'] / error, batches - 1))})
+    return out
 
 
-def paired_difference(series_a, series_b, *, block, draws=2000, seed=7) -> dict:
-    """Bootstrap of the per-session difference a - b on the sessions both have. The pairing removes what the two share."""
-    a, b = np.asarray(series_a, dtype=float), np.asarray(series_b, dtype=float)
-    keep = np.isfinite(a) & np.isfinite(b)
-    return block_bootstrap(a[keep] - b[keep], block=block, draws=draws, seed=seed)
+def paired_difference(series_a, series_b, *, horizon) -> dict:
+    """Interval of the per-session difference a - b over every session (a session either did not rank counts as 0 for
+    it). The pairing removes what the two share."""
+    return batch_interval(filled(series_a) - filled(series_b), horizon=horizon)
 
 
 def holm(p_values: dict, level=0.10) -> dict:
     """Holm's step-down control of the family-wise error rate over a family of tests. {name: {'p', 'adjusted', 'rejected'}}.
-    A missing p-value counts as 1."""
+    A missing p-value (no interval could be formed) counts as 1."""
     items = sorted(((1.0 if p is None or not np.isfinite(p) else float(p)), name) for name, p in p_values.items())
     out, running, m = {}, 0.0, len(items)
     for position, (p, name) in enumerate(items):
         running = max(running, min(1.0, (m - position) * p))
-        out[name] = {'p': p, 'adjusted': running, 'rejected': False}
+        out[name] = {'p': p, 'adjusted': running, 'rejected': False, 'family_size': m}
     alive = True
     for p, name in items:
         alive = alive and out[name]['adjusted'] <= level
@@ -215,21 +257,24 @@ def holm(p_values: dict, level=0.10) -> dict:
     return out
 
 
-def ranking(y, prediction, session, *, horizon, k=5, draws=2000, seed=7) -> dict:
-    """The cross-sectional ranking record of one model on one evaluation period."""
-    days, ic = session_ic(y, prediction, session)
-    usable = ic[np.isfinite(ic)]
-    boot = block_bootstrap(ic, block=horizon, draws=draws, seed=seed)
+def ranking(y, prediction, session, *, horizon, k=5) -> dict:
+    """The cross-sectional ranking record of one model on one evaluation period. The mean is over every session of the
+    period; a session without a ranking counts as 0."""
+    days, raw = session_ic(y, prediction, session)
+    ic = filled(raw)
+    ranked = int(np.isfinite(raw).sum())
+    interval = batch_interval(ic, horizon=horizon)
     spread = top_bottom(y, prediction, session, k=k)
     independent = non_overlapping(ic, horizon)
-    independent = independent[np.isfinite(independent)]
-    out = {'sessions': int(len(days)), 'sessions_with_a_ranking': int(len(usable)), 'non_overlapping_windows': int(len(usable) // max(1, horizon)),
-           'mean_ic': float(usable.mean()) if len(usable) else float('nan'), 'median_ic': float(np.median(usable)) if len(usable) else float('nan'),
-           'share_positive_ic': float(np.mean(usable > 0)) if len(usable) else float('nan'),
+    out = {'sessions': int(len(days)), 'sessions_with_a_ranking': ranked, 'non_overlapping_windows': int(len(days) // max(1, horizon)),
+           'batches': interval['batches'], 'batch_length': interval['batch_length'],
+           'mean_ic': float(ic.mean()) if len(ic) else float('nan'), 'median_ic': float(np.median(ic)) if len(ic) else float('nan'),
+           'mean_ic_on_ranked_sessions_only': float(np.nanmean(raw)) if ranked else float('nan'),
+           'share_positive_ic': float(np.mean(ic > 0)) if len(ic) else float('nan'),
            'mean_ic_non_overlapping': float(independent.mean()) if len(independent) else float('nan'),
-           'ic_interval_90': [boot['low'], boot['high']], 'p_ic_not_positive': boot['p_not_positive'], 'ic_series': ic.tolist(),
+           'ic_interval_90': [interval['low'], interval['high']], 'p_ic_not_positive': interval['p_not_positive'], 'ic_series': ic.tolist(),
            'top_bottom': {key: value for key, value in spread.items() if key != 'series_top_minus_bottom'}}
     if spread.get('sessions'):
-        gap = block_bootstrap(np.asarray(spread['series_top_minus_bottom']), block=horizon, draws=draws, seed=seed)
+        gap = batch_interval(np.asarray(spread['series_top_minus_bottom']), horizon=horizon)
         out['top_minus_bottom_interval_90'] = [gap['low'], gap['high']]
     return out

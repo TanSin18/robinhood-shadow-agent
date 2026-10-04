@@ -19,7 +19,7 @@ import numpy as np
 from . import deep, metrics, models, splits, targets
 from .dataset import MINIMUM_HISTORY, sequences
 
-PLAN_VERSION = 'checkpoint7-tournament-plan-v1'
+PLAN_VERSION = 'checkpoint7-tournament-plan-v2'
 PURGE = targets.MAX_HORIZON
 EMBARGO = 5
 FOLDS = 5
@@ -130,6 +130,7 @@ def run(spec, data, definition, *, seed=0, keep_models=False) -> dict:
         model, prediction, full = fit_predict(cls, chosen, data, target, columns, train, test, seed)
         entry = {'block': block.name, 'rows': test, 'prediction': prediction, 'predicted': full, 'chosen': chosen, 'tried': tried,
                  'train_rows': int(len(train)), 'train_sessions': int(len(np.unique(session_of[train]))),
+                 'learn_sessions': int(getattr(model, 'learn_sessions', len(np.unique(session_of[train])))),
                  'parameters': int(getattr(model, 'parameter_count', 0)), 'describe': model.describe()}
         if keep_models:
             entry['model'] = model
@@ -150,7 +151,20 @@ def gather(result, part) -> tuple:
     return rows, prediction
 
 
-def score(result, data, *, part, head=0, target=None, draws=2000) -> dict:
+def _by_block(result, data, name, part, head, measure):
+    """The mean over blocks of a classification measure that only compares rows within a block (ROC-AUC, PR-AUC). Pooled
+    over folds it would reward or punish a forecast for the level it was at in each fold, which says nothing about ranking."""
+    values = []
+    for b in result['blocks']:
+        if (b['block'] == 'final_holdout') != (part == 'holdout') or not b['predicted'].any():
+            continue
+        rows, prediction = b['rows'][b['predicted']], b['prediction'][b['predicted']]
+        values.append(measure(data.y[name][rows], prediction[:, head] if prediction.ndim > 1 else prediction))
+    values = [v for v in values if np.isfinite(v)]
+    return float(np.mean(values)) if values else float('nan')
+
+
+def score(result, data, *, part, head=0, target=None) -> dict:
     """The metric record of one result on one part. A classification model is also scored as a ranking of the 10-session
     excess return, so that every model answers the same ranking question."""
     rows, prediction = gather(result, part)
@@ -167,20 +181,24 @@ def score(result, data, *, part, head=0, target=None, draws=2000) -> dict:
     out = {'n': int(len(rows)), 'sessions': int(len(np.unique(session)))}
     if kind == models.CLASSIFICATION:
         out['classification'] = metrics.classification(y, prediction)
+        out['classification'].update({'roc_auc': _by_block(result, data, name, part, head, metrics.roc_auc),
+                                      'pr_auc': _by_block(result, data, name, part, head, metrics.average_precision),
+                                      'auc_method': 'mean over blocks; a forecast that is constant within a block scores 0.5'})
         ranked = data.y[targets.PRIMARY][rows]
-        out['ranking'] = metrics.ranking(ranked, prediction, session, horizon=10, k=TOP_K, draws=draws)
+        out['ranking'] = metrics.ranking(ranked, prediction, session, horizon=10, k=TOP_K)
     elif result.get('scale') == 'rank':
         # a per-session rank score is not a forecast in return units: it has a ranking record and no error, R2 or direction
-        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K, draws=draws)
+        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K)
     else:
         out['regression'] = metrics.regression(y, prediction)
         out['buckets'] = metrics.bucket_means(y, prediction)
-        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K, draws=draws)
+        out['ranking'] = metrics.ranking(y, prediction, session, horizon=horizon, k=TOP_K)
     return out
 
 
 def fold_ics(result, data, *, head=0, target=None) -> list:
-    """Mean session rank correlation in each development fold: the stability record."""
+    """Mean session rank correlation in each development fold: the stability record. A session without a ranking counts
+    as 0, so a fold in which a model ranked nothing has mean 0 and is not a positive fold."""
     out = []
     name = target or (result['target'][head] if isinstance(result['target'], (tuple, list)) else result['target'])
     name = targets.PRIMARY if name == targets.CLASSIFICATION else name
@@ -190,23 +208,30 @@ def fold_ics(result, data, *, head=0, target=None) -> list:
         rows, prediction = b['rows'][b['predicted']], b['prediction'][b['predicted']]
         if prediction.ndim > 1:
             prediction = prediction[:, head]
-        ic = metrics.session_ic(data.y[name][rows], prediction, data.row_session[rows])[1]
-        ic = ic[np.isfinite(ic)]
-        out.append(float(ic.mean()) if len(ic) else float('nan'))
+        ic = metrics.filled(metrics.session_ic(data.y[name][rows], prediction, data.row_session[rows])[1])
+        out.append(float(ic.mean()) if len(ic) else 0.0)
     return out
 
 
-def average_pair_correlation(data, target=targets.PRIMARY) -> float:
-    """The mean correlation between instruments' labels over the development sessions: how far from independent the
-    cross-section is."""
+def label_table(data, target, sessions=None) -> np.ndarray:
+    """[session, instrument] table of one label over the eligible rows of ``sessions`` (all eligible sessions if None)."""
     rows = eligible_rows(data)
-    sessions = np.unique(data.row_session[rows])
-    table = np.full((len(sessions), len(data.instruments)), np.nan)
-    position = {s: k for k, s in enumerate(sessions)}
+    if sessions is not None:
+        rows = rows[np.isin(data.row_session[rows], np.asarray(list(sessions)))]
+    days = np.unique(data.row_session[rows])
+    table = np.full((len(days), len(data.instruments)), np.nan)
+    position = {s: k for k, s in enumerate(days)}
     for r in rows:
         table[position[data.row_session[r]], data.row_instrument[r]] = data.y[target][r]
+    return table
+
+
+def average_pair_correlation(data, target=targets.PRIMARY, sessions=None) -> float:
+    """The mean correlation between instruments' labels over ``sessions``: how far from independent the cross-section is.
+    The laboratory passes the development sessions only, so no holdout label is read before a model is fitted."""
+    table = label_table(data, target, sessions)
     table = table[:, np.all(np.isfinite(table), axis=0)]
-    if table.shape[1] < 2:
+    if table.shape[1] < 2 or table.shape[0] < 3:
         return 0.0
     c = np.corrcoef(table.T)
     return float(c[np.triu_indices_from(c, 1)].mean())

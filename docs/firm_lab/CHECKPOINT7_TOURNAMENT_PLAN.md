@@ -145,3 +145,37 @@ plausible cost range; it is not a profit figure and no cost model is fitted.
 The tournament is run once. If a defect in the code is found afterwards, it gets a failing test first, then the fix,
 then a full rerun, and the reason is recorded in the closure report. A rerun to get a better-looking number is not a
 defect fix and is not done.
+
+## 12. Plan v2 — changes after the first run and the independent review
+
+Plan version `checkpoint7-tournament-plan-v2`, 2026-10-03/04. Sections 1 to 11 above are the plan as it stood before
+any model was fitted and are left as written. The tournament ran once under v1 (report `ceb4a311…`). Two things then
+happened: reporting defects were found in that report, and two fresh reviewers examined the code
+(`CHECKPOINT7_REVIEW.md`). Each change below has a regression test that failed on the reviewed code. None was made to
+move a result. Where a change can only make a status less favourable it says "stricter"; where it can move a status
+either way it says so.
+
+| # | Change | Why | Effect |
+|---|---|---|---|
+| 1 | **Intervals and p-values.** The percentile moving-block bootstrap (block = one horizon) is replaced by a Student t interval on the means of consecutive batches two horizons long. Fewer than three batches: no interval, no p-value; the p-value then counts as 1 in a Holm family. | The reviewer showed the bootstrap is anti-conservative here: a no-information ranking had a "90% interval" above zero 9% to 14% of the time on development sessions, a holdout tail share of exactly 0 up to 14% of the time, and Holm cannot repair a p of 0. Under a worst-case overlapping series the batch interval rejects 5% to 6% at nominal 5%. | Stricter. The holdout (59 sessions) has 5, 2 and 1 batches for the 5-, 10- and 20-session labels: no test exists for the 10- and 20-session targets, so no model can be ELIGIBLE_FOR_FUTURE_REVIEW on them with this data. Development has 13, 6 and 3 batches. |
+| 2 | **A session a model does not rank counts as rank correlation 0 for that model.** Means, fold results, paired differences and intervals run over every predicted session for every model. | The strongest baseline of the 5- and 10-session tables (126-session momentum) ranked 104 of 131 development sessions (its descriptor does not exist in the first fold), and its mean over 104 sessions was compared with candidates' means over 131. v1 already said a baseline that ranks nothing counts as 0; this applies the same rule session by session. | Either way. A partly ranking baseline's mean falls (momentum_126, 10-session: +0.051 to +0.040), so some candidates that were REJECTED for being below it are now tested against the lower number; a candidate is never tested against less than zero. |
+| 3 | **A challenger must have a paired development interval above zero against every naive baseline of its target**, not only the one with the highest mean. | The "strongest" baseline is chosen with noise: on the 20-session table two baselines were 0.0004 apart, and the one CHALLENGER of the first run passed against one and not the other. | Stricter. |
+| 4 | **The Holm family of a label is every registered model that ranks it**: baselines, candidates, ablation and specialist runs, multi-task heads, and classifiers with the 10-session models. | Section 7 says "all registered models of a target". The v1 code used only the candidates of one table (9, 18, 9 and 7 tests instead of 16, 54 and 16). | Stricter. The code is brought to the plan. |
+| 5 | **A model that fails the data-sufficiency gate is EXPERIMENTAL whatever it scored.** The gating network and any combination that contains a failing network are gated too. A result fitted as a network with no gate record is an error, never a pass. The gate counts the sessions gradient steps were taken on (early stopping holds some back), and the breadth of the cross-section is measured on development sessions only, per label. | Sections 8 and 9 say every model that fails the gate is EXPERIMENTAL; the v1 code returned REJECTED first for eight rows. The 15-parameter gating network was registered with 0 parameters and escaped the gate. The breadth was computed over all sessions, holdout included. | A gate-failed network that scored below its baseline moves from REJECTED to EXPERIMENTAL: its result is not evidence for or against the architecture. The gate itself is stricter. No network passes it. |
+| 6 | **A risk model is compared with the strongest naive baseline of its target** (lowest development loss): for future volatility that is persistence, not the training mean. | Found in the first report: two volatility models were CHALLENGER against the training mean while a naive persistence line beat both. | Stricter. |
+| 7 | **A classifier's log loss must be below both the base rate's and a coin flip's.** | On a nearly balanced target the training share (0.6953) was a weaker bar than a constant one half (0.6931). | Stricter. |
+| 8 | A quantile or risk model level with its baseline is EXPERIMENTAL, not REJECTED; an unscored holdout cannot make a CHALLENGER. | Section 9 says REJECTED "if worse". | Edge cases only. |
+| 9 | A multi-head network has one research status per head; the status of the primary target's head names the model in the registry. Registry rows of risk and quantile models carry the status the report gives them, and naive baselines are registered as baselines. | The first run took a multi-head network's status from whichever table came first, and registered every risk and quantile model as an unjudged diagnostic. | Bookkeeping. |
+| 10 | Sequence and transformer networks get the training median and a missing-value flag. | Section 3 says so; the v1 code gave them the median without the flag. | The code is brought to the plan. |
+| 11 | The stacker and the gate give no learned weight to a member whose inner-block predictions were constant. | In late blocks a specialist's descriptors exist in the outer training window and not in the inner one; 76% of the holdout stacker weight was learned from constants. | Diagnostic combinations only. |
+| 12 | PR-AUC and the top/bottom spread treat tied predictions the same in any row order; ROC-AUC and PR-AUC are averaged over blocks, not pooled. | Row-order dependence; pooled over folds a constant forecast scored 0.47 instead of 0.5. | Reporting. |
+
+Corrections to the text above. Section 2 says "about 15 non-overlapping 20-session windows": there are 14 in the 295
+usable sessions, and that count is not the one that matters. What is predicted is 131 development sessions (26, 13 and
+6 non-overlapping windows of 5, 10 and 20 sessions) and 59 holdout sessions (11, 5 and 2). Non-overlapping is not the
+same as independent. The report and the page now show these numbers.
+
+**The holdout has been read twice**: by the first run under v1 and by the rerun under v2. Section 3 says "read once". The
+rerun is the defect-fix rerun section 11 provides for; it is disclosed in the report, on the page and in the closure
+report, with every status that moved and the change that moved it. No further rerun follows unless a new defect is
+found, recorded and tested first.

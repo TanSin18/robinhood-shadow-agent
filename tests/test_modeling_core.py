@@ -158,22 +158,26 @@ def test_rank_correlation_auc_and_calibration_agree_with_hand_calculations():
     assert metrics.coverage(np.array([1, 2, 3, 4]), np.array([0, 0, 4, 0]), np.array([2, 1, 5, 9]))['coverage'] == 0.5
 
 
-def test_session_statistics_respect_overlap_and_the_bootstrap_is_reproducible():
+def test_session_statistics_respect_overlap_and_an_interval_needs_enough_batches():
     generator = np.random.default_rng(3)
     sessions = np.repeat(np.arange(120), 10)
     y = generator.normal(size=1200)
     days, ic = metrics.session_ic(y, y + generator.normal(scale=0.5, size=1200), sessions)
     assert len(days) == 120 and ic.mean() > 0.6
     assert len(metrics.non_overlapping(ic, 10)) == 12                                              # 120 sessions of 10-session labels are 12 windows, not 120
-    a = metrics.block_bootstrap(ic, block=10, draws=500, seed=7)
-    assert a == metrics.block_bootstrap(ic, block=10, draws=500, seed=7) and a['blocks'] == 12 and a['low'] < a['estimate'] < a['high']
-    noise = metrics.block_bootstrap(generator.normal(size=120), block=10, draws=500, seed=7)
+    a = metrics.batch_interval(ic, horizon=10)
+    assert a == metrics.batch_interval(ic, horizon=10) and (a['batches'], a['batch_length']) == (6, 20) and a['low'] < a['estimate'] < a['high']
+    assert 0 < a['p_not_positive'] < 0.001                                                          # strong, and still never exactly zero
+    noise = metrics.batch_interval(generator.normal(size=120), horizon=10)
     assert noise['low'] < 0 < noise['high'] and 0.02 < noise['p_not_positive'] < 0.98               # noise is not declared an edge
-    assert math.isnan(metrics.block_bootstrap(ic[:12], block=10)['low'])                            # too few sessions: no interval is made up
-    ranking = metrics.ranking(y, y, sessions, horizon=10, k=3, draws=200)
-    assert ranking['mean_ic'] == pytest.approx(1.0) and ranking['non_overlapping_windows'] == 12 and ranking['top_bottom']['top_minus_bottom'] > 0
-    constant = metrics.ranking(y, np.zeros(1200), sessions, horizon=10, draws=200)
-    assert constant['sessions_with_a_ranking'] == 0 and math.isnan(constant['mean_ic'])
+    short = metrics.batch_interval(ic[:59], horizon=10)
+    assert short['batches'] == 2 and math.isnan(short['low']) and math.isnan(short['p_not_positive']) and 'too few' in short['note']      # no interval is made up
+    flat = metrics.batch_interval(np.zeros(120), horizon=10)
+    assert flat['p_not_positive'] == 1.0 and flat['low'] == flat['high'] == 0.0                     # a model that ranks nothing shows nothing
+    ranking = metrics.ranking(y, y, sessions, horizon=10, k=3)
+    assert ranking['mean_ic'] == pytest.approx(1.0) and ranking['non_overlapping_windows'] == 12 and ranking['batches'] == 6 and ranking['top_bottom']['top_minus_bottom'] > 0
+    constant = metrics.ranking(y, np.zeros(1200), sessions, horizon=10)
+    assert constant['sessions_with_a_ranking'] == 0 and constant['mean_ic'] == 0.0 and constant['ic_series'] == [0.0] * 120      # no ranking counts as zero skill
 
 
 def test_holm_adjustment_makes_one_lucky_result_among_many_insufficient():
@@ -194,20 +198,23 @@ def _record(ic, holdout, folds, horizon=10, seed=0, n=130):
 def test_statuses_follow_the_rules_fixed_in_advance_and_there_is_no_production_status():
     assert modeling.STATUSES == ('EXPERIMENTAL', 'CHALLENGER', 'REJECTED', 'ELIGIBLE_FOR_FUTURE_REVIEW')
     assert not [s for s in modeling.STATUSES if 'PRODUCTION' in s or 'LIVE' in s]
-    base = _record(0.02, 0.02, [0.02] * 5, seed=1)
-    assert selection.status(_record(-0.01, 0.1, [0.1] * 5), base, holm_rejected=True)[0] == 'REJECTED'
-    assert selection.status(_record(0.01, 0.1, [0.1] * 5), base, holm_rejected=True)[0] == 'REJECTED'           # not above the strongest baseline
-    strong = _record(0.12, 0.10, [0.1, 0.12, 0.09, 0.15, 0.11], seed=2)
+    base = {'momentum': _record(0.02, 0.02, [0.02] * 5, horizon=5, seed=1)}
+    assert selection.status(_record(-0.01, 0.1, [0.1] * 5, horizon=5), base, holm_rejected=True)[0] == 'REJECTED'
+    assert selection.status(_record(0.01, 0.1, [0.1] * 5, horizon=5), base, holm_rejected=True)[0] == 'REJECTED'      # not above the strongest baseline
+    strong = _record(0.12, 0.10, [0.1, 0.12, 0.09, 0.15, 0.11], horizon=5, seed=2)
     assert selection.status(strong, base, holm_rejected=True)[0] == 'ELIGIBLE_FOR_FUTURE_REVIEW'
     assert selection.status(strong, base, holm_rejected=False)[0] == 'CHALLENGER'                                # not established after adjustment
+    # the same numbers on the 10-session label: 59 holdout sessions are 2 batches, too few for any interval, so nothing can be eligible
+    status, reasons = selection.status(dict(strong, horizon=10), {'momentum': dict(base['momentum'], horizon=10)}, holm_rejected=True)
+    assert status == 'CHALLENGER' and 'too few for any interval' in reasons[-1]
     status, reasons = selection.status(strong, base, holm_rejected=True, sufficient=False)
     assert status == 'EXPERIMENTAL' and 'EXPERIMENTAL_INSUFFICIENT_DATA' in reasons[0]                           # a network without enough data cannot be a challenger
-    unstable = _record(0.12, 0.10, [0.4, 0.3, -0.1, -0.05, -0.02], seed=2)
+    unstable = _record(0.12, 0.10, [0.4, 0.3, -0.1, -0.05, -0.02], horizon=5, seed=2)
     assert selection.status(unstable, base, holm_rejected=True)[0] == 'EXPERIMENTAL'                             # one or two lucky folds are not enough
-    assert selection.status(_record(0.12, -0.03, [0.1] * 5, seed=2), base, holm_rejected=True)[0] == 'EXPERIMENTAL'      # the holdout did not agree
-    classifier = dict(strong, dev_log_loss=0.70, base_rate_log_loss=0.69)
-    assert selection.status(classifier, base, holm_rejected=True)[0] == 'EXPERIMENTAL'                           # ranks well, but its probabilities are worse than the base rate
-    assert selection.strongest_baseline({'zero': {'dev_mean_ic': float('nan')}, 'momentum': {'dev_mean_ic': -0.01}}) == 'momentum'
+    assert selection.status(_record(0.12, -0.03, [0.1] * 5, horizon=5, seed=2), base, holm_rejected=True)[0] == 'EXPERIMENTAL'      # the holdout did not agree
+    classifier = dict(strong, dev_log_loss=0.70, naive_log_loss=0.69)
+    assert selection.status(classifier, base, holm_rejected=True)[0] == 'EXPERIMENTAL'                           # ranks well, but its probabilities are worse than a naive forecast
+    assert selection.strongest_baseline({'zero': {'dev_mean_ic': float('nan')}, 'momentum': {'dev_mean_ic': -0.01}}) == 'zero'      # nothing ranked counts as 0, above a negative
     assert selection.loss_status([1.0] * 5, [1.1] * 5, 1.0, 1.1)[0] == 'CHALLENGER' and selection.loss_status([1.2] * 5, [1.1] * 5, 1.0, 1.1)[0] == 'REJECTED'
     assert selection.loss_status([1.0, 1.0, 1.2, 1.2, 1.0], [1.1] * 5, 1.0, 1.1)[0] == 'EXPERIMENTAL'
 

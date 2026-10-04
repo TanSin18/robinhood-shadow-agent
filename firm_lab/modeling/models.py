@@ -161,6 +161,18 @@ class BaseRate(Model):
         return np.full(len(X), self.rate)
 
 
+class CoinFlip(Model):
+    """Probability one half for everything. On a target that is close to balanced it can be a better naive forecast than
+    the training share, so a classifier has to beat both."""
+    kind = CLASSIFICATION
+
+    def fit(self, X, y, context):
+        return self
+
+    def predict(self, X, context):
+        return np.full(len(X), 0.5)
+
+
 class TrainQuantile(Model):
     """The training quantile of the target, for everything: the unconditional distribution."""
     kind = QUANTILE

@@ -58,13 +58,20 @@ def validate(record) -> dict:
         raise ValueError('MODEL_RECORD_INCOMPLETE:' + ','.join(missing))
     if record['status'] not in STATUSES or any(word in str(record['status']).upper() for word in FORBIDDEN_STATUS_WORDS):
         raise ValueError('RESEARCH_STATUS_REQUIRED')
+    for status in (record.get('status_by_target') or {}).values():
+        if status not in STATUSES:
+            raise ValueError('RESEARCH_STATUS_REQUIRED')
     if record['role'] not in ('BASELINE', 'CANDIDATE', 'DIAGNOSTIC'):
         raise ValueError('INVALID_ROLE')
     return clean(record)
 
 
-def model_id(name, target, dataset_hash, hyperparameters, code) -> str:
-    return content_hash([name, target, dataset_hash, hyperparameters, code])
+def model_id(name, target, dataset_hash, hyperparameters, code, run=None) -> str:
+    """Names one model of one run: what was fitted, on what, by which code, in which run. A rerun is a new run and gets new rows."""
+    return content_hash([name, target, dataset_hash, hyperparameters, code, run])
+
+
+REGISTRY_TABLES = ('modeling_models', 'modeling_predictions', 'modeling_runs', 'modeling_reports')
 
 
 class Registry:
@@ -73,6 +80,9 @@ class Registry:
         self.db = sqlite3.connect(Path(path).resolve(), timeout=120)
         with self.db:
             timeview.create_tables(self.db)
+            for table in REGISTRY_TABLES:                           # INSERT OR REPLACE would delete a row without firing the delete trigger
+                self.db.execute(f'CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) '
+                                "BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY'); END")
 
     def __enter__(self):
         return self
@@ -81,9 +91,17 @@ class Registry:
         self.db.close()
 
     def _insert(self, table, identity, payload) -> bool:
+        """True if stored, False if the identical row is already there. The same identity with different content is an
+        error: a stored research record is never silently kept in place of a different one."""
+        body = canonical(payload)
+        row = self.db.execute(f'SELECT payload FROM {table} WHERE id = ?', (identity,)).fetchone()
+        if row is not None:
+            if row[0] != body:
+                raise ValueError('REGISTRY_ROW_CONFLICT:' + table)
+            return False
         with self.db:
-            return self.db.execute(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)',
-                                   (identity, canonical(payload), datetime.now(timezone.utc).isoformat())).rowcount > 0
+            self.db.execute(f'INSERT INTO {table} VALUES (?,?,?)', (identity, body, datetime.now(timezone.utc).isoformat()))
+        return True
 
     def add_model(self, record) -> bool:
         record = validate(record)

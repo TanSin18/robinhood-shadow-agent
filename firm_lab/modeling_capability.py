@@ -11,14 +11,21 @@ ROWS = ('research_modeling', 'ml_ranker', 'deep_learning', 'transformer_models',
 
 
 def _best(report, key):
-    best = (report.get('champions') or {}).get(key) or {}
-    ic = best.get('dev_mean_ic')
-    return f'{best.get("name", "none")} (development rank correlation {ic:+.3f}, research status {best.get("status")})' if isinstance(ic, (int, float)) else 'none'
+    """One highest-development-score row, always with its holdout number, its status and (for a network) its gate label."""
+    best = (report.get('best_research_models') or {}).get(key) or {}
+    ic, holdout = best.get('dev_mean_ic'), best.get('holdout_mean_ic')
+    if not isinstance(ic, (int, float)):
+        return 'none'
+    gate = f', {best["sufficiency"]}' if best.get('sufficiency') not in (None, 'sufficient') else ''
+    after = f'{holdout:+.3f}' if isinstance(holdout, (int, float)) else 'not measured'
+    return (f'{best.get("name", "none")} (development rank correlation {ic:+.3f}, holdout {after}, research status {best.get("status")}{gate}; '
+            f'the highest of {best.get("highest_of", "several")} compared, so biased upward)')
 
 
 def record(store, report, *, models, now=None) -> dict:
     """Writes the eight rows from a stored laboratory report. Returns {capability: status}."""
     data, fib = report['dataset'], report['ablation']['fibonacci']
+    windows = data['evaluation_windows']
     gates = report.get('sufficiency') or {}
     failed = sorted(k for k, v in gates.items() if v.get('label') != 'sufficient')
     networks = (f'{len(gates)} network configurations were run under {report["plan_version"]}; {len(failed)} failed the data-sufficiency gate and are '
@@ -26,8 +33,10 @@ def record(store, report, *, models, now=None) -> dict:
     transformers = sorted(k for k in gates if 'transformer' in k)
     rows = {
         'research_modeling': (RESEARCH_ONLY, 'Firm Lab modeling laboratory',
-                              f'{models} research models evaluated once under {report["plan_version"]} on {data["usable_samples"]:,} retrospective samples '
-                              f'({data["usable_sessions"]} sessions, about {data["non_overlapping_windows"].get("10")} independent 10-session windows; 0 strict point-in-time samples). '
+                              f'{models} research models evaluated under {report["plan_version"]} on {data["usable_samples"]:,} retrospective samples '
+                              f'({data["usable_sessions"]} sessions; {windows["development"]["non_overlapping_windows"].get("10")} development and '
+                              f'{windows["holdout"]["non_overlapping_windows"].get("10")} holdout non-overlapping 10-session windows are predicted; '
+                              f'{data.get("strict_point_in_time_samples")} strict point-in-time samples). '
                               f'Purged walk-forward with a final holdout. {fib["statement"]}. No model is in use and no output reaches a trading path.'),
         'ml_ranker': (RESEARCH_ONLY, 'Firm Lab modeling laboratory',
                       'Rank models were evaluated offline. Highest development score on the 10-session target: ' + _best(report, 'best_10d')

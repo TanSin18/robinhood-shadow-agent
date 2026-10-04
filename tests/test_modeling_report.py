@@ -61,9 +61,7 @@ def synthetic(seed=0) -> Dataset:
 class SmallLab(lab_module.Lab):
     def prepare(self):
         self.data = synthetic()
-        self.definition = tournament.design(self.data)
-        self.rows = tournament.eligible_rows(self.data)
-        self.breadth, self.pair_correlation = 10.0, 0.0
+        self.measure()
 
 
 def _database(folder):
@@ -86,7 +84,7 @@ def _run(path):
         patch.setattr(deep.TorchModel, 'EPOCHS', 4)
         closes = 100 * np.exp(np.cumsum(np.random.default_rng(5).normal(scale=0.01, size=SESSIONS)))
         patch.setattr(targets, 'load_closes', lambda _path: ([f'S{k:03d}' for k in range(SESSIONS)], {'VTI': list(closes)}))
-        run = SmallLab(path, log=lambda _text: None, quick=True, draws=100).execute()
+        run = SmallLab(path, log=lambda _text: None, quick=True).execute()
         body = report_module.assemble(run)
         written = report_module.write(run, body)
     return run, body, written
@@ -108,7 +106,7 @@ def test_a_score_that_is_only_a_rank_has_no_error_in_return_units(finished):
         assert ranked.get(field) is None, field                                                      # a rank is not a return forecast
     assert rows['ridge']['dev_rmse'] is not None and rows['specialist_equal_weight']['dev_rmse'] is not None       # averages of return forecasts keep theirs
     result = finished['run'].results['ensemble/family_equal_weight']
-    assert result['scale'] == 'rank' and 'regression' not in tournament.score(result, finished['run'].data, part='dev', draws=50)
+    assert result['scale'] == 'rank' and 'regression' not in tournament.score(result, finished['run'].data, part='dev')
 
 
 def test_every_target_names_the_naive_baseline_it_was_judged_against(finished):
@@ -230,6 +228,10 @@ def test_the_exported_file_is_small_read_only_material_and_the_page_renders_the_
     out.mkdir(parents=True)
     result = cli.export(finished['path'], out / modeling_view.FILE_NAME)
     assert result['rows']['modeling_reports'] == 1 and result['rows']['modeling_models'] == finished['written']['models_registered'] and result['rows']['modeling_datasets'] == 0
+    with pytest.raises(ValueError, match='EXPORT_FOLDER_MISSING'):
+        cli.export(finished['path'], tmp_path / 'no_such_folder' / modeling_view.FILE_NAME)
+    with pytest.raises(ValueError, match='EXPORT_TARGET_EXISTS'):
+        cli.export(finished['path'], finished['path'])
     db = sqlite3.connect(out / modeling_view.FILE_NAME)
     counts = {t: db.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0] for t in ('modeling_predictions', 'modeling_feature_results', 'modeling_feature_inputs', 'modeling_time_view')}
     db.close()
@@ -250,3 +252,133 @@ def test_the_exported_file_is_small_read_only_material_and_the_page_renders_the_
     db.close()
     again = modeling_view.summary(out / 'firm_lab.db')
     assert again['models'] == state['models'] and again['registry_statuses'] == state['registry_statuses'] and again['models_from_other_runs'] == 1
+
+
+# ====================================================================================================== the independent review, end to end
+def test_the_holm_family_of_a_label_is_every_registered_model_that_ranks_it(finished):
+    report, run = finished['report'], finished['run']
+    expected = {t: 0 for t in targets.REGRESSION}
+    for result in run.results.values():
+        if result['status'] != 'RUN' or result['kind'] == models.QUANTILE:
+            continue
+        heads = result['target'] if isinstance(result['target'], (tuple, list)) else [result['target']]
+        for target in heads:
+            if target in targets.REGRESSION:
+                expected[target] += 1
+            elif target == targets.CLASSIFICATION:
+                expected[targets.PRIMARY] += 1                                                       # a classifier is tested on the 10-session label
+    assert report['validation']['holm_family_sizes'] == expected
+    assert expected[targets.PRIMARY] > 40 and expected['excess_return_5'] == expected['excess_return_20'] == 7 + 7 + 2      # baselines, candidates and both multi-task heads
+    for target, rows in report['tables'].items():
+        label = targets.PRIMARY if target == targets.CLASSIFICATION else target
+        for row in rows:
+            if row['role'] == 'CANDIDATE' and row.get('status'):
+                assert row['holm_family_size'] == expected[label], (target, row['name'])            # not only the candidates of one table
+
+
+def test_every_result_fitted_as_a_network_is_gated_and_a_gate_failure_is_never_a_rejection_or_a_challenger(finished):
+    report, run = finished['report'], finished['run']
+    gates = report['sufficiency']
+    networks = [key for key, r in run.results.items() if r['status'] == 'RUN' and r['family'].startswith(('D_', 'E_', 'F_'))]
+    assert networks and set(networks) <= set(gates)
+    assert 'ensemble/specialist_gating' in gates and gates['ensemble/specialist_gating']['parameters'] > 0      # the gating network is a network
+    assert gates['ensemble/family_equal_weight']['inherited_from'] == [f'mlp/{targets.PRIMARY}']    # a combination holding a failed network fails too
+    registered = {m['name']: m for m in registry.Registry(finished['path']).models()}
+    assert registered['ensemble/specialist_gating']['seeds'] == [lab_module.GATE_SEED] and registered['ensemble/specialist_gating']['parameters'] > 0
+    assert registered['ensemble/specialist_linear_stacker']['hyperparameters']['chosen_by_block']['fold_1']['weights']       # a combiner's weights are on record
+    for rows in report['tables'].values():
+        for row in rows:
+            if row.get('sufficiency') == 'EXPERIMENTAL_INSUFFICIENT_DATA':
+                assert row['status'] == 'EXPERIMENTAL' and any('EXPERIMENTAL_INSUFFICIENT_DATA' in r for r in row['status_reasons']), row['name']
+    mlp = gates[f'mlp/{targets.PRIMARY}']
+    last = run.results[f'mlp/{targets.PRIMARY}']['blocks'][-2]
+    assert mlp['training_sessions'] == last['learn_sessions'] < last['train_sessions'] == mlp['training_window_sessions']      # the sessions gradient steps used
+
+
+def test_nothing_measured_before_the_fits_reads_a_holdout_label(finished):
+    run = finished['run']
+    before = (dict(run.breadth), run.pair_correlation)
+    data = run.data
+    saved = {name: values.copy() for name, values in data.y.items()}
+    holdout = np.isin(data.row_session, list(run.definition['holdout'].validation))
+    try:
+        for name in targets.REGRESSION:
+            wrecked = data.y[name].copy()
+            wrecked[holdout & np.isfinite(wrecked)] = np.random.default_rng(1).normal(size=int((holdout & np.isfinite(wrecked)).sum()))
+            data.y[name] = wrecked
+        run.measure()
+        assert (dict(run.breadth), run.pair_correlation) == before                                  # the sufficiency gate's breadth is a development-only number
+    finally:
+        for name, values in saved.items():
+            data.y[name] = values
+        run.measure()
+    assert set(run.breadth) == set(targets.REGRESSION)
+
+
+def test_a_sequence_network_gets_the_same_missing_value_flags_as_every_other_network(finished):
+    data = finished['run'].data
+    rows = tournament.eligible_rows(data)[:400]
+    columns = [NAMES.index('fund_a'), NAMES.index('return20')]
+    from firm_lab.modeling.dataset import sequences
+    windows, full = sequences(data, rows, columns, deep.SEQUENCE_LENGTH)
+    model = deep.GRU()
+    scaled = model._scale(windows[full], fit=True)
+    assert scaled.shape[-1] == 3 and model.pre.names(['fund_a', 'return20']) == ['fund_a', 'return20', 'fund_a__missing']      # median and a flag, as the plan says
+    assert set(np.unique(scaled[:, :, 2])) == {0.0, 1.0}
+
+
+def test_the_registry_says_about_a_risk_or_quantile_model_exactly_what_the_report_says(finished):
+    report = finished['report']
+    registered = {m['name']: m for m in registry.Registry(finished['path']).models()}
+    checked = 0
+    for target, body in report['risk'].items():
+        for name, row in body.items():
+            record = registered[f'{name}/{target}']
+            assert (record['status'], record['role']) == (row['status'], row['role']) and record['status_by_target'] == {target: row['status']}
+            checked += 1
+    for name, body in report['distribution']['models'].items():
+        for q in report['distribution']['quantiles']:
+            record = registered[f'{name}/q{int(q * 100):02d}']
+            assert (record['status'], record['role']) == (body['status'], body['role'])
+            checked += 1
+    assert checked == 3 * 3 + 1 + 3 * 5
+    assert registered['historical_mean/close_mae_10']['role'] == 'BASELINE' and registered['train_quantile/q50']['role'] == 'BASELINE'      # a naive baseline is registered as one
+    assert not [m for m in registered.values() if m['role'] == 'DIAGNOSTIC' and m['name'].split('/')[0] in ('ridge', 'lightgbm', 'linear_quantile', 'lightgbm_quantile')
+                and not m['name'].startswith(('ablation', 'specialist'))]
+
+
+def test_the_report_counts_the_windows_that_are_predicted_and_shows_a_best_score_with_its_caveats(finished):
+    report = finished['report']
+    windows = report['dataset']['evaluation_windows']
+    design = finished['run'].definition
+    development, holdout = sum(len(f.validation) for f in design['folds']), len(design['holdout'].validation)
+    assert windows['development']['sessions'] == development and windows['holdout']['sessions'] == holdout
+    assert windows['development']['non_overlapping_windows'] == {'5': development // 5, '10': development // 10, '20': development // 20}
+    assert windows['holdout']['batches_for_an_interval'] == {'5': holdout // 10, '10': holdout // 20, '20': holdout // 40}
+    assert 'non_overlapping_windows' not in report['dataset'] and 'champions' not in report        # the count over all sessions is no longer the headline
+    for row in report['tables'][targets.PRIMARY]:
+        if row.get('status'):
+            assert row['dev_batches'] == development // 20 and row['holdout_batches'] == holdout // 20 and row['dev_sessions'] == development
+    best = report['best_research_models']
+    for key in ('best_5d', 'best_10d', 'best_20d', 'best_classifier', 'strongest_advanced_candidate'):
+        assert best[key]['highest_of'] > 1 and 'holdout_mean_ic' in best[key] and 'sufficiency' in best[key]
+    assert 'biased upward' in best['note']
+    names = {r['name']: r for r in report['tables'][targets.CLASSIFICATION]}
+    assert names['coin_flip']['role'] == names['base_rate']['role'] == 'BASELINE' and names['coin_flip']['dev_log_loss'] == pytest.approx(np.log(2))
+    naive = min(names['coin_flip']['dev_log_loss'], names['base_rate']['dev_log_loss'])
+    for row in report['tables'][targets.CLASSIFICATION]:
+        if row['role'] == 'CANDIDATE' and row.get('status') == 'CHALLENGER':
+            assert row['dev_log_loss'] < naive                                                      # a classifier must beat the better naive forecast, not the worse
+    data = report['dataset']
+    assert data['features'] == len(NAMES) and data['features_in_a_model_group'] == len(NAMES) and data['strict_point_in_time_samples'] == 0
+    assert report['examples'][0]['shown_because'] == lab_module.EXAMPLE_RULE and 'instruments_per_session' in report['frequency']
+
+
+def test_the_stored_report_can_be_checked_against_the_code_that_is_about_to_be_closed(finished, monkeypatch):
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(tournament, 'PLAN_VERSION', finished['report']['plan_version'])
+        result = cli.verify(finished['path'])
+    assert result['matches'] is True and result['models_of_this_run'] == finished['written']['models_registered'] and result['problems'] == []
+    monkeypatch.setattr(registry, 'code_hash', lambda: 'f' * 64)
+    changed = cli.verify(finished['path'])
+    assert changed['matches'] is False and 'the stored report was produced by other code' in changed['problems']      # closing on a report from other code is caught

@@ -237,7 +237,8 @@ def test_blocked_capabilities_are_unavailable(tmp_path):                        
     for name in ('live_quotes', 'news_catalysts', 'sec_filings'):
         assert status[name] == 'PARTIAL_EXISTING', name
     assert set(status.values()) <= set(capabilities.STATUSES)
-    assert set(capabilities.STATUSES) == {'AVAILABLE', 'UNAVAILABLE', 'NOT_STARTED', 'BUILD_ONLY', 'PARTIAL_EXISTING', 'BLOCKED'}
+    # Checkpoint 7 added RESEARCH_ONLY: offline research evidence exists; never available to a strategy (tests/test_modeling_isolation_ui.py)
+    assert set(capabilities.STATUSES) == {'AVAILABLE', 'UNAVAILABLE', 'NOT_STARTED', 'BUILD_ONLY', 'PARTIAL_EXISTING', 'BLOCKED', 'RESEARCH_ONLY'}
     assert lab.capability('something_nobody_registered') == 'UNAVAILABLE'
     with pytest.raises(FirmLabError):
         lab.set_capability('fundamentals', 'COMING_SOON')

@@ -7,8 +7,10 @@ do anything with a security, and a research status is shown in one neutral style
 from .components import esc
 
 WARNING = 'MODEL RESEARCH ONLY — NO TRADING STRATEGY IS ACTIVE'
-STATUS_NOTE = {'EXPERIMENTAL': 'not established', 'CHALLENGER': 'better than the strongest naive baseline on development and holdout; not established after adjustment',
-               'REJECTED': 'not better than the strongest naive baseline', 'ELIGIBLE_FOR_FUTURE_REVIEW': 'passed every research gate; review only'}
+STATUS_NOTE = (('REJECTED', 'not better than the strongest naive baseline on development sessions'),
+               ('EXPERIMENTAL', 'not established: a gate was missed, or the model failed the data-sufficiency gate, in which case its result is not evidence either way'),
+               ('CHALLENGER', 'better than every naive baseline on development sessions and not worse on the holdout; not established after adjustment for the number of models compared'),
+               ('ELIGIBLE_FOR_FUTURE_REVIEW', 'passed every research gate; eligible for a later human review, nothing more'))
 TARGET_NAMES = {'excess_return_5': '5-session excess return vs VTI', 'excess_return_10': '10-session excess return vs VTI (primary)',
                 'excess_return_20': '20-session excess return vs VTI', 'positive_excess_10': 'Probability the 10-session excess return is above zero',
                 'close_mae_10': 'Largest adverse close excursion, next 10 sessions', 'close_mfe_10': 'Largest favourable close excursion, next 10 sessions',
@@ -65,9 +67,9 @@ def _leaderboard(rows):
         gate = f'<span class="small fl-sub">{esc(r["sufficiency"])}</span>' if r.get('sufficiency') and r['sufficiency'] != 'sufficient' else ''
         out.append([f'<b>{esc(r["name"])}</b>', role,
                     _status(r['status']) + gate + f'<details class="small"><summary>why</summary>{esc(reasons)}</details>',
-                    f'{_n(r.get("dev_mean_ic"))}<span class="small fl-sub">{esc(_interval(r.get("dev_ic_interval_90")))}</span>',
+                    f'{_n(r.get("dev_mean_ic"))}<span class="small fl-sub">{esc(_evidence(r, "dev"))}</span>',
                     f'{esc(str(r.get("folds_positive", 0)))} of {esc(str(r.get("folds", 0)))}<span class="small fl-sub">{esc(folds)}</span>',
-                    f'{_n(r.get("holdout_mean_ic"))}<span class="small fl-sub">{esc(_interval(r.get("holdout_ic_interval_90")))}</span>',
+                    f'{_n(r.get("holdout_mean_ic"))}<span class="small fl-sub">{esc(_evidence(r, "holdout"))}</span>',
                     (_n(r.get('dev_rmse'), 4, False) + ' / ' + _n(r.get('holdout_rmse'), 4, False)) if r.get('dev_rmse') is not None else
                     (_n(r.get('dev_log_loss'), 4, False) + ' / ' + _n(r.get('holdout_log_loss'), 4, False)) if r.get('dev_log_loss') is not None else
                     '<span class="small fl-sub">a rank score: no error in return units</span>',
@@ -75,30 +77,65 @@ def _leaderboard(rows):
     return out
 
 
+def _evidence(r, part):
+    """What stands behind one rank-correlation number: its interval, how many batches the interval rests on, and how many
+    sessions the model ranked at all."""
+    batches, sessions, ranked = r.get(f'{part}_batches'), r.get(f'{part}_sessions'), r.get(f'{part}_sessions_ranked')
+    text = _interval(r.get(f'{part}_ic_interval_90'))
+    if batches is not None:
+        text += f' · {batches} batches'
+    if sessions is not None and ranked is not None and ranked < sessions:
+        text += f' · ranked {ranked} of {sessions} sessions'
+    return text
+
+
+STAMP = f'<p class="fl-stamp">{esc(WARNING)}</p>'
+INTRO = ('<p class="v10-note">A research laboratory. It asks one question: do any descriptors or model families carry out-of-sample information about the '
+         '10-session excess return against VTI? It does not say what to hold, how much, or when. No model here is in use, and none has a production or live status.</p>')
+
+
 def render_modeling(fl):
-    lab = (fl or {}).get('modeling') or {}
-    stamp = f'<p class="fl-stamp">{esc(WARNING)}</p>'
-    intro = ('<p class="v10-note">A research laboratory. It asks one question: do any descriptors or model families carry out-of-sample information about the '
-             '10-session excess return against VTI? It does not say what to hold, how much, or when. No model here is in use, and none has a production or live status.</p>')
+    """The laboratory section. A stored report that is incomplete or of an older shape never takes the page down: the
+    section says the report could not be shown, and shows nothing from it."""
+    lab = (fl or {}).get('modeling') if isinstance(fl, dict) else None
+    lab = lab if isinstance(lab, dict) else {}
     report = lab.get('report')
     if not lab.get('exists') or not report:
-        return stamp + intro + f'<p class="v10-empty">No laboratory run is stored on this machine ({esc(lab.get("missing_reason") or "NO_STORED_LABORATORY_RUN")}).</p>'
-    data, validation, champions = report['dataset'], report['validation'], report['champions']
+        return STAMP + INTRO + f'<p class="v10-empty">No laboratory run is stored on this machine ({esc(lab.get("missing_reason") or "NO_STORED_LABORATORY_RUN")}).</p>'
+    try:
+        return _render(lab, report)
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+        return STAMP + INTRO + ('<p class="v10-empty">A laboratory report is stored but could not be shown: it is incomplete or has a shape this page does not know '
+                                f'({esc(type(error).__name__)}). Nothing from it is displayed.</p>')
+
+
+def _render(lab, report):
+    stamp, intro = STAMP, INTRO
+    data, validation, champions = report['dataset'], report['validation'], report['best_research_models']
     fib = report['ablation']['fibonacci']
-    windows = data['non_overlapping_windows']
+    windows = data['evaluation_windows']
+    dev_w, hold_w = windows['development']['non_overlapping_windows'], windows['holdout']['non_overlapping_windows']
+    strict = data.get('strict_point_in_time_samples')
     summary = _facts((
         ('Time rule', f'<b>{esc(report["time_policy"])}</b> every input was captured on 2026-10-01 to 2026-10-03; nothing here proves it was held earlier'),
-        ('Strict point-in-time samples', f'<b>{esc(str(data["strict_point_in_time_samples"]))}</b> under the strict known-at rule'),
+        ('Strict point-in-time samples', (f'<b>{esc(str(strict))}</b> under the strict known-at rule' if strict is not None else 'not measured')
+         + esc(f' ({data.get("closes_held_at_their_own_session_close")} stored closes were held at their own session close)')),
         ('Research samples', esc(f'{data["usable_samples"]:,} rows: {len(data["instruments"])} instruments × {data["usable_sessions"]} sessions '
                                  f'({data["first_usable_session"]} to {data["last_usable_session"]})')),
-        ('Independent label windows', esc(f'about {windows.get("10")} of 10 sessions, {windows.get("20")} of 20 sessions')),
+        ('Predicted sessions', esc(f'{windows["development"]["sessions"]} development, {windows["holdout"]["sessions"]} holdout')),
+        ('Non-overlapping label windows in them', esc(f'development: {dev_w.get("5")} of 5 sessions, {dev_w.get("10")} of 10, {dev_w.get("20")} of 20; '
+                                                       f'holdout: {hold_w.get("5")}, {hold_w.get("10")}, {hold_w.get("20")}. {windows.get("note", "")}')),
         ('Effective independent instruments', esc(_n(data.get('effective_independent_instruments'), 1, False))),
-        ('Descriptors used', esc(f'{data["features"]} of the registered definitions; {data["excluded_features"]} left out by rule (dollar levels, structured values)')),
+        ('Descriptors', esc(f'{data["features"]} encoded as numbers, {data.get("features_in_a_model_group")} of them offered to a model, '
+                            f'{data.get("features_ever_available")} of those ever available; {data["excluded_features"]} left out by rule (dollar levels, structured values)')),
         ('Dataset hash', f'<code>{esc(data["dataset_hash"][:16])}</code>'),
         ('Feature calculation hash', f'<code>{esc(data["calculation_hash"][:16])}</code>'),
         ('Code hash', f'<code>{esc(report["code_hash"][:16])}</code>'),
-        ('Plan', esc(report['plan_version']) + ' (fixed before any model was fitted)'),
-        ('Models in the registry', esc(str(lab.get('models', 0))) + ' — ' + esc(', '.join(f'{k} {v}' for k, v in sorted((lab.get('registry_statuses') or {}).items())))),
+        ('Plan', esc(report['plan_version']) + (' (v1 was fixed before any model was fitted; v2 records the repairs made after the first run and the independent review)'
+                                                 if report.get('supersedes') else ' (fixed before any model was fitted)')),
+        ('Replaces', esc(str((report.get('supersedes') or {}).get('report_id', ''))[:16] + ' — ' + str((report.get('supersedes') or {}).get('reason', ''))) if report.get('supersedes') else 'nothing'),
+        ('Models in the registry', esc(str(lab.get('models', 0))) + ' — ' + esc(', '.join(f'{k} {v}' for k, v in sorted((lab.get('registry_statuses') or {}).items())))
+         + (esc(f' ({lab["models_from_other_runs"]} rows of other runs are kept in the file and not counted)') if lab.get('models_from_other_runs') else '')),
         ('Configurations fitted', esc(f'{validation["configurations_fitted"]:,}')),
         ('Fibonacci', f'<b>{esc(fib["statement"])}</b>'),
     ))
@@ -108,7 +145,10 @@ def render_modeling(fl):
                      esc(f'{b["purged_sessions"]} sessions'), esc(f'{b["validation"][0]} to {b["validation"][1]} ({b["validation_sessions"]})')] for b in validation['blocks']])
     design = _facts((('Split', esc(validation['split_method'])), ('Purge', esc(f'{validation["purge_sessions"]} sessions before every predicted block')),
                      ('Embargo', esc(f'{validation["embargo_sessions"]} sessions')), ('Gap before the holdout', esc(f'{validation["gap_before_holdout_sessions"]} sessions')),
-                     ('Tuning', esc(validation['inner_tuning'])), ('Uncertainty', esc(validation['bootstrap'])), ('Many comparisons', esc(validation['multiple_testing']))))
+                     ('Tuning', esc(validation['inner_tuning'])), ('Intervals', esc(validation['interval_method'])),
+                     ('Sessions without a ranking', esc(validation['unranked_sessions'])),
+                     ('Many comparisons', esc(validation['multiple_testing']) + esc('; family sizes: ' + ', '.join(f'{k} {v}' for k, v in sorted(validation['holm_family_sizes'].items()))))))
+    meanings = '<ul>' + ''.join(f'<li>{_status(name)} {esc(text)}</li>' for name, text in STATUS_NOTE) + '</ul>'
     head = ('Model', 'Family', 'Research status', 'Development rank correlation', 'Folds above zero', 'Holdout rank correlation', 'Error, development / holdout',
             'Top 5 minus bottom 5, development / holdout')
     boards = ''
@@ -193,11 +233,15 @@ def render_modeling(fl):
     cond = _table(('VTI volatility group (cut-offs from the first training window)', 'Sessions', 'Independent windows', 'Mean rank correlation', 'Enough to read?'),
                   [[esc(g['group']), esc(str(g['sessions'])), esc(str(g['non_overlapping_windows'])), _n(g['mean_ic']), 'yes' if g['meaningful'] else 'no'] for g in conditional['vti_volatility_terciles']['groups']])
     economic = report['economic']
-    eco = _table(('Model', 'Top 5 minus bottom 5, development', 'Holdout', 'Development interval clears the upper cost bound?'),
+    eco = _table(('Model', 'Top 5 minus bottom 5, development', 'Holdout', 'Whole development interval above the stated cost range? (a description, not a signal)'),
                  [[f'<b>{esc(r["name"])}</b>', _pct(r['dev_spread']) + f'<span class="small fl-sub">{esc(_interval([None if x is None else x * 100 for x in (r["dev_interval_90"] or [None, None])], 2))} %</span>',
-                   _pct(r['holdout_spread']), 'yes' if r['dev_interval_clears_upper_cost'] else 'no'] for r in economic['rows']])
+                   _pct(r['holdout_spread']), 'yes' if r['development_interval_above_stated_cost_range'] else 'no'] for r in economic['rows']])
     best = _table(('Question', 'Highest development score', 'Research status', 'Development', 'Holdout'),
-                  [[esc(label), f'<b>{esc((champions.get(key) or {}).get("name") or "none")}</b>', _status((champions.get(key) or {}).get('status')),
+                  [[esc(label), f'<b>{esc((champions.get(key) or {}).get("name") or "none")}</b>'
+                    + ('<span class="small fl-sub">naive baseline</span>' if (champions.get(key) or {}).get('role') == 'BASELINE' else '')
+                    + f'<span class="small fl-sub">highest of {esc(str((champions.get(key) or {}).get("highest_of", "—")))} compared</span>',
+                    _status((champions.get(key) or {}).get('status'))
+                    + (f'<span class="small fl-sub">{esc((champions.get(key) or {})["sufficiency"])}</span>' if (champions.get(key) or {}).get('sufficiency') not in (None, 'sufficient') else ''),
                     _n((champions.get(key) or {}).get(a), 4), _n((champions.get(key) or {}).get(b), 4)]
                    for label, key, a, b in (('5-session excess return', 'best_5d', 'dev_mean_ic', 'holdout_mean_ic'), ('10-session excess return', 'best_10d', 'dev_mean_ic', 'holdout_mean_ic'),
                                             ('20-session excess return', 'best_20d', 'dev_mean_ic', 'holdout_mean_ic'), ('Classifier (log loss)', 'best_classifier', 'dev_log_loss', 'holdout_log_loss'),
@@ -220,10 +264,11 @@ def render_modeling(fl):
     return (stamp + intro + summary
             + '<h3>What this data cannot support</h3>' + limits
             + '<h3>Validation design</h3>' + design + folds
+            + '<h3>What a research status means</h3>' + meanings
             + '<h3>Highest development scores, with what the holdout said</h3><p class="v10-note">' + esc(champions['note']) + '</p>' + best
             + boards
             + '<h3>Feature-family ablation</h3><p class="v10-note">Each family is added to the technical baseline (trend, momentum, volatility) and compared with it per session. '
-            + f'<b>{esc(fib["statement"])}</b>: {esc(fib["why"])}. {esc(fib_detail)}.</p>' + ablation
+            + f'<b>{esc(fib["statement"])}</b>: {esc(fib["why"])}. {esc(fib_detail)}. {esc(report["ablation"].get("note", ""))}</p>' + ablation
             + '<h3>Specialist models and combinations</h3>' + special
             + '<h3>Neural models: is there enough data?</h3><p class="v10-note">A network that fails the gate is still shown, labelled, and cannot be a challenger.</p>' + sufficiency
             + '<h3>Return distribution</h3>' + dist
@@ -239,5 +284,6 @@ def render_modeling(fl):
                       ('Fed context', esc(conditional['fed']['result'])), ('PCE context', esc(conditional['pce']['result']))))
             + '<h3>Size of the ranking spread</h3><p class="v10-note">' + esc(economic['statement'])
             + f' Stated cost range: {_pct(economic["cost_range_round_trip_two_legs"][0])} to {_pct(economic["cost_range_round_trip_two_legs"][1])}.</p>' + eco
-            + '<h3>Prediction examples — research only</h3><p class="v10-note">Holdout rows from the last predicted session. Shown so the provenance of a prediction can be '
-              'followed. They are measurements of a research model, not advice of any kind.</p>' + (examples or '<p class="v10-empty">None stored.</p>'))
+            + '<h3>Prediction examples — research only</h3><p class="v10-note">Shown so the provenance of a prediction can be followed. Which rows: '
+            + esc(((report.get('examples') or [{}])[0] or {}).get('shown_because') or 'none stored')
+            + '. They are measurements of a research model, not advice of any kind.</p>' + (examples or '<p class="v10-empty">None stored.</p>'))
