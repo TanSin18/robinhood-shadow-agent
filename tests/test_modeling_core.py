@@ -121,7 +121,7 @@ def test_a_design_that_would_leak_is_reported_and_too_little_data_is_refused():
 def test_preprocessing_is_learned_from_training_rows_only_and_is_deterministic():
     generator = np.random.default_rng(1)
     train = generator.normal(size=(200, 4))
-    train[:120, 2] = np.nan                                                                        # available in 40% of training rows: dropped
+    train[:190, 2] = np.nan                                                                        # available in 5% of training rows: dropped
     train[:10, 1] = np.nan
     train[:, 3] = 7.0                                                                              # constant: dropped
     validation = generator.normal(loc=50, scale=9, size=(50, 4))

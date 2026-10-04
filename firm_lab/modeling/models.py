@@ -65,6 +65,20 @@ class Model:
             self.pre = Preprocessor(**self.preprocess).fit(X)
         return self.pre.transform(X)
 
+    # shared: a model left with no usable descriptor after the train-only filter predicts its training mean, and says so
+    def _without_inputs(self, Z, y) -> bool:
+        if Z.shape[-1] > 0:
+            self.constant = None
+            return False
+        y = np.asarray(y, dtype=float)
+        self.constant = float(np.clip(np.nanmean(y), 0.01, 0.99)) if self.kind == CLASSIFICATION else (
+            float(np.nanquantile(y, self.params['quantile'])) if self.kind == QUANTILE else float(np.nanmean(y)))
+        self.parameter_count = 0
+        return True
+
+    def _constant(self, X):
+        return np.full(len(X), self.constant)
+
 
 # ---------------------------------------------------------------------------- family A: naive baselines
 class Zero(Model):
@@ -190,6 +204,8 @@ class ElasticNet(Model):
     def fit(self, X, y, context):
         from sklearn.linear_model import ElasticNet as SkElasticNet
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         self.model = SkElasticNet(alpha=self.params.get('alpha', 0.001), l1_ratio=self.params.get('l1_ratio', 0.5), max_iter=5000,
                                   random_state=context.get('seed', 0)).fit(Z, y)
         self.coefficients = self.model.coef_
@@ -197,7 +213,7 @@ class ElasticNet(Model):
         return self
 
     def predict(self, X, context):
-        return self.model.predict(self._prepare(X))
+        return self._constant(X) if self.constant is not None else self.model.predict(self._prepare(X))
 
 
 class Logistic(Model):
@@ -209,13 +225,15 @@ class Logistic(Model):
     def fit(self, X, y, context):
         from sklearn.linear_model import LogisticRegression
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         self.model = LogisticRegression(C=self.params.get('C', 0.1), max_iter=2000).fit(Z, y.astype(int))
         self.coefficients = self.model.coef_[0]
         self.parameter_count = int(Z.shape[1] + 1)
         return self
 
     def predict(self, X, context):
-        return self.model.predict_proba(self._prepare(X))[:, 1]
+        return self._constant(X) if self.constant is not None else self.model.predict_proba(self._prepare(X))[:, 1]
 
 
 class LinearQuantile(Model):
@@ -227,12 +245,14 @@ class LinearQuantile(Model):
     def fit(self, X, y, context):
         from sklearn.linear_model import QuantileRegressor
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         self.model = QuantileRegressor(quantile=self.params['quantile'], alpha=self.params.get('alpha', 0.01), solver='highs').fit(Z, y)
         self.parameter_count = int(Z.shape[1] + 1)
         return self
 
     def predict(self, X, context):
-        return self.model.predict(self._prepare(X))
+        return self._constant(X) if self.constant is not None else self.model.predict(self._prepare(X))
 
 
 # ---------------------------------------------------------------------------- family C: boosted trees
@@ -245,13 +265,15 @@ class _Tree(Model):
         return self.kind
 
     def predict(self, X, context):
+        if self.constant is not None:
+            return self._constant(X)
         Z = self._prepare(X)
         if self.kind == CLASSIFICATION:
             return self.model.predict_proba(Z)[:, 1]
         return self.model.predict(Z)
 
     def importance(self) -> np.ndarray:
-        return np.asarray(self.model.feature_importances_, dtype=float)
+        return np.zeros(0) if self.constant is not None else np.asarray(self.model.feature_importances_, dtype=float)
 
 
 class XGBoost(_Tree):
@@ -260,6 +282,8 @@ class XGBoost(_Tree):
     def fit(self, X, y, context):
         import xgboost
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         common = dict(n_estimators=self.params.get('n_estimators', 100), max_depth=self.params.get('max_depth', 2),
                       learning_rate=self.params.get('learning_rate', 0.05), subsample=0.8, colsample_bytree=0.8,
                       min_child_weight=self.params.get('min_child_weight', 20), reg_lambda=self.params.get('reg_lambda', 5.0),
@@ -289,6 +313,8 @@ class LightGBM(_Tree):
     def fit(self, X, y, context):
         import lightgbm
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         common = dict(n_estimators=self.params.get('n_estimators', 100), num_leaves=self.params.get('num_leaves', 4),
                       learning_rate=self.params.get('learning_rate', 0.05), subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
                       min_child_samples=self.params.get('min_child_samples', 50), reg_lambda=self.params.get('reg_lambda', 5.0),
@@ -320,6 +346,8 @@ class CatBoost(_Tree):
     def fit(self, X, y, context):
         import catboost
         Z = self._prepare(X, fit=True)
+        if self._without_inputs(Z, y):
+            return self
         common = dict(iterations=self.params.get('iterations', 200), depth=self.params.get('depth', 3),
                       learning_rate=self.params.get('learning_rate', 0.05), l2_leaf_reg=self.params.get('l2_leaf_reg', 10.0),
                       random_seed=context.get('seed', 0), thread_count=2, verbose=False, allow_writing_files=False)

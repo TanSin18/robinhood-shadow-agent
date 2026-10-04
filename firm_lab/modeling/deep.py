@@ -53,6 +53,8 @@ class TorchModel(Model):
         heads = self.params.get('heads', self.heads)
         self.heads_used = tuple(heads)
         Z = self._scale(X, fit=True)
+        if Z.shape[-1] == 0:
+            raise ValueError('NO_USABLE_DESCRIPTOR_FOR_A_NETWORK')
         regression = [k for k, h in enumerate(heads) if h == 'regression']
         self.center = np.zeros(y.shape[1])
         self.spread = np.ones(y.shape[1])

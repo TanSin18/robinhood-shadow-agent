@@ -12,7 +12,7 @@ PREPROCESS_VERSION = 'train-only-preprocess-v1'
 
 
 class Preprocessor:
-    def __init__(self, *, minimum_availability=0.5, clip=(1.0, 99.0), indicators=True, scale=True, impute=True):
+    def __init__(self, *, minimum_availability=0.10, clip=(1.0, 99.0), indicators=True, scale=True, impute=True):
         self.minimum_availability, self.clip, self.indicators, self.scale, self.impute = minimum_availability, clip, indicators, scale, impute
         self.fitted = False
 

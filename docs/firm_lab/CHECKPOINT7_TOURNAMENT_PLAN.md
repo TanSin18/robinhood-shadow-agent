@@ -49,7 +49,9 @@ Not asked: what to buy, how much, with what instrument, or when to enter or leav
 - **Configuration choice:** inside each training window, on its last quarter, purged the same way. Every tried
   configuration and its inner score is recorded.
 - Preprocessing (feature availability filter, clipping, imputation, scaling, target scaling) is fitted on training
-  rows only.
+  rows only. A descriptor available in fewer than 10% of a training window's rows, or constant in it, is dropped for
+  that window. Linear and neural models get the training median and a missing-value flag where a value is
+  unavailable; trees see "unavailable" as it is. A model left with no descriptor predicts its training mean.
 
 ## 4. Families and search spaces (bounded, listed in `models.GRIDS` and `deep.py`)
 
