@@ -72,9 +72,10 @@ def status(record, baselines: dict, *, holm_rejected, sufficient=True) -> tuple:
               f'positive in at least {FOLDS_REQUIRED} of {len(record["fold_ics"])} folds': positive_folds >= FOLDS_REQUIRED,
               'holdout mean IC above zero and at least the strongest baseline’s': holdout > 0 and holdout >= base_holdout,
               f'development mean IC above the same predictions with instrument identities shuffled (p at most {metrics.IDENTITY_LEVEL})':
-                  bool(np.isfinite(_nan_if_none(record.get('dev_identity_p'))) and record['dev_identity_p'] <= metrics.IDENTITY_LEVEL)}
-    if record.get('dev_log_loss') is not None:
-        checks['development log loss below the base rate and below a coin flip'] = record['dev_log_loss'] < record['naive_log_loss']
+                  _is_p(record.get('dev_identity_p')) and record['dev_identity_p'] <= metrics.IDENTITY_LEVEL}
+    if 'dev_log_loss' in record:                                        # a classifier: a missing loss is not a pass
+        checks['development log loss below the base rate and below a coin flip'] = bool(
+            record['dev_log_loss'] is not None and record.get('naive_log_loss') is not None and record['dev_log_loss'] < record['naive_log_loss'])
     failed = [name for name, ok in checks.items() if not ok]
     reasons += [f'not met: {name}' for name in failed]
     if not_beaten:
@@ -132,6 +133,11 @@ def fibonacci_verdict(comparisons: dict) -> tuple:
         return 'NO', ('the development interval rules out an improvement of 0.01 for every reference model' if all(np.isfinite(highs)) and all(x < MINIMUM_RELEVANT_IC for x in highs)
                       else 'the difference is at or below zero for every reference model on both development and holdout')
     return 'INCONCLUSIVE', 'the intervals include both no improvement and a material one, or the reference models and periods disagree'
+
+
+def _is_p(value) -> bool:
+    """A p-value: a real number in (0, 1]. Anything else (missing, a boolean, zero, negative, not finite) is not one."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and bool(np.isfinite(value)) and 0 < value <= 1
 
 
 def _nan_if_none(value):

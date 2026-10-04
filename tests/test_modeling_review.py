@@ -266,7 +266,7 @@ def test_no_calculator_reads_a_field_that_was_linked_from_a_later_filing_and_the
         text = path.read_text()
         assert 'fiscal_period_end' not in text and 'periodic_accession' not in text, path.name      # stored on the 8-K row, known only once the 10-Q exists
     plan = (ROOT / 'docs' / 'firm_lab' / 'CHECKPOINT7_TOURNAMENT_PLAN.md').read_text()
-    assert tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v3' and '## 12. Plan v2' in plan and '## 13. Plan v3' in plan and 'checkpoint7-tournament-plan-v3' in plan
+    assert tournament.PLAN_VERSION == 'checkpoint7-tournament-plan-v3.1' and '## 12. Plan v2' in plan and '## 13. Plan v3' in plan and 'checkpoint7-tournament-plan-v3.1' in plan
     for phrase in ('batch', 'every naive baseline', 'counts as 0', 'every registered model', 'strongest naive baseline', 'read twice'):
         assert phrase in plan.split('## 12. Plan v2')[1], phrase                                    # each change after the first run is recorded with its reason
     for phrase in ('identities shuffled', 'No prediction changed', 'not the worst case', 'spread of 0'):
@@ -294,14 +294,15 @@ def test_a_ranking_that_persists_by_chance_is_caught_by_the_identity_shuffle_whe
     draws, by_interval, by_shuffle, by_both = 300, 0, 0, 0
     for _ in range(draws):
         y, score, session, instrument = _persistent_null(generator)
-        record = metrics.ranking(y, score, session, horizon=5, instrument=instrument)
-        interval, shuffle = record['ic_interval_90'][0] > 0, record['identity_permutation_p'] <= metrics.IDENTITY_LEVEL
+        series = metrics.filled(metrics.session_ic(y, score, session)[1])
+        interval = metrics.batch_interval(series, horizon=5)['low'] > 0
+        shuffle = metrics.identity_permutation_p(y, score, session, instrument, draws=2000)['p'] <= metrics.IDENTITY_LEVEL
         by_interval, by_shuffle, by_both = by_interval + interval, by_shuffle + shuffle, by_both + (interval and shuffle)
     assert by_interval / draws > 0.15                                                               # the interval alone calls chance an edge far too often here
     assert by_shuffle / draws <= 0.09 and by_both / draws <= 0.09                                   # the shuffle holds its level (5%; 300 draws), and so does the pair
     y, score, session, instrument = _persistent_null(generator)
     informed = metrics.ranking(y, y + generator.normal(scale=0.02, size=len(y)), session, horizon=5, instrument=instrument)
-    assert informed['identity_permutation_p'] == pytest.approx(1 / 2001)                            # a real link is found, and p is never zero
+    assert informed['identity_permutation_p'] == pytest.approx(1 / (1 + informed['identity_permutation_draws']))          # a real link is found, and p is never zero
 
 
 def test_the_identity_shuffle_is_the_mean_rank_correlation_of_the_shuffled_predictions():
@@ -310,10 +311,9 @@ def test_the_identity_shuffle_is_the_mean_rank_correlation_of_the_shuffled_predi
     score = score + generator.normal(scale=0.5, size=len(score))
     record = metrics.identity_permutation_p(y, score, session, instrument, draws=200, seed=3)
     assert record['observed'] == pytest.approx(metrics.filled(metrics.session_ic(y, score, session)[1]).mean())
-    check = np.random.default_rng(3)
+    orders = np.random.default_rng(3).permuted(np.tile(np.arange(9), (200, 1)), axis=1)
     as_good = 0
-    for _ in range(200):
-        order = check.permutation(9)
+    for order in orders:
         shuffled = score.reshape(40, 9)[:, order].ravel()                                           # every session's predictions handed to other instruments, the same way
         as_good += metrics.filled(metrics.session_ic(y, shuffled, session)[1]).mean() >= record['observed'] - 1e-12
     assert record['p'] == pytest.approx((1 + as_good) / 201)
@@ -369,7 +369,8 @@ def test_an_exported_file_is_append_only_and_checking_a_file_never_changes_it(tm
     db = sqlite3.connect(path)
     with db:
         db.execute("INSERT INTO modeling_datasets VALUES ('d1', '{\"a\": 1}', 'x')")
-        db.execute("INSERT OR REPLACE INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')")       # ignored: the stored row stays
+    with pytest.raises(sqlite3.DatabaseError, match='APPEND_ONLY'):
+        db.execute("INSERT OR REPLACE INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')")       # refused: the stored row stays
     assert db.execute("SELECT payload FROM modeling_datasets WHERE id = 'd1'").fetchone()[0] == '{"a": 1}'
     db.close()
     before = timeview.file_sha256(path)
@@ -398,3 +399,73 @@ def test_an_inherited_gate_row_says_so_and_a_huge_number_cannot_take_the_page_do
     state = modeling_view.summary(tmp_path / 'firm_lab.db')
     page = firm_lab_page.render({'firm_lab': {'exists': False, 'mode': 'BUILD_OBSERVE', 'fills': 0, 'modeling': state}})
     assert 'id="fl-modeling"' in page and modeling.WARNING in page                                  # a corrupt number degrades the cell or the section, never the page
+
+
+# ====================================================================================================== the delta review of plan v3 (six minor findings)
+def test_a_part_with_nothing_predicted_is_a_part_of_zeros_not_a_crash():
+    from firm_lab.modeling import report as report_module
+    data = synthetic(strength=0.02, seed=7)
+    design = tournament.design(data)
+    columns = list(range(len(NAMES)))
+    for cls, target in ((models.Ridge, targets.PRIMARY), (models.Logistic, targets.CLASSIFICATION)):
+        result = tournament.run({'name': 'x', 'cls': cls, 'grid': [{}], 'target': target, 'columns': columns}, data, design)
+        for block in result['blocks'][:-1]:                                                         # nothing could be predicted on development sessions
+            block['predicted'][:] = False
+            block['prediction'][:] = np.nan
+        summary = lab_module.summarize(result, data)
+        assert summary['dev_mean_ic'] == 0.0 and summary['fold_ics'] == [0.0] * 5 and summary['dev']['n'] == 0
+        assert 'regression' not in summary['dev'] and 'classification' not in summary['dev']        # no error is made up for rows that were never predicted
+        assert summary.get('dev_log_loss') is None
+
+        class Stub:
+            results = {'x': result}
+        row = report_module._row('x', Stub, summary, role='CANDIDATE', status='EXPERIMENTAL', reasons=[])
+        assert row['dev_mean_ic'] == 0.0 and row.get('dev_rmse') is None and row.get('dev_log_loss') is None
+        assert row['holdout_mean_ic'] is not None                                                   # the part that was predicted is still scored
+
+
+def test_the_identity_gate_does_not_turn_on_the_luck_of_the_shuffles():
+    generator = np.random.default_rng(12)
+    y, score, session, instrument = _persistent_null(generator, sessions=60, instruments=22)
+    score = score + 0.9 * np.tile(np.argsort(np.argsort(y.reshape(60, 22).mean(axis=0))), 60) / 22           # a weak real link: p near the level
+    values = [metrics.identity_permutation_p(y, score, session, instrument, seed=seed)['p'] for seed in range(1, 9)]
+    assert metrics.identity_permutation_p.__kwdefaults__['draws'] >= 100_000
+    assert max(values) - min(values) < 0.004, values                                                # 2,000 shuffles moved a p near 0.05 by about 0.01 between seeds
+    assert len({v <= metrics.IDENTITY_LEVEL for v in values}) == 1 or abs(np.mean(values) - metrics.IDENTITY_LEVEL) < 0.002
+
+
+def test_the_identity_gate_accepts_only_a_p_value_and_a_partly_predicted_session_gets_none():
+    baseline = {'steady': _series_record(0.04, seed=4)}
+    candidate = _series_record(0.11, seed=3)
+    for bad in (-0.1, 0.0, False, True, float('inf'), float('-inf')):
+        assert selection.status(dict(candidate, dev_identity_p=bad), baseline, holm_rejected=True)[0] == 'EXPERIMENTAL', bad
+    assert selection.status(dict(candidate, dev_identity_p=0.05), baseline, holm_rejected=False)[0] == 'CHALLENGER'
+    generator = np.random.default_rng(5)
+    y, score, session, instrument = _persistent_null(generator, sessions=30, instruments=9)
+    partly = score.astype(float).copy()
+    partly[4] = np.nan                                                                              # one instrument unpredicted in one session
+    record = metrics.identity_permutation_p(y, partly, session, instrument)
+    assert math.isnan(record['p']) and 'partly' in record['note']                                   # the shuffled statistic would not be the reported mean: no p-value
+    whole = score.astype(float).copy()
+    whole[:9] = np.nan                                                                              # a whole session unpredicted counts as 0, as in the mean
+    record = metrics.identity_permutation_p(y, whole, session, instrument)
+    assert record['observed'] == pytest.approx(metrics.filled(metrics.session_ic(y, whole, session)[1]).mean()) and 0 < record['p'] <= 1
+
+
+def test_the_holm_level_shown_is_the_level_used_and_a_dataset_row_cannot_be_quietly_replaced(tmp_path):
+    import inspect
+    from firm_lab.modeling import report as report_module
+    assert 'metrics.holm(values, level=HOLM_LEVEL)' in inspect.getsource(report_module.assemble) and report_module.HOLM_LEVEL == 0.10
+    path = _modeling_db(tmp_path)
+    registry.Registry(path).db.close()
+    db = sqlite3.connect(path)
+    with db:
+        db.execute("INSERT INTO modeling_datasets VALUES ('d1', '{\"a\": 1}', 'x')")
+        assert db.execute("INSERT OR IGNORE INTO modeling_datasets VALUES ('d1', '{\"a\": 1}', 'y')").rowcount == 0       # the same dataset again: nothing to do
+    for statement in ("INSERT INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')", "INSERT OR REPLACE INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')",
+                      "INSERT OR IGNORE INTO modeling_datasets VALUES ('d1', '{\"a\": 2}', 'y')"):
+        with pytest.raises(sqlite3.DatabaseError, match='APPEND_ONLY'):
+            db.execute(statement)                                                                   # a different dataset under a stored identity is an error, not silence
+    assert db.execute("SELECT payload, created_at FROM modeling_datasets WHERE id = 'd1'").fetchone() == ('{"a": 1}', 'x')
+    assert db.execute("INSERT INTO modeling_datasets VALUES ('d2', '{\"a\": 3}', 'x')").rowcount == 1
+    db.close()

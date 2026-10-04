@@ -190,7 +190,7 @@ prediction hashes are identical), and no status rule was loosened.
 
 | # | Change | Why | Effect |
 |---|---|---|---|
-| 13 | **A challenger's development mean rank correlation must also be above what the same predictions earn with instrument identities shuffled** (one shuffle for every session, 2,000 shuffles, fixed seed, p at most 0.05). A record without that p-value has not passed. | The batch interval of v2 #1 is honest for rankings that change from session to session, and for a Gaussian moving sum it rejects about 6% at nominal 5%. That is not the worst case. The reviewer ran real labels against no-information rankings that persist across sessions (the same instruments on top week after week): the interval was above zero 8.5% to 11.5% of the time on the 5-session label and about 7% on the 10-session label. Return patterns across instruments persist longer than a batch. The identity shuffle is exact for that case. | Stricter: one more gate before CHALLENGER. No stored status depended on the interval alone. |
+| 13 | **A challenger's development mean rank correlation must also be above what the same predictions earn with instrument identities shuffled** (one shuffle for every session, fixed seed, p at most 0.05; 2,000 shuffles in the v3 run, 100,000 from v3.1). A record without that p-value has not passed. | The batch interval of v2 #1 is honest for rankings that change from session to session, and for a Gaussian moving sum it rejects about 6% at nominal 5%. That is not the worst case. The reviewer ran real labels against no-information rankings that persist across sessions (the same instruments on top week after week): the interval was above zero 8.5% to 11.5% of the time on the 5-session label and about 7% on the 10-session label. Return patterns across instruments persist longer than a batch. The identity shuffle is exact for that case. | Stricter: one more gate before CHALLENGER. No stored status depended on the interval alone. |
 | 14 | The top-minus-bottom spread counts a session without a ranking as a spread of 0; inner tuning scores a configuration that ranks nothing as 0; a fold in which nothing could be predicted is a fold of zeros. | v2 #2 said every model is averaged over every session, and these three places did not do it (the strongest baseline's spread was an average over 104 of 131 sessions). | Description and bookkeeping. No tuning choice changes. |
 | 15 | The Holm family counts two registry rows with identical session-by-session results once (the full-set ablation run is the same model as the family run), and is described as "every registered model that is judged by ranking the label": quantile and risk models are judged by a loss. The reason shown for a row names the level, whether it was met and the number of batches. | The family held two duplicates; the wording claimed more than the code did; a reader could not tell whether an adjusted p of 0.054 met the 10% level. | Family sizes 16, 51 and 16: the full-set ablation runs equal the family runs, and adding macro descriptors to the technical baseline changes nothing, so those four rows are not extra tests. |
 | 16 | An exported laboratory file is append-only in the same way as the modeling database; checking a file never writes to it; the page survives a number too large to print and shows a combination's inherited gate row as inherited. | An INSERT OR REPLACE succeeded on the exported file; `verify` added triggers to the file it checked; an absurd integer in a stored report raised. | Hardening. |
@@ -202,3 +202,23 @@ a status that differed from the report's.
 
 The holdout has now been read by three runs. The v3 run exists so that the stored report is the product of the code
 that is closed; it re-evaluates the same predictions under rules that are the same or stricter.
+
+### Plan v3.1 — the delta review of v3
+
+Plan version `checkpoint7-tournament-plan-v3.1`, 2026-10-04. A fourth fresh reviewer read only the v3 changes. No
+critical or important finding. It reproduced every stored identity-shuffle p-value bit for bit, confirmed the shortcut
+against a from-scratch recomputation (largest difference 7.5e-17), and measured the pair of gates against real
+development labels with random fixed rankings: 5.3%, 4.0% and 1.8% for the 5-, 10- and 20-session labels at nominal
+5%, where the interval alone gave 12.1%, 7.1% and 4.2%. Six minor points were repaired, each with a regression first.
+No prediction and no status changed.
+
+| # | Change | Why |
+|---|---|---|
+| 17 | The identity shuffle uses 100,000 shuffles, not 2,000. | With 2,000 the p-value of a model near the 0.05 level moved by about 0.01 between seeds: four rows changed sides of the gate across 20 seeds. No status depended on it. |
+| 18 | The gate accepts only a p-value (a real number above 0 and at most 1); a session that is only partly predicted gets no p-value. | A negative number or a boolean passed; the shuffled statistic would not have been the reported mean. |
+| 19 | A part in which a model predicted nothing is a part of zeros with no error or loss; a classifier without a loss has not passed the loss gate. | Report assembly raised on it (not reachable with this data). |
+| 20 | The Holm level printed is the level passed to the test. A different dataset row under a stored identity is an error; the same row again is ignored. | Two constants that could drift; a silent ignore. |
+
+What the identity shuffle does not do: it is conditional on the one realised history and draws its power from 22
+instruments, not from time; it treats instruments as exchangeable; it is not adjusted for the number of models tried
+(6 of 43 candidates are at or below 0.05 on it). It is a necessary gate beside the batch interval, not a proof.

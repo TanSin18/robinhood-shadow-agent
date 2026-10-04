@@ -76,12 +76,18 @@ REGISTRY_TABLES = ('modeling_models', 'modeling_predictions', 'modeling_runs', '
 
 def protect(db):
     """INSERT OR REPLACE deletes the old row without firing a delete trigger. These triggers close that door: on a
-    registry table a second insert under an existing identity is an error; on the dataset table it is ignored, which is
-    what registering the same dataset twice already meant. Applied to the modeling database and to every exported file."""
+    registry table a second insert under an existing identity is an error. On the dataset table the same row again is
+    ignored (registering the same dataset twice already meant that) and a different row under a stored identity is an
+    error. Applied to the modeling database and to every exported file."""
     for table in REGISTRY_TABLES:
         db.execute(f'CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) '
                    "BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY'); END")
-    db.execute('CREATE TRIGGER IF NOT EXISTS modeling_datasets_no_replace BEFORE INSERT ON modeling_datasets WHEN EXISTS (SELECT 1 FROM modeling_datasets WHERE id = NEW.id) '
+    db.execute('DROP TRIGGER IF EXISTS modeling_datasets_no_replace')
+    db.execute('CREATE TRIGGER IF NOT EXISTS modeling_datasets_other_row BEFORE INSERT ON modeling_datasets '
+               'WHEN EXISTS (SELECT 1 FROM modeling_datasets WHERE id = NEW.id AND payload <> NEW.payload) '
+               "BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY'); END")
+    db.execute('CREATE TRIGGER IF NOT EXISTS modeling_datasets_same_row BEFORE INSERT ON modeling_datasets '
+               'WHEN EXISTS (SELECT 1 FROM modeling_datasets WHERE id = NEW.id AND payload = NEW.payload) '
                'BEGIN SELECT RAISE(IGNORE); END')
 
 

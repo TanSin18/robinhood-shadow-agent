@@ -256,12 +256,17 @@ def paired_difference(series_a, series_b, *, horizon) -> dict:
     return batch_interval(filled(series_a) - filled(series_b), horizon=horizon)
 
 
-def identity_permutation_p(y, prediction, session, instrument, *, draws=2000, seed=11) -> dict:
+def identity_permutation_p(y, prediction, session, instrument, *, draws=100_000, seed=11) -> dict:
     """The one-sided p-value of a model's mean session rank correlation against the same predictions with instrument
     identities shuffled. One shuffle is applied to every session at once, so whatever persists in the predictions and in
     the labels is kept, and only the link between them is broken. Exact for the question "would these predictions,
     attached to the wrong instruments, have done as well?". Needs every instrument in every session; otherwise there is
-    no p-value. Never 0: p = (1 + shuffles at least as good) / (1 + shuffles)."""
+    no p-value. Never 0: p = (1 + shuffles at least as good) / (1 + shuffles).
+
+    100,000 shuffles: with 2,000 the p-value of a model near the 0.05 level moved by about 0.01 between seeds, enough to
+    flip the gate. What the test does not do: it is conditional on the one realised history and draws its power from
+    the instruments, not from time; it treats instruments as exchangeable; it is not adjusted for the number of models
+    tried. It is a necessary gate beside the batch interval, not a proof of anything."""
     y, prediction = np.asarray(y, dtype=float), np.asarray(prediction, dtype=float)
     days, names = np.unique(session), np.unique(instrument)
     out = {'draws': int(draws), 'p': float('nan'), 'observed': float('nan')}
@@ -279,8 +284,12 @@ def identity_permutation_p(y, prediction, session, instrument, *, draws=2000, se
     P, Y = np.full(A.shape, np.nan), np.full(A.shape, np.nan)
     P[row, column], Y[row, column] = prediction, y
     for k in range(len(days)):
-        if not (np.all(np.isfinite(P[k])) and np.all(np.isfinite(Y[k]))):
-            continue                                                    # nothing predicted, or no label: the session counts as 0
+        usable = np.isfinite(P[k]) & np.isfinite(Y[k])
+        if not usable.any():
+            continue                                                    # nothing predicted, or no label: the session counts as 0, as in the mean
+        if not usable.all():
+            out['note'] = 'a session is only partly predicted: the shuffled statistic would not be the reported mean'
+            return out
         a, b = rank(P[k]), rank(Y[k])
         a, b = a - a.mean(), b - b.mean()
         na, nb = np.linalg.norm(a), np.linalg.norm(b)
@@ -290,7 +299,10 @@ def identity_permutation_p(y, prediction, session, instrument, *, draws=2000, se
     observed = float(np.trace(M))
     generator = np.random.default_rng(seed)
     index = np.arange(len(names))
-    as_good = sum(1 for _ in range(draws) if M[generator.permutation(len(names)), index].sum() >= observed)
+    as_good = 0
+    for start in range(0, draws, 20_000):                               # in slices, to keep the memory small
+        orders = generator.permuted(np.tile(index, (min(20_000, draws - start), 1)), axis=1)
+        as_good += int(np.sum(M[orders, index].sum(axis=1) >= observed))
     out.update({'observed': observed, 'p': float((1 + as_good) / (1 + draws))})
     return out
 

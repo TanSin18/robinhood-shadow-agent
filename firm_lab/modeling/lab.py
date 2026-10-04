@@ -52,6 +52,8 @@ def summarize(result, data, *, head=0, target=None) -> dict:
            'dev_identity_p': dev.get('ranking', {}).get('identity_permutation_p')}
     if 'classification' in dev:
         out['dev_log_loss'] = dev['classification']['log_loss']
+    elif name == targets.CLASSIFICATION:
+        out['dev_log_loss'] = None                                      # nothing predicted on development sessions: no loss exists
     return out
 
 

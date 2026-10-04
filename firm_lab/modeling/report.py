@@ -140,7 +140,7 @@ def assemble(lab, *, supersedes=None) -> dict:
                 continue
             seen[label].setdefault(digest, token)
             family[label][token] = summary(key, **kw)['p_holdout_ic_not_positive']
-    holm = {label: metrics.holm(values) for label, values in family.items()}
+    holm = {label: metrics.holm(values, level=HOLM_LEVEL) for label, values in family.items()}
     for label in holm:
         for token, first in same_as.items():
             if first in holm[label]:
@@ -158,9 +158,9 @@ def assemble(lab, *, supersedes=None) -> dict:
                                  reasons=['naive baseline: a reference, not a candidate'] + (['the strongest baseline on development sessions'] if name == strongest else [])))
         else:
             naive = {name: summary(f'{name}/{target}') for name in NAIVE_CLASSIFIERS}
-            naive_log_loss = min(v['dev']['classification']['log_loss'] for v in naive.values())
+            naive_log_loss = min(v['dev_log_loss'] for v in naive.values())
             for name, record in naive.items():
-                best = record['dev']['classification']['log_loss'] == naive_log_loss
+                best = record['dev_log_loss'] == naive_log_loss
                 rows.append(_row(f'{name}/{target}', lab, record, role='BASELINE', status='EXPERIMENTAL',
                                  reasons=['naive baseline: ' + ARCHITECTURE[name]] + (['the lower naive log loss on development sessions'] if best else [])))
         for key, label_shown, kw in candidates:

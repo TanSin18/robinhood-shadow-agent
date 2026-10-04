@@ -19,7 +19,7 @@ import numpy as np
 from . import deep, metrics, models, splits, targets
 from .dataset import MINIMUM_HISTORY, sequences
 
-PLAN_VERSION = 'checkpoint7-tournament-plan-v3'
+PLAN_VERSION = 'checkpoint7-tournament-plan-v3.1'
 PURGE = targets.MAX_HORIZON
 EMBARGO = 5
 FOLDS = 5
@@ -186,6 +186,9 @@ def score(result, data, *, part, head=0, target=None) -> dict:
     ranking = lambda: metrics.ranking(data.y[ranked][every], every_prediction, data.row_session[every], horizon=int(ranked.rsplit('_', 1)[1]), k=TOP_K,
                                       instrument=data.row_instrument[every])
     out = {'n': int(len(rows)), 'sessions': int(len(np.unique(data.row_session[every])))}
+    if not len(rows):
+        out['ranking'] = ranking()                                      # nothing was predicted in this part: a ranking record of zeros, and no error or loss
+        return out
     if kind == models.CLASSIFICATION:
         out['classification'] = metrics.classification(y, prediction)
         out['classification'].update({'roc_auc': _by_block(result, data, name, part, head, metrics.roc_auc),

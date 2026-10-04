@@ -111,7 +111,7 @@ def render_modeling(fl):
         return STAMP + INTRO + f'<p class="v10-empty">No laboratory run is stored on this machine ({esc(lab.get("missing_reason") or "NO_STORED_LABORATORY_RUN")}).</p>'
     try:
         return _render(lab, report)
-    except (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError) as error:
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError, RecursionError) as error:
         return STAMP + INTRO + ('<p class="v10-empty">A laboratory report is stored but could not be shown: it is incomplete or has a shape this page does not know '
                                 f'({esc(type(error).__name__)}). Nothing from it is displayed.</p>')
 
