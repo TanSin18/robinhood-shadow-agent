@@ -52,6 +52,10 @@ def test_the_policy_document_lists_every_rejection_reason_and_every_change_class
         assert f'`{name}`' in POLICY, name
     assert f'read its last {dataset.INPUT_WINDOW_BARS} bars' in POLICY and dataset.INPUT_WINDOW_BARS == features.LONGEST_FIXED_LOOKBACK == 253
     assert 'are used for every row of a dataset or for none' in POLICY and 'is tier C and is not a strict sample' in POLICY
+    from firm_lab.history import adjust
+    assert adjust.SPLIT_VALUE_MEANS == 'new_per_old' and "a split's value is new shares per old share" in POLICY
+    assert adjust.DIVIDEND_VALUE_MEANS == 'unadjusted' and "dividend's value is the amount paid per share on the day" in POLICY
+    assert "taken from the decimals of **that bar's own row**" in POLICY and '`splits_unchecked`' in POLICY
     assert 'within five sessions of the security\'s last bar' in POLICY and targets.DELISTING_WINDOW == 5
     assert 'It is not a\n  stored column.' in POLICY                                         # eligible_from is computed from the calendar
     assert 'These hashes are integrity checks, not authentication.' in POLICY
@@ -72,7 +76,9 @@ def test_the_universe_document_states_the_rule_in_code():
 
 def test_the_second_amendment_states_the_measurement_rules_in_code_and_lowers_no_bar():
     amendment = SPEC[SPEC.index('**Amendment 2'):SPEC.index('**Amendment 3')]
-    third = SPEC[SPEC.index('**Amendment 3'):]
+    third = SPEC[SPEC.index('**Amendment 3'):SPEC.index('**Amendment 4')]
+    fourth = SPEC[SPEC.index('**Amendment 4'):]
+    assert 'No bar was\nlowered and none was added.' in fourth and 'Print precision is judged per bar' in fourth and 'A removed bar is a restated bar' in fourth
     assert 'No bar was\nlowered and none was added.' in third and 'for every row of a dataset or for none' in third
     assert 'A restated bar is tier C' in third and f'({splits.MINIMUM_FOLDS} x {splits.MINIMUM_FOLD_SESSIONS})' in third and 'reads 253 bars' in third
     assert len(set(re.findall(r'^\| ([HPEFO][0-9]) ', SPEC, re.M))) == 25 and 'lists all 25 bars' in third

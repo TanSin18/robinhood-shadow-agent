@@ -114,9 +114,10 @@ def _places(block) -> dict:
 
 
 def _factor_range(old, i, new, j, old_places, new_places):
-    """The range of factors k for which this row is the old row with prices times k and volume divided by k, given how
-    finely both were printed; None when no factor fits or the printed price itself moved. Every one of the four prices
-    and the volume must agree on k: a different bar is not a rescale."""
+    """(lowest k, highest k, whether the volume could confirm it) for which this row is the old row with prices times k
+    and volume divided by k, given how finely both were printed; None when no factor fits or the printed price itself
+    moved. Every one of the four prices and the volume must agree on k: a different bar is not a rescale. A volume is
+    taken as rounded to a whole share at best, however many decimals it is printed with ("1502.0" is 1502)."""
     try:
         if old['close_unadjusted'][i] != new['close_unadjusted'][j]:
             return None
@@ -127,30 +128,31 @@ def _factor_range(old, i, new, j, old_places, new_places):
             low = max(low, (now - b) / (was + a))
             high = min(high, (now + b) / (was - a) if was - a > 0 else float('inf'))
         was, now = float(old['volume'][i]), float(new['volume'][j])
-        a, b = 0.5 * 10.0 ** -old_places['volume'], 0.5 * 10.0 ** -new_places['volume']
+        a, b = max(0.5, 0.5 * 10.0 ** -old_places['volume']), max(0.5, 0.5 * 10.0 ** -new_places['volume'])
         if was > 0 or now > 0:
             low = max(low, (was - a) / (now + b))
             high = min(high, (was + a) / (now - b) if now - b > 0 else float('inf'))
         slack = 1e-12 * max(1.0, low)
-        return (low - slack, high + slack) if low <= high + 2 * slack else None
+        return (low - slack, high + slack, was > 0 and now > 0) if low <= high + 2 * slack else None
     except (ValueError, ZeroDivisionError):
         return None
 
 
 def _common_factor(old, new, pairs):
     """The one factor every (old row, new row) pair of a block was rescaled by, or None. One is not a factor: a block
-    whose rows moved by nothing more than their printing is not a rescale."""
+    whose rows moved by nothing more than their printing is not a rescale. At least one row must have traded: with no
+    volume anywhere, nothing says that the shares were re-counted and not the prices changed."""
     if not pairs:
         return None
     old_places, new_places = _places(old), _places(new)
-    low, high, ratios = 0.0, float('inf'), []
+    low, high, ratios, traded = 0.0, float('inf'), [], False
     for i, j in pairs:
         found = _factor_range(old, i, new, j, old_places, new_places)
         if found is None:
             return None
-        low, high = max(low, found[0]), min(high, found[1])
+        low, high, traded = max(low, found[0]), min(high, found[1]), traded or found[2]
         ratios.append(float(new['close'][j]) / float(old['close'][i]))
-    if low > high or low <= 1.0 <= high:
+    if low > high or low <= 1.0 <= high or not traded:
         return None
     middle = sorted(ratios)[len(ratios) // 2]
     return min(max(middle, low), high)
@@ -199,7 +201,7 @@ class HistoryStore:
         self.path = target
         self.db = sqlite3.connect(target.as_uri() + '?mode=ro', uri=True, timeout=120) if read_only else sqlite3.connect(target, timeout=120)
         self._depth = 0
-        self._latest = False                                               # the latest stored capture time, read once and then kept
+        self._capture = None                                               # the capture in progress: the (time, clock) pair ``begin_capture`` handed out
         try:
             self.db.execute('PRAGMA recursive_triggers=ON')                 # so that INSERT OR REPLACE meets the delete trigger and is refused
             names = {r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -255,7 +257,6 @@ class HistoryStore:
             self._depth -= 1
             if self._depth == 0:
                 self.db.rollback()
-                self._latest = False                                       # whatever was written is gone; read the latest time again
             raise
         else:
             self._depth -= 1
@@ -268,8 +269,6 @@ class HistoryStore:
         if table not in JSON_TABLES:
             raise ValueError('UNKNOWN_TABLE')
         with self.transaction():
-            if table == 'history_captures':
-                self._latest = False
             return bool(self.db.execute(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)',
                                         (identity or content_hash(payload), canonical(payload), at or now_utc())).rowcount)
 
@@ -294,11 +293,10 @@ class HistoryStore:
         return self.db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
 
     def latest_capture_time(self):
-        """The latest time any capture or bar version was stored under, as text in UTC; None in an empty store."""
-        if self._latest is False:
-            times = [r[0] for r in self.db.execute(f'SELECT created_at FROM history_captures UNION SELECT DISTINCT created_at FROM {BAR_TABLE}')]
-            self._latest = max(times, key=when) if times else None
-        return self._latest
+        """The latest time any capture or bar version was stored under, as text in UTC; None in an empty store. Read
+        from the database every time: another connection may have stored something since."""
+        times = [r[0] for r in self.db.execute(f'SELECT MAX(created_at) FROM history_captures UNION ALL SELECT MAX(created_at) FROM {BAR_TABLE}') if r[0]]
+        return max(times, key=when) if times else None       # every stored time is UTC in one notation, so the text maximum per table is its latest
 
     def capture_clock(self, at=None) -> tuple:
         """(time, clock) for a write. Without ``at`` the time is this machine's clock (SYSTEM). A supplied time is SUPPLIED:
@@ -312,6 +310,12 @@ class HistoryStore:
             raise ValueError('CAPTURE_TIME_NOT_MONOTONIC')
         return stamp, clock
 
+    def begin_capture(self, at=None) -> tuple:
+        """Checks the time of a capture once and returns the (time, clock) pair every block of that capture is stored
+        under. ``put_bars`` accepts only the pair handed out here, so a clock cannot be claimed."""
+        self._capture = self.capture_clock(at)
+        return self._capture
+
     # ------------------------------------------------------------------------------------------------------- bars
     def sources(self) -> list:
         return [r[0] for r in self.db.execute(f'SELECT DISTINCT source FROM {BAR_TABLE} ORDER BY 1')]
@@ -324,21 +328,23 @@ class HistoryStore:
             raise ValueError('SOURCE_REQUIRED')                             # two vendors' bars for one identifier are two different series
         return found[0] if found else None
 
-    def put_bars(self, source, security_id, year, columns, capture_id, *, price_table, at=None, clock=None, sparse=False) -> dict:
+    def put_bars(self, source, security_id, year, columns, capture_id, *, price_table, at=None, capture=None, sparse=False) -> dict:
         """Stores one security-year block. Every row is checked again here, against the capture time too; a block holding an
         invalid row is refused whole. Stored sessions outside the span this capture holds are carried over, so a partial file
         extends a year. A stored session inside that span that the capture no longer mentions is removed from the new
         version (``sparse`` captures remove nothing). Content equal to the current version is a duplicate; anything else is
-        the next version. ``clock`` is passed by ``ingest`` together with the time it already checked; a direct caller
-        leaves it out and the time is checked here."""
+        the next version. ``capture`` is the pair ``begin_capture`` returned, passed by ``ingest`` for every block of one
+        file; a direct caller leaves it out and gives ``at`` or nothing, and the time is checked here."""
         if tuple(sorted(columns)) != tuple(sorted(BAR_COLUMNS)) or len({len(columns[c]) for c in BAR_COLUMNS}) != 1 or not columns['sessions']:
             raise ValueError('MALFORMED_BAR_BLOCK')
         if list(columns['sessions']) != sorted(set(columns['sessions'])) or any(str(s)[:4] != str(year) for s in columns['sessions']):
             raise ValueError('MALFORMED_BAR_BLOCK')
-        if clock is None:
+        if capture is None:
             at, clock = self.capture_clock(at)
-        elif clock not in ('SYSTEM', 'SUPPLIED') or not at:
-            raise ValueError('INVALID_CAPTURE_TIME')
+        elif capture is not self._capture or at is not None:
+            raise ValueError('INVALID_CAPTURE_TIME')                        # not the pair this store handed out
+        else:
+            at, clock = capture
         if price_table not in ('stocks', 'funds') or block_reasons(columns, captured_at=at):
             raise ValueError('INVALID_BAR_BLOCK')
         body = {c: ['' if v is None else str(v) for v in columns[c]] for c in BAR_COLUMNS}
@@ -365,7 +371,6 @@ class HistoryStore:
             self.db.execute(f'INSERT INTO {BAR_TABLE} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (identity, source, security_id, int(year), version, len(body['sessions']), body['sessions'][0], body['sessions'][-1], capture_id,
                              canonical(change), digest, price_table, zlib.compress(canonical(body).encode(), 6), at, clock))
-        self._latest = at
         return {'stored': True, 'id': identity, 'version': version, **change}
 
     def bar_blocks(self, security_id, *, source=None, through_capture_time=None):
@@ -398,6 +403,7 @@ class HistoryStore:
             since    {session: when the value read today was first stored}
             clock    {session: SYSTEM or SUPPLIED, the clock of that version}
             revised  the sessions whose value was changed after it was first stored
+            removed  the sessions that were stored once and are not read today: the vendor took the bar out
 
         A pure rescale of a block for a later split (SCALE_ONLY), a re-adjusted total-return close and a new update stamp
         do not change a bar. Anything else does: in a VALUE_CHANGE version every row whose values differ from the version
@@ -429,7 +435,8 @@ class HistoryStore:
                         clock.pop(session, None)
                         revised.add(session)                           # removed: if it returns, it returns as a revised bar
             previous[year] = block
-        return {'since': since, 'clock': clock, 'revised': {session for session in revised if session in since}}
+        return {'since': since, 'clock': clock, 'revised': {session for session in revised if session in since},
+                'removed': {session for session in revised if session not in since}}
 
     def held_since(self, security_id, *, source=None) -> dict:
         """{session: when the bar that is read today was first stored}. See ``bar_history``."""

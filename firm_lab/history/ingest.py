@@ -42,8 +42,8 @@ def capture_time(at=None) -> str:
 
 
 def _begin(store, at) -> tuple:
-    """(capture time, clock). See ``HistoryStore.capture_clock``."""
-    return store.capture_clock(at)
+    """(capture time, clock), checked once for the whole file. See ``HistoryStore.begin_capture``."""
+    return store.begin_capture(at)
 
 
 def _capture_id(store, kind, source, file, adapter, at) -> str:
@@ -150,7 +150,8 @@ def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=
     A stored session that lies inside the span of sessions this file holds for a security and year, and that the file
     does not mention, is removed from the new version: the vendor took the bar out. ``sparse`` says the file lists only
     scattered rows (for example those changed since a date); then nothing is removed."""
-    at, clock = _begin(store, at)
+    capture = _begin(store, at)
+    at, clock = capture
     securities = current_securities(store, source=source)
     by_symbol = {}
     for sid, sec in securities.items():
@@ -205,7 +206,7 @@ def ingest_bars(store, rows, *, source, file, adapter, price_table='stocks', at=
                 block, key = state['block'], state['key']
                 if not block or not block['sessions']:
                     return
-                result = store.put_bars(source, key[0], key[1], block, cid, price_table=price_table, at=at, clock=clock, sparse=sparse)
+                result = store.put_bars(source, key[0], key[1], block, cid, price_table=price_table, capture=capture, sparse=sparse)
                 if result['stored']:
                     counts['blocks_stored'] += 1
                     counts['rows_stored'] += len(block['sessions'])

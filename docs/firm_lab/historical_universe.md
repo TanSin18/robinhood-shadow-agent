@@ -73,7 +73,8 @@ built, that universe no longer describes the stored data. `is_current` says so, 
 dataset refuses it (`UNIVERSE_IS_STALE`) until the universe is rebuilt. A rebuild stores another universe beside the
 first. Records belong to a universe by its hash, so two builds can never be read as one. A read that does not say
 which universe is refused when more than one fits the stored bars (`UNIVERSE_HASH_REQUIRED`); the `count` command
-then counts the one built last unless told otherwise, and the readiness report shows the one counted last. Records
+then counts the one stored last unless told otherwise (a rebuild that changes nothing stores nothing), and the
+readiness report shows the one counted last. Records
 that do not match their manifest are refused (`UNIVERSE_RECORDS_DO_NOT_MATCH_MANIFEST`).
 
 ## Limitations

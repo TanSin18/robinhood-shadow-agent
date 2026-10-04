@@ -42,13 +42,16 @@ a timestamp for each fact. A daily bar has no publication timestamp, so its avai
   vendor took the bar out, and that is a `VALUE_CHANGE`. Outside that span nothing is removed. A file that lists only
   scattered rows (for example the rows changed since a date) must be ingested as `sparse`; then nothing is removed.
 * Every block is validated again at the point of storage, the capture-time check included (`INVALID_BAR_BLOCK`), so
-  no code path can store a bar the row checks would have rejected or a bar "captured" before its session closed.
+  the store's own methods cannot store a bar the row checks would have rejected or a bar "captured" before its
+  session closed. A clock cannot be claimed either: the store hands out the time and clock of a capture once, and a
+  block is accepted only under that pair. The latest stored time is read from the database at every capture, so a
+  second connection cannot be overtaken.
 * A new version records what changed:
 
   | Class | Meaning |
   |---|---|
   | `EXTENDED` | only sessions after the previous last session were added |
-  | `SCALE_ONLY` | every session before some date moved by one common factor (prices times k, volume divided by k) and the printed price did not move: the vendor re-adjusting for a later split. All four prices and the volume of every changed row must agree on one factor, within what the printing of both versions can explain |
+  | `SCALE_ONLY` | every session before some date moved by one common factor (prices times k, volume divided by k) and the printed price did not move: the vendor re-adjusting for a later split. All four prices and the volume of every changed row must agree on one factor, within what the printing of both versions can explain. A volume is taken as rounded to a whole share at best, however it is printed, and at least one changed row must have traded |
   | `TOTAL_RETURN_READJUSTED` | only the total-return close differs: a later dividend |
   | `METADATA_ONLY` | only the provider's update stamp differs |
   | `VALUE_CHANGE` | anything else: one corrected print, a session that appeared in the past, a session that disappeared, a "rescale" that only some rows or some columns show, the same numbers printed otherwise |
@@ -56,7 +59,8 @@ a timestamp for each fact. A daily bar has no publication timestamp, so its avai
   A `VALUE_CHANGE` is a vendor revision of history. It is counted on the readiness page ("Stored versions"). Every
   row of that version whose values differ from the version before is a **revised bar**: it is dated to the capture
   that revised it, and it is a restated value. A training row that reads a revised bar, in a feature or in its
-  label, is tier C and is not a strict sample (§5); such rows are counted, not hidden.
+  label, is tier C and is not a strict sample (§5); such rows are counted, not hidden. A bar the vendor **removed**
+  is treated the same way: the rows that would have read it are tier C.
 * Security-master rows, corporate actions and index-membership events are stored content-addressed with the capture
   they came from. A security-master row that returns to an earlier state is stored as a new row, so "the current row"
   is always the latest stored. Two securities claiming one identifier with different names is refused
@@ -97,7 +101,11 @@ not one of the provider's two values is rejected (`MALFORMED_SECURITY`); nothing
 **Consistency with corporate actions** is checked per security after bars and actions are both stored. The ratio of
 unadjusted close to split-adjusted close is the cumulative split factor. It must be constant between split dates and
 must step, at each recorded split date, by that split's ratio. The tolerance is 0.5% plus the largest error that
-rounding of the two printed prices can cause, taken from the number of decimals the vendor printed. A step with no
+rounding of the two printed prices can cause, taken from the decimals of **that bar's own row** (the most decimals
+among its open, high, low and close). Only the bar's own row is read: a precision taken over the whole column would
+let one later print, in a sealed segment or after a later split, change how every earlier bar is judged. If a vendor
+drops trailing zeros, a bar whose four prices are all round is judged coarser than it is, which errs on the cautious
+side. A step with no
 recorded split (`SPLIT_FACTOR_WITHOUT_ACTION`), or a recorded split with no step (`ACTION_WITHOUT_SPLIT_FACTOR`), is
 recorded as a **break** at that session: prices before it and after it cannot be compared. Either way of writing a
 split ratio is read (new shares per old, or the inverse), splits dated on one session multiply, and a split large
@@ -138,7 +146,20 @@ depends on the future. Two rules close that channel:
   the rows of that stock cannot be told from the others by what is missing.
 
 What remains is bounded and stated: on rows that are used, a reprinted high, low or open can be off by up to 0.05%
-of the price, and how far depends on later splits.
+of the price, and how far depends on later splits. The measure is deliberately blunt: a vendor that prints two
+decimals makes every bar under $10 coarse by it, whether or not a split followed.
+
+* **What a coarse reprint may not decide.** After later splits, early prices are reprinted as small, coarsely rounded
+  numbers, and the split factor and the total-return factor read from them are blurred. Two decisions used to
+  depend on that blur, and so on the future: whether a small recorded split (a 3% stock dividend) was confirmed, and
+  whether a cash distribution reached 5%. Both are now taken from numbers a later split cannot change. A recorded
+  split too small to show through the blur is applied as recorded (`splits_unchecked`), not turned into a break. A
+  distribution the blurred factor cannot size is sized by its recorded amount over the unadjusted close of the day.
+  This rests on two readings of the vendor's action table, stated in the code and counted against the cases the
+  prices can show (`split_convention`, `dividend_basis`): a split's value is new shares per old share, and a
+  dividend's value is the amount paid per share on the day. The validation sample is where a vendor that means
+  otherwise is found out. What still depends on the reprint is whether an **error** in the vendor's own tables is
+  caught: a check that cannot be made is not a failure.
 
 The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 

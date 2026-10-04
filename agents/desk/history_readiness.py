@@ -49,8 +49,9 @@ def _span(pair):
 
 
 def _measured(value):
-    if isinstance(value, dict):
-        return '; '.join(f'{esc(str(k).replace("_", " "))} {_count(v)}' for k, v in value.items())
+    if isinstance(value, dict):                                         # horizons in their own order, with their unit
+        items = sorted(value.items(), key=lambda kv: (0, int(kv[0]), '') if str(kv[0]).isdigit() else (1, 0, str(kv[0])))
+        return '; '.join(f'{esc(str(k) + "-session" if str(k).isdigit() else str(k).replace("_", " "))} {_count(v)}' for k, v in items)
     return _count(value)
 
 

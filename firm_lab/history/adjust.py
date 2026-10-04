@@ -29,6 +29,10 @@ LARGE_DISTRIBUTION = 0.05
 PRECISION_BOUND = 5e-4                    # an adjusted price printed more coarsely than 0.05% of itself cannot support high/low/open features
 DIRECTION_FROM = 0.2                      # a split of at least about 1.22-for-1 is large enough to check which way the factor stepped
 SPIN_OFF, LARGE, NO_ACTION, NO_FACTOR = 'SPIN_OFF', 'LARGE_DISTRIBUTION', 'SPLIT_FACTOR_WITHOUT_ACTION', 'ACTION_WITHOUT_SPLIT_FACTOR'
+# What the action table is taken to mean where the reprinted prices are too coarse to show it. Both are counted against
+# the cases the prices can show (``split_convention``, ``dividend_basis``), so a vendor that means otherwise is found out.
+SPLIT_VALUE_MEANS = 'new_per_old'         # a split's value is new shares per old share
+DIVIDEND_VALUE_MEANS = 'unadjusted'       # a cash dividend's value is the amount paid per share on the day
 
 
 def split_factor(panel) -> np.ndarray:
@@ -52,17 +56,24 @@ def _number(text):
 
 
 def breaks(panel, actions) -> dict:
-    """{'breaks': [...], 'splits': [(session index, new shares per old share)], 'splits_confirmed', 'split_convention',
-    'dividend_basis'}.
+    """{'breaks': [...], 'splits': [(session index, new shares per old share)], 'splits_confirmed', 'splits_unchecked',
+    'split_convention', 'dividend_basis', 'distributions_not_sizable'}.
 
     A split's value may be recorded as new-per-old or old-per-new; either is read when it matches the observed step.
     Splits recorded for one session multiply. A step large enough to tell is also checked for direction: the adjusted
     series must be continuous across it. The size of a cash distribution is read from the vendor's own total-return
-    factor on the two sessions around the ex-date, which a later split does not change; the recorded amount is used only
-    when that factor is missing, taken as the amount paid per share on the day."""
+    factor on the two sessions around the ex-date.
+
+    What a later split must not decide. After later splits the vendor reprints early prices as small, coarsely rounded
+    numbers, and the factor read from them is blurred. Where the blur is too large to show a recorded split, the split
+    is applied as recorded (``splits_unchecked``), not turned into a break; where it is too large to say whether a
+    distribution reached 5%, the recorded amount over the unadjusted close of the day decides. Both use only numbers a
+    later split cannot change, so a row of a stock that split heavily afterwards is treated like any other. What does
+    still depend on the reprint is whether an ERROR in the vendor's own tables is caught: a check that cannot be made
+    is not a failure."""
     sessions, present = panel['sessions'], panel['present']
     factor = split_factor(panel)
-    found, confirmed, split_steps = [], 0, []
+    found, confirmed, unchecked, unsizable, split_steps = [], 0, 0, 0, []
     convention = {'new_per_old': 0, 'old_per_new': 0}
     basis = {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}
     valid = np.flatnonzero(present)
@@ -85,19 +96,28 @@ def breaks(panel, actions) -> dict:
         elif action['type'] == 'cash_dividend' and k in previous and present[k]:
             j = previous[k]
             value = _number(action.get('value'))
+            paid = None if value is None else value / panel['close_unadjusted'][j]       # the recorded amount over the price printed on the day
+            blur = 2 * (panel['print_error'][j] + panel['print_error'][k])               # how far the reprinted factor can be off
+            share = None
             if math.isfinite(total[j]) and math.isfinite(total[k]) and total[k] > 0:
                 share = 1.0 - total[j] / total[k]
                 if value is not None:
-                    paid, adjusted = value / panel['close_unadjusted'][j], value / panel['close'][j]
-                    near = lambda x: abs(x - share) <= max(0.002, 0.25 * abs(share)) + 2 * (panel['print_error'][j] + panel['print_error'][k])
+                    adjusted = value / panel['close'][j]
+                    near = lambda x: abs(x - share) <= max(0.002, 0.25 * abs(share)) + blur
                     basis['unadjusted' if near(paid) else 'adjusted' if near(adjusted) else 'neither'] += 1
             elif value is not None:
-                share = value / panel['close_unadjusted'][j]
                 basis['no_total_return_factor'] += 1
+            if share is not None and share - blur >= LARGE_DISTRIBUTION:
+                large, size = True, share
+            elif share is not None and share + blur < LARGE_DISTRIBUTION:
+                large, size = False, share
+            elif paid is not None:                                      # the reprint cannot say: the recorded amount on the day's price does
+                large, size = paid >= LARGE_DISTRIBUTION, paid
             else:
+                unsizable += share is not None                          # no amount recorded and a factor too blurred to size it: counted, not guessed
                 continue
-            if share >= LARGE_DISTRIBUTION:
-                found.append({'session': sessions[k], 'index': k, 'reason': LARGE, 'share_of_prior_close': round(float(share), 6)})
+            if large:
+                found.append({'session': sessions[k], 'index': k, 'reason': LARGE, 'share_of_prior_close': round(float(size), 6)})
     for k, step in sorted(steps.items()):
         j = previous[k]
         bound = TOLERANCE + panel['half_ulp'][k] + panel['half_ulp'][j]
@@ -124,12 +144,25 @@ def breaks(panel, actions) -> dict:
             found.append(item)
     first_bar = int(valid[0]) if len(valid) else None
     for k, rows in sorted(splits.items()):
-        if first_bar is not None and k > first_bar and k not in steps:           # a split on the very first bar has no earlier price to step from
+        if first_bar is not None and k > first_bar and k not in steps and k in previous:      # a split on the very first bar has no earlier price to step from
             values = [_number(a.get('value')) for a in rows]
-            if any(v is not None for v in values) and abs(math.log(math.prod(v for v in values if v is not None))) > TOLERANCE:
+            if not any(v is not None for v in values):
+                continue
+            combined = math.prod(v for v in values if v is not None)
+            if abs(math.log(combined)) <= TOLERANCE:
+                continue                                                # too small to matter at any precision
+            j = previous[k]
+            blur = panel['half_ulp'][k] + panel['half_ulp'][j]
+            if all(v is not None for v in values) and abs(math.log(combined)) <= TOLERANCE + 2 * blur:
+                # The reprinted prices here are too coarse to show a step of this size. The record stands, as recorded.
+                unchecked += 1
+                split_steps.append((int(k), float(combined if SPLIT_VALUE_MEANS == 'new_per_old' else 1.0 / combined)))
+            else:
                 found.append({'session': sessions[k], 'index': k, 'reason': NO_FACTOR, 'recorded_split_values': [a.get('value') for a in rows]})
     found.sort(key=lambda b: (b['index'], b['reason']))
-    return {'breaks': found, 'splits': split_steps, 'splits_confirmed': confirmed, 'split_convention': convention, 'dividend_basis': basis}
+    split_steps.sort()
+    return {'breaks': found, 'splits': split_steps, 'splits_confirmed': confirmed, 'splits_unchecked': unchecked, 'split_convention': convention,
+            'dividend_basis': basis, 'distributions_not_sizable': int(unsizable)}
 
 
 def break_mask(panel, found) -> np.ndarray:

@@ -79,7 +79,8 @@ def row_tiers(sessions, present, history, *, oldest=None, label_reach=targets.MA
 
     A  every bar the row's features read was stored by this machine's clock before the next session opened, and none
        was changed afterwards. The row reads its last 253 bars, and further back where ``oldest`` says so.
-    C  a bar the row reads, or a bar its longest label reads, was changed by the vendor after it was first stored.
+    C  a bar the row reads, or a bar its longest label reads, was changed by the vendor after it was first stored, or
+       was taken out by the vendor (the hole it left is the vendor's later doing, not the market's).
     B  otherwise: a publisher-dated historical bar."""
     count = len(sessions)
     if not count:
@@ -92,7 +93,10 @@ def row_tiers(sessions, present, history, *, oldest=None, label_reach=targets.MA
         # a bar cannot be stored before its session closes, so only a time on the days up to the next open can qualify
         if stamp is not None and clock.get(s) == 'SYSTEM' and s <= stamp[:10] <= _eligible_from(s)[:10]:
             held[t] = when(stamp) <= when(_eligible_from(s))
+    removed = history.get('removed') or ()
     changed = present & np.array([s in revised for s in sessions], bool) if revised else np.zeros(count, bool)
+    if removed:
+        changed = changed | np.array([s in removed for s in sessions], bool)
     t = np.arange(count)
     start = np.maximum(t - INPUT_WINDOW_BARS + 1, 0)
     if oldest is not None:
@@ -154,10 +158,12 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
         labels[h]['value'] = np.where(readable, labels[h]['value'], np.nan)        # sealed, purge and burn-in label values never leave this function
     for name in values:
         values[name] = np.where(readable, values[name], np.nan)                    # nor do their features: a price series is its own label
+    # A break is returned as where and why. Its size is a price move, and for a sealed session that is not handed out.
+    found = [{'session': b['session'], 'index': b['index'], 'reason': b['reason']} for b in audit['breaks']]
     return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'bar_tier': bar_tier,
             'segment': segment, 'coarse': coarse, 'reads_coarse': reads_coarse, 'delisting': delisting,
-            'features': values, 'labels': labels, 'breaks': audit['breaks'], 'blocks': p['blocks'], 'audit': {**audit, 'structure': computed['audit']},
-            'history_bars': history}
+            'features': values, 'labels': labels, 'breaks': found, 'blocks': p['blocks'],
+            'audit': {**{k: v for k, v in audit.items() if k != 'breaks'}, 'structure': computed['audit']}, 'history_bars': history}
 
 
 def _sources(store) -> list:
@@ -189,7 +195,8 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
            'members_whose_bars_end_without_a_delisting_record': 0, 'breaks_by_reason': {}, 'splits_confirmed': 0,
            'split_convention': {'new_per_old': 0, 'old_per_new': 0},
            'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0, 'rows_reading_a_coarse_print': 0,
-           'sample_sessions_per_instrument': [], 'sequence_ready': 0}
+           'sample_sessions_per_instrument': [], 'sequence_ready': 0, 'splits_unchecked': 0, 'distributions_not_sizable': 0}
+    sample_sessions = set()                                             # sessions with at least one strict sample at the longest horizon
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
     totals = {h: {} for h in targets.HORIZONS}                           # horizon -> {window index: [sum, count]} for the cross-sectional mean
     hold_counts = {h: {} for h in targets.HORIZONS}                      # horizon -> {holdout window index: how many labels can be built}; a count, never a value
@@ -204,6 +211,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         out['eligible_feature_rows'] += int(eligible.sum())
         out['rows_reading_a_coarse_print'] += int((eligible & rows['reads_coarse']).sum())
         out['splits_confirmed'] += rows['audit']['splits_confirmed']
+        out['splits_unchecked'] += rows['audit']['splits_unchecked']
+        out['distributions_not_sizable'] += rows['audit']['distributions_not_sizable']
+        own_samples = 0
         for key, value in rows['audit']['split_convention'].items():
             out['split_convention'][key] += value
         for key, value in rows['audit']['dividend_basis'].items():
@@ -212,7 +222,6 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         for b in rows['breaks']:
             out['breaks_by_reason'][b['reason']] = out['breaks_by_reason'].get(b['reason'], 0) + 1
         index = np.flatnonzero(eligible)
-        out['sample_sessions_per_instrument'].append(int(len(index)))
         run = 0
         for t in range(len(sessions)):
             run = run + 1 if eligible[t] else 0
@@ -239,6 +248,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
                     part[f'labelled_{h}'] += 1
                     if sample:
                         out['strict_samples_by_tier'][str(h)][rows['tier'][t]] += 1
+                        if h == targets.MAX_HORIZON:
+                            own_samples += 1
+                            sample_sessions.add(s)
                     if state == targets.DELISTED_EXIT and h == targets.MAX_HORIZON:
                         out['delisting_exits_by_reason'][reason] = out['delisting_exits_by_reason'].get(reason, 0) + 1
                         by_year = out['delisting_exits_by_year'].setdefault(s[:4], {})
@@ -253,8 +265,10 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
                     k = hold_position.get(s)
                     if name == splits.HISTORICAL_HOLDOUT and k is not None and k % h == 0:
                         hold_counts[h][k // h] = hold_counts[h].get(k // h, 0) + 1
+        out['sample_sessions_per_instrument'].append(own_samples)
         if progress and n % 200 == 0:
             progress(n, len(spans))
+    out['unique_sample_sessions'] = len(sample_sessions)
     out['sample_sessions_per_instrument_median'] = float(np.median(out.pop('sample_sessions_per_instrument'))) if spans else 0.0
     out['unique_instruments'] = len(set().union(*(p['instruments'] for p in out['by_segment'].values())))
     out['unique_sessions'] = len(set().union(*(p['sessions'] for p in out['by_segment'].values())))

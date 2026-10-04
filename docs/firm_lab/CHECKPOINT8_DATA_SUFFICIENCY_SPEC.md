@@ -239,3 +239,13 @@ lowered and none was added. Three rules are tightened and two statements of this
 The readiness report lists all 25 bars of this specification. A bar whose measurement is not built yet (P7) is shown
 as not met, with that reason. H1 is measured as the first month-end at which the universe holds the minimum number of
 members, so that one early bar of one security cannot meet it.
+
+**Amendment 4, 2026-10-04, after the fifth independent review and still before any data was collected.** No bar was
+lowered and none was added. Two measures are stated more narrowly, and one rule is added to tier C:
+
+* **H2 and P5 count samples.** H2 is the number of sessions that have at least one strict sample with a 20-session
+  label; P5 is the strict samples with a 20-session label of the median member. Sessions of a purge, and rows that
+  have no label, are not counted toward either.
+* **A removed bar is a restated bar (§1).** A row that would have read a bar the vendor later took out is tier C.
+* **Print precision is judged per bar**, from the decimals of that bar's own row, never from the whole column. O7
+  and every tolerance that depends on precision follow that.

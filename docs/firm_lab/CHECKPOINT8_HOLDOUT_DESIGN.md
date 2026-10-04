@@ -58,7 +58,10 @@ Chosen from the calendar and from the sufficiency specification, without looking
 
 * The dataset builder removes the label values and the feature values of every segment that is not readable (both
   holdouts, the purges, the burn-in) before any row leaves it. Only whether a row and its label can be built is
-  counted, which reads dates and the existence of bars.
+  counted. Finding that out does read the sealed bars (a feature has to be computable, a break has to be found);
+  what leaves is a count, and a break is returned as where and why, without its size.
+* How a bar is printed is judged from that bar's own row. The print of a holdout bar cannot change how a development
+  or a burned bar is read; a test adds two zeros to one holdout print and shows that no other segment's rows move.
 * **What the seal is not.** The raw bars of the holdout sit in the same database as everything else and can be read
   by anyone who opens it. The seal is on what the dataset builder hands out and on what any model is measured on;
   it is a rule with tests, not a lock. One thing does cross the boundary: universe membership in the first months of

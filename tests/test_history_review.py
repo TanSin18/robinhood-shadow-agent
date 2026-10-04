@@ -162,11 +162,13 @@ def test_an_inverted_split_adjustment_is_a_break_not_a_confirmed_split():
     assert 'not continuous' in found['breaks'][0]['note']
 
 
-def test_print_precision_is_read_from_the_column_and_small_input_oddities_fail_safe():
+def test_print_precision_is_read_from_the_bars_own_row_and_small_input_oddities_fail_safe():
     columns = _columns(hi=60, decimals=2, price=29.0)
-    columns['close'][10] = columns['close'][10].rstrip('0').rstrip('.')             # a vendor that strips trailing zeros: "29" for 29.00
+    columns['close'][10] = '29'                                                     # a vendor that strips trailing zeros: "29" for 29.00
+    columns['high'][10] = max(columns['high'][10], '29.01')
+    columns['low'][10] = min(columns['low'][10], '28.99')
     p = panel.from_columns(columns)
-    assert p['half_ulp'][10] == pytest.approx(p['half_ulp'][11], rel=0.2) and p['half_ulp'][10] < 0.001      # two decimals, not zero decimals
+    assert p['half_ulp'][10] == pytest.approx(p['half_ulp'][11], rel=0.2) and p['half_ulp'][10] < 0.001      # two decimals (its other prices show them), not zero
     stamped = panel.from_columns(_columns(hi=400, factor=np.r_[np.full(200, 2.0), np.ones(200)]))
     day = stamped['sessions'][200]
     assert adjust.breaks(stamped, [{'type': 'split', 'effective_date': day + 'T00:00:00', 'value': '2'}])['breaks'] == []        # a timestamp is read as its date
@@ -922,3 +924,155 @@ def test_the_report_lists_every_bar_of_the_specification_and_a_history_is_not_on
     assert report['market_data']['history_range'][0] == '2004-03-01' and bars['H1']['status'] == 'NOT_MET' and bars['H1']['measured'] is None
     assert bars['O5']['status'] == 'MET' and bars['O2']['status'] == 'NOT_MET' and bars['P7']['status'] == 'NOT_MET'
     assert report['regimes']['training_alone']['status'] == 'NOT_MEASURABLE'
+
+
+# ------------------------------------------------------ review round 4 (a fifth, fresh reviewer; commit 9e593ae)
+def _aaa_columns(day, ratio, later, decimals, monkeypatch, ticker='AAA'):
+    """AAA with a recorded split of ``ratio`` on ``day``, as a vendor prints it after a later cumulative split."""
+    if ratio is not None:
+        monkeypatch.setattr(fx, 'SPLIT', (ticker, day, ratio))
+    rows = list(fx.price_rows([ticker], through='2020-12-31', rescale=(ticker, later) if later != 1 else None, decimals=decimals))
+    columns = {'sessions': [r[1] for r in rows]}
+    for k, name in ((2, 'open'), (3, 'high'), (4, 'low'), (5, 'close'), (6, 'volume'), (7, 'close_total_return'), (8, 'close_unadjusted')):
+        columns[name] = [r[k] for r in rows]
+    return columns
+
+
+def test_how_one_bar_is_printed_never_changes_how_another_bar_is_read(tmp_path):
+    """Print precision was taken over the whole column: one finer print inside the sealed holdout made every earlier
+    coarse bar count as precise, and development rows changed with it."""
+    def stores(folder, finer):
+        folder.mkdir(parents=True)
+        fx.write_tickers(folder / 'T.csv')
+        rows = [list(r) for r in fx.price_rows([t for t in fx.SECURITIES if t != 'AAA'])] + [list(r) for r in fx.price_rows(['AAA'], rescale=('AAA', 40.0), decimals=2)]
+        for r in rows:
+            if finer and r[0] == 'AAA' and r[1] == '2024-06-03':
+                r[5] = r[5] + '00'                                      # the same number, printed with four decimals
+        fx.write_prices(folder / 'P.csv', rows)
+        fx.write_actions(folder / 'A.csv')
+        store = HistoryStore(folder / 'firm_lab_history.db', create=True)
+        ingest.ingest_securities(store, sf.securities(folder / 'T.csv'), file=ingest.describe_file(folder / 'T.csv'), at=LATER, **COMMON)
+        ingest.ingest_bars(store, sf.prices(folder / 'P.csv'), file=ingest.describe_file(folder / 'P.csv'), at=LATER, **COMMON)
+        ingest.ingest_actions(store, sf.actions(folder / 'A.csv'), file=ingest.describe_file(folder / 'A.csv'), at=LATER, **COMMON)
+        universe.build(store, fx.FIRST, fx.LAST, rule=RULE, version=fx.VERSION)
+        return store
+
+    assert splits.segment('2024-06-03') == splits.HISTORICAL_HOLDOUT
+    a, b = stores(tmp_path / 'a', False), stores(tmp_path / 'b', True)
+    try:
+        for segment in (splits.DEVELOPMENT, splits.BURNED):
+            xa, xb = dataset.materialise(a, segments=(segment,)), dataset.materialise(b, segments=(segment,))
+            assert xa['manifest']['hashes']['rows'] == xb['manifest']['hashes']['rows'] and xa['manifest']['hashes']['features'] == xb['manifest']['hashes']['features'], segment
+            assert xa['manifest']['high_low_open_families_usable'] == xb['manifest']['high_low_open_families_usable'], segment
+        ca, cb = dataset.count(a), dataset.count(b)
+        assert ca['strict_samples'] == cb['strict_samples'] and ca['breaks_by_reason'] == cb['breaks_by_reason']
+    finally:
+        a.close()
+        b.close()
+    p = panel.from_columns(_columns(hi=60, decimals=2, price=29.0))
+    finer = _columns(hi=60, decimals=2, price=29.0)
+    finer['close'][40] += '00'
+    q = panel.from_columns(finer)
+    np.testing.assert_array_equal(np.delete(p['print_error'], 40), np.delete(q['print_error'], 40))      # only the bar that was printed finer is read as finer
+
+
+def test_a_coarse_reprint_after_a_later_split_does_not_undo_a_recorded_split_or_inflate_a_dividend(monkeypatch):
+    """A recorded 1.03-for-1 split became a break once later splits made the vendor reprint the prices around it too
+    coarsely to show a 3% step, and the rows of exactly that stock lost their long lookbacks."""
+    from firm_lab.history import features
+    close_based = [d['name'] for d in features.DEFINITIONS if not d['uses_high_low_open']]
+    lost = different = 0
+    for day in calendar.sessions('2019-06-03', '2020-03-31')[::14]:
+        series = fx.series('AAA')
+        later = float(round(series['close'][series['sessions'].index(day)] / 0.36))       # a cumulative later split that leaves the price near 0.36
+        action = [{'type': 'split', 'effective_date': day, 'value': '1.03'}]
+        plain, coarse = panel.from_columns(_aaa_columns(day, 1.03, 1, 2, monkeypatch)), panel.from_columns(_aaa_columns(day, 1.03, later, 2, monkeypatch))
+        a, b = adjust.breaks(plain, action), adjust.breaks(coarse, action)
+        lost += a['splits_confirmed'] + a['splits_unchecked'] != b['splits_confirmed'] + b['splits_unchecked'] or a['splits'] != b['splits'] or bool(b['breaks'])
+        va = features.compute(plain, adjust.break_mask(plain, a['breaks']), splits=a['splits'])['values']
+        vb = features.compute(coarse, adjust.break_mask(coarse, b['breaks']), splits=b['splits'])['values']
+        different += sum(not np.array_equal(np.isnan(va[name]), np.isnan(vb[name])) for name in close_based)
+        assert a['splits'] == [(plain['sessions'].index(day), 1.03)]
+    assert lost == 0 and different == 0                                 # the record stands as recorded, and nothing close-based goes missing
+    # a recorded ordinary dividend near coarse prints is sized by its amount over the day's price, not by a blurred factor
+    monkeypatch.setattr(fx, 'SPLIT', ('AAA', '2020-06-15', 2.0))
+    day, amount = fx.DISTRIBUTION[1], None
+    for later in (1.0, 150.0):
+        columns = _aaa_columns(None, None, later, 2, monkeypatch, ticker='FFF')
+        p = panel.from_columns(columns)
+        k = p['sessions'].index(day)
+        amount = amount or f'{0.10 * float(columns["close_unadjusted"][k - 1]) / 0.9:.4f}'
+        ordinary = [{'type': 'cash_dividend', 'effective_date': s, 'value': f'{0.01 * float(columns["close_unadjusted"][p["sessions"].index(s) - 1]):.4f}'}
+                    for s in p['sessions'][100:400:15] if abs(p['sessions'].index(s) - k) > 3]
+        found = adjust.breaks(p, [{'type': 'cash_dividend', 'effective_date': day, 'value': amount}] + ordinary)
+        assert [(b['session'], b['reason']) for b in found['breaks']] == [(day, 'LARGE_DISTRIBUTION')], later
+
+
+def test_a_split_re_adjustment_is_a_rescale_however_the_vendor_prints_its_volume():
+    rng = np.random.default_rng(5)
+    days = list(calendar.sessions('2019-01-02', '2019-12-31'))[:120]
+    close = 40 * np.exp(np.cumsum(rng.normal(0, 0.02, len(days))))
+    volume = np.round(np.exp(rng.normal(13, 0.4, len(days))))
+
+    def block(k, decimals, volume_text):
+        price = lambda scale: [f'{c * scale / k:.{decimals}f}' for c in close]
+        return {'sessions': days, 'open': price(0.999), 'high': price(1.004), 'low': price(0.995), 'close': price(1.0), 'volume': [volume_text(v * k) for v in volume],
+                'close_unadjusted': [f'{c:.2f}' for c in close], 'close_total_return': price(1.0), 'provider_updated': [''] * len(days)}
+
+    whole_as_float = lambda v: f'{float(round(v)):.1f}'                  # 2253.0: a whole number of shares printed with a decimal
+    for ratio in (1.5, 0.1, 1.25, 1.05, 2.0, 7.0):
+        for decimals in (2, 4, 6):
+            found = classify_change(block(1.0, decimals, whole_as_float), block(ratio, decimals, whole_as_float))
+            assert found['change'] == 'SCALE_ONLY' and found['scale_factor'] == pytest.approx(1 / ratio, rel=2e-3), (ratio, decimals)
+    silent = block(1.0, 2, lambda v: '0')                               # nothing traded: nothing says the shares were re-counted
+    moved = {**silent, **{c: [f'{float(v) * 1.1:.2f}' for v in silent[c]] for c in ('open', 'high', 'low', 'close')}}
+    assert classify_change(silent, moved)['change'] == 'VALUE_CHANGE'
+    one_wrong = block(1.5, 4, whole_as_float)
+    one_wrong['volume'][30] = whole_as_float(volume[30] * 1.5 * 1.02)   # and a real change among the rescaled rows is still one
+    assert classify_change(block(1.0, 4, whole_as_float), one_wrong)['change'] == 'VALUE_CHANGE'
+
+
+def test_a_removed_bar_a_claimed_clock_and_a_second_connection(tmp_path, monkeypatch):
+    sessions = list(calendar.sessions('2024-01-02', '2025-12-31'))
+    present = np.ones(len(sessions), bool)
+    present[100] = False                                                # the vendor took this bar out after it had been stored
+    history = {'since': {s: '2026-10-03T12:00:00+00:00' for s in sessions if s != sessions[100]}, 'clock': {s: 'SYSTEM' for s in sessions}, 'revised': set(),
+               'removed': {sessions[100]}}
+    tiers = dataset.row_tiers(sessions, present, history)
+    assert set(tiers[100 - 21:100 + 253]) == {'RETROSPECTIVE'} and tiers[100 - 22] == tiers[100 + 253] == 'PUBLISHER_DATED_HISTORICAL'
+    fx.set_clock(monkeypatch, '2026-10-04T12:00:00+00:00')
+    store = _bare(tmp_path)
+    try:
+        full = _block(SPAN, [f'{10 + k}.25' for k in range(10)])
+        store.put_bars('X', '1', 2024, full, 'c1', price_table='stocks', at='2026-10-01T12:00:00+00:00')
+        store.put_bars('X', '1', 2024, {c: [v for j, v in enumerate(column) if j != 4] for c, column in full.items()}, 'c2', price_table='stocks', at='2026-10-02T12:00:00+00:00')
+        assert store.bar_history('1')['removed'] == {SPAN[4]} and store.bar_history('1')['revised'] == set()
+        with pytest.raises(ValueError, match='INVALID_CAPTURE_TIME'):   # a clock cannot be claimed: only the pair the store handed out is accepted
+            store.put_bars('X', '2', 2024, full, 'c3', price_table='stocks', capture=('2024-03-15T21:00:00+00:00', 'SYSTEM'))
+        with pytest.raises(TypeError):
+            store.put_bars('X', '2', 2024, full, 'c3', price_table='stocks', at='2024-03-15T21:00:00+00:00', clock='SYSTEM')
+        other = HistoryStore(store.path)                                # another connection stores something later
+        try:
+            other.put_bars('X', '3', 2024, full, 'c4', price_table='stocks', at='2026-10-03T12:00:00+00:00')
+        finally:
+            other.close()
+        with pytest.raises(ValueError, match='CAPTURE_TIME_NOT_MONOTONIC'):
+            store.put_bars('X', '4', 2024, full, 'c5', price_table='stocks', at='2026-10-02T18:00:00+00:00')
+    finally:
+        store.close()
+
+
+def test_sample_measures_count_samples_and_a_break_is_returned_without_its_size(tmp_path):
+    store = _store(tmp_path / 's')
+    try:
+        universe.build(store, fx.FIRST, '2026-10-02', rule=RULE, version=fx.VERSION)
+        counted = dataset.count(store)
+        assert 0 < counted['unique_sample_sessions'] < counted['unique_sessions']        # purge sessions and rows without a label are not sample sessions
+        segments = [splits.segment(s) for s in calendar.sessions(fx.FIRST, '2026-10-02')]
+        assert counted['unique_sample_sessions'] <= sum(name in splits.SAMPLE_SEGMENTS for name in segments)
+        assert counted['splits_unchecked'] == 0 and counted['distributions_not_sizable'] == 0
+        actions = [a for _, a, _ in store.rows('history_actions') if a['security_id'] == '100005']
+        rows = dataset.security_rows(store, '100005', None, universe.membership(universe.load(store)['records'])['100005'], actions)
+        assert rows['breaks'] and all(set(b) == {'session', 'index', 'reason'} for b in rows['breaks']) and 'breaks' not in rows['audit']
+    finally:
+        store.close()

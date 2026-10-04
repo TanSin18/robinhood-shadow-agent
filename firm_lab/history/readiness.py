@@ -293,7 +293,7 @@ def build(research_database, history_database=None, *, now=None) -> dict:
     largest_smallest = max(v[1] for v in sufficiency.FAMILIES.values())
     known = lambda values: values is not None and all(v is not None for v in values.values())
     rounded = lambda values, digits: None if values is None else {h: None if v is None else round(v, digits) for h, v in values.items()}
-    sessions_counted = (counted or {}).get('unique_sessions')
+    sessions_counted = (counted or {}).get('unique_sample_sessions')
     median_sessions = (counted or {}).get('sample_sessions_per_instrument_median')
     by_year = manifest.get('member_count_min_by_year') or {}
     complete = (counted or {}).get('member_bars_present_share')
@@ -308,7 +308,8 @@ def build(research_database, history_database=None, *, now=None) -> dict:
              MET if from_minimum and from_minimum[:7] <= sufficiency.HISTORY['minimum_first_session'][:7] else NOT_MET,
              f'the first month-end at which the universe holds at least {sufficiency.HISTORY["minimum_members"]} members; one early bar of one security is not a history'),
         _bar('H2', 'Unique sessions with samples', 'about 7,230', 'about 5,470', sessions_counted if stored else None,
-             MET if sessions_counted and sessions_counted >= 5470 else NOT_MET),
+             MET if sessions_counted and sessions_counted >= 5470 else NOT_MET,
+             'sessions that have at least one strict sample with a 20-session label; purge and burn-in sessions are not among them'),
         _bar('H3', 'Instruments per reconstitution', 1000, 500, manifest.get('member_count_min') if stored else None,
              MET if manifest and manifest['member_count_min'] >= sufficiency.HISTORY['minimum_members'] else NOT_MET),
         _bar('H4', 'Distinct securities over the history, delisted included', 'counted', 'at least twice the members per reconstitution, and delisted ones among them',
@@ -332,7 +333,8 @@ def build(research_database, history_database=None, *, now=None) -> dict:
              MET if known(ic_hold) and max(ic_hold.values()) <= sufficiency.WEAK_IC else NOT_MET,
              'from how many labels can be built there and the breadth measured in development; no holdout value is read'),
         _bar('P5', 'Sample sessions of the median member', 'at least 500', 'the same', median_sessions if counted else None,
-             MET if median_sessions and median_sessions >= 500 else NOT_MET, 'every member also has 252 bars before its first sample, by construction'),
+             MET if median_sessions and median_sessions >= 500 else NOT_MET,
+             'strict samples with a 20-session label per member; every member also has 252 bars before its first sample, by construction'),
         _bar('P6', 'Members in the thinnest month of each year', 'at least 950 in every year', 'at least 900', min(by_year.values()) if by_year else None,
              MET if by_year and min(by_year.values()) >= 900 else NOT_MET, 'a member has a bar on the formation session and on 60 of the 63 before it'),
         _bar('P7', 'Non-overlapping 20-session windows per regime class', 'at least 12 in each class', 'reported if not met', None, NOT_MET, not_built),
@@ -342,7 +344,8 @@ def build(research_database, history_database=None, *, now=None) -> dict:
              f'{present_bars / expected:.3%}' if stored and expected else None, MET if stored and expected and present_bars == expected else NOT_MET,
              'a session without a bar is left empty, never filled'),
         _bar('O3', 'Bars present on member sessions', 'at least 99.5%', 'at least 99.0%', None if complete is None else f'{complete:.3%}',
-             MET if complete is not None and complete >= sufficiency.COVERAGE['bars_complete_minimum'] else NOT_MET),
+             MET if complete is not None and complete >= sufficiency.COVERAGE['bars_complete_minimum'] else NOT_MET,
+             'counted between each member\'s first and last stored bar; sessions after its bars stop are not expected'),
         _bar('O4', 'Rejected bar rows, worst file', 'at most 0.1%', 'at most 0.5%', None if rejected is None else f'{rejected:.3%}',
              NOT_MET if rejected is None else MET if rejected <= sufficiency.COVERAGE['rejected_minimum'] else NOT_MET,
              'the largest share in any one bar file, so ingesting a clean file again cannot dilute a bad one'),
@@ -453,6 +456,7 @@ def build(research_database, history_database=None, *, now=None) -> dict:
                             'effective': (counted or {}).get('effective'), 'label_states': (counted or {}).get('label_states'),
                             'delisting_exits_by_reason': (counted or {}).get('delisting_exits_by_reason'), 'dataset_version': 'pit-dataset-v2',
                             'breaks_by_reason': (counted or {}).get('breaks_by_reason'), 'splits_confirmed': (counted or {}).get('splits_confirmed'),
+                            'splits_unchecked': (counted or {}).get('splits_unchecked'), 'distributions_not_sizable': (counted or {}).get('distributions_not_sizable'),
                             'split_convention': (counted or {}).get('split_convention'), 'dividend_basis': (counted or {}).get('dividend_basis'),
                             'coarse_print_share': (counted or {}).get('coarse_print_share'),
                             'target_version': targets.TARGET_VERSION, 'dataset_spec_hash': ((counted or {}).get('manifest') or {}).get('dataset_spec_hash')},

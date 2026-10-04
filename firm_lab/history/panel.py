@@ -17,17 +17,23 @@ NUMERIC = ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted', 'close_
 
 def _decimals(text) -> int:
     """Digits after the decimal point in a printed number ("29.50" -> 2, "1e-05" -> 5, "29" -> 0)."""
+    text = str(text).strip()
+    if text.isascii() and 'e' not in text and 'E' not in text and text.replace('.', '', 1).lstrip('-').isdigit():
+        return len(text) - text.index('.') - 1 if '.' in text else 0
     try:
-        exponent = Decimal(str(text).strip()).as_tuple().exponent
+        exponent = Decimal(text).as_tuple().exponent
     except InvalidOperation:
         raise ValueError('INVALID_STORED_BAR') from None
     return max(0, -exponent) if isinstance(exponent, int) else 0
 
 
-def _places(texts) -> int:
-    """The precision a column is printed at: the most decimals any of its values shows. A vendor that strips trailing
-    zeros prints "29" for 29.00; the column, not the single value, says how finely the price was rounded."""
-    return max((_decimals(t) for t in texts if t not in ('', None)), default=0)
+def _row_places(columns, k) -> int:
+    """How finely the adjusted prices of ONE bar are printed: the most decimals among its own open, high, low and close.
+    Only the bar's own row is read. A precision taken from the whole column would let one later print (in a sealed
+    segment, or after a later split) change how every earlier bar is judged. A vendor that drops trailing zeros prints
+    "29" for 29.00; the three other prices of the same bar usually still show the precision. Where they do not, the bar
+    is judged coarser than it is, which errs on the cautious side."""
+    return max((_decimals(columns[c][k]) for c in ('open', 'high', 'low', 'close') if columns[c][k] not in ('', None)), default=0)
 
 
 def from_columns(columns) -> dict:
@@ -54,8 +60,11 @@ def from_columns(columns) -> dict:
         out[c] = values
     if not (np.all(out['close'][index] > 0) and np.all(out['close_unadjusted'][index] > 0)):
         raise ValueError('INVALID_STORED_BAR')                          # ingestion rejects these; a stored block must not hold one
-    # How coarsely the vendor printed each price, relative to the price. A tolerance and a report, never a correction.
-    adjusted, printed = 0.5 * 10.0 ** -_places(columns['close']), 0.5 * 10.0 ** -_places(columns['close_unadjusted'])
+    # How coarsely the vendor printed each bar, relative to its price: from that bar's own row and nothing else.
+    # A tolerance and a report, never a correction.
+    adjusted, printed = np.full(len(span), np.nan), np.full(len(span), np.nan)
+    adjusted[index] = [0.5 * 10.0 ** -_row_places(columns, k) for k in range(len(stored))]
+    printed[index] = [0.5 * 10.0 ** -_decimals(columns['close_unadjusted'][k]) for k in range(len(stored))]
     out['print_error'] = adjusted / out['close']
     out['half_ulp'] = out['print_error'] + printed / out['close_unadjusted']
     return out
