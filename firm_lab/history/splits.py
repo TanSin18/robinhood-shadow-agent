@@ -25,7 +25,7 @@ from .targets import MAX_HORIZON
 
 SPLIT_VERSION = 'c9-chronology-v1'
 EMBARGO = 5
-PURGE = MAX_HORIZON + 1 + EMBARGO                      # the label of T ends at the open of T+1+h; then the embargo
+PURGE = MAX_HORIZON + 1 + EMBARGO                      # the label of T ends at the close of T+1+h; then the embargo
 FIRST_SAMPLE = '1999-01-04'
 HOLDOUT_FIRST, HOLDOUT_LAST = '2021-01-04', '2025-03-28'
 BURNED_FIRST, BURNED_LAST = '2025-03-31', '2026-10-02'

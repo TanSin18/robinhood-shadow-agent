@@ -274,14 +274,17 @@ def test_splits_are_confirmed_and_inconsistencies_are_named_without_changing_a_v
     assert found['100009']['breaks'] == []
 
 
-def test_a_recorded_split_with_no_step_in_the_factor_is_a_break_and_either_split_convention_is_read(stored):
+def test_a_recorded_split_with_no_step_in_the_factor_is_a_break_and_a_split_recorded_the_other_way_is_named(stored):
     folder, _, _ = stored
     with HistoryStore(folder / 'firm_lab_history.db', read_only=True) as store:
         plain, split = panel.load(store, '100009'), panel.load(store, '100001')
     phantom = [{'type': 'split', 'effective_date': '2021-05-03', 'value': '2.0'}]
     assert [(b['session'], b['reason']) for b in adjust.breaks(plain, phantom)['breaks']] == [('2021-05-03', 'ACTION_WITHOUT_SPLIT_FACTOR')]
-    inverse = adjust.breaks(split, [{'type': 'split', 'effective_date': '2020-06-15', 'value': '0.5'}])
-    assert inverse['breaks'] == [] and inverse['split_convention'] == {'new_per_old': 0, 'old_per_new': 1}
+    inverse = adjust.breaks(split, [{'type': 'split', 'effective_date': '2020-06-15', 'value': '0.5'}])     # old per new: not what the adapter assumes
+    assert inverse['splits'] == [] and inverse['split_convention'] == {'new_per_old': 0, 'old_per_new': 1}
+    assert [b['note'] for b in inverse['breaks']] == ['the split is recorded the other way round']
+    from firm_lab.history import dataset
+    assert dataset.contradictions(inverse['split_convention'], inverse['dividend_basis']) == ['SPLIT_VALUE_CONVENTION_CONTRADICTED']
     wrong = adjust.breaks(split, [{'type': 'split', 'effective_date': '2020-06-15', 'value': '3.0'}])
     assert [b['reason'] for b in wrong['breaks']] == ['SPLIT_FACTOR_WITHOUT_ACTION'] and wrong['breaks'][0]['recorded_split_values'] == ['3.0']
     weekend = adjust.breaks(split, [{'type': 'split', 'effective_date': '2020-06-13', 'value': '2.0'}])       # dated on a Saturday: the next session carries it

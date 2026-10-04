@@ -54,8 +54,13 @@ def test_the_policy_document_lists_every_rejection_reason_and_every_change_class
     assert 'are used for every row of a dataset or for none' in POLICY and 'is tier C and is not a strict sample' in POLICY
     from firm_lab.history import adjust
     assert adjust.SPLIT_VALUE_MEANS == 'new_per_old' and "a split's value is new shares per old share" in POLICY
-    assert adjust.DIVIDEND_VALUE_MEANS == 'unadjusted' and "dividend's value is the amount paid per share on the day" in POLICY
-    assert "taken from the decimals of **that bar's own row**" in POLICY and '`splits_unchecked`' in POLICY
+    assert 'Either way of writing' not in POLICY
+    assert adjust.DIVIDEND_VALUE_MEANS == 'unadjusted' and "a dividend's value\n  is the amount paid per share on the day" in POLICY
+    assert "taken from the decimals of **that\n  bar's own row**" in POLICY and '`splits_unchecked`' in POLICY
+    assert f'`{targets.TARGET_VERSION}`' in POLICY and 'the label starts at the close of T+1' in POLICY
+    for name in (adjust.UNSIZED, adjust.NO_ACTION, adjust.NO_FACTOR, 'SPLIT_VALUE_CONVENTION_CONTRADICTED', 'DIVIDEND_AMOUNT_BASIS_CONTRADICTED'):
+        assert f'`{name}`' in POLICY, name
+    assert dataset.contradictions({'old_per_new': 1}, {}) == ['SPLIT_VALUE_CONVENTION_CONTRADICTED']
     assert 'within five sessions of the security\'s last bar' in POLICY and targets.DELISTING_WINDOW == 5
     assert 'It is not a\n  stored column.' in POLICY                                         # eligible_from is computed from the calendar
     assert 'These hashes are integrity checks, not authentication.' in POLICY
@@ -77,7 +82,9 @@ def test_the_universe_document_states_the_rule_in_code():
 def test_the_second_amendment_states_the_measurement_rules_in_code_and_lowers_no_bar():
     amendment = SPEC[SPEC.index('**Amendment 2'):SPEC.index('**Amendment 3')]
     third = SPEC[SPEC.index('**Amendment 3'):SPEC.index('**Amendment 4')]
-    fourth = SPEC[SPEC.index('**Amendment 4'):]
+    fourth = SPEC[SPEC.index('**Amendment 4'):SPEC.index('**Amendment 5')]
+    fifth = SPEC[SPEC.index('**Amendment 5'):]
+    assert 'No bar was\nlowered and none was added.' in fifth and f'`{targets.TARGET_VERSION}`' in fifth
     assert 'No bar was\nlowered and none was added.' in fourth and 'Print precision is judged per bar' in fourth and 'A removed bar is a restated bar' in fourth
     assert 'No bar was\nlowered and none was added.' in third and 'for every row of a dataset or for none' in third
     assert 'A restated bar is tier C' in third and f'({splits.MINIMUM_FOLDS} x {splits.MINIMUM_FOLD_SESSIONS})' in third and 'reads 253 bars' in third

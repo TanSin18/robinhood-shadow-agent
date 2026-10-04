@@ -249,3 +249,14 @@ lowered and none was added. Two measures are stated more narrowly, and one rule 
 * **A removed bar is a restated bar (§1).** A row that would have read a bar the vendor later took out is tier C.
 * **Print precision is judged per bar**, from the decimals of that bar's own row, never from the whole column. O7
   and every tolerance that depends on precision follow that.
+
+**Amendment 5, 2026-10-04, after the sixth independent review and still before any data was collected.** No bar was
+lowered and none was added. No number in this document changes. Two things it relies on are fixed elsewhere and
+named here so that the record is in one place:
+
+* **The label** is `forward-close-to-close-price-return-v3`: from the close of T+1 to the close of T+1+h on the
+  exact close (unadjusted close and recorded split ratios). The earlier open-to-open label read the vendor's
+  reprinted opens, which a later split makes coarse. Horizons, windows and every bar are as before.
+* **No dataset is built while a visible case contradicts the reading of the vendor's action table** (split value as
+  new shares per old; dividend value as the amount paid per share on the day). That is a gate before any bar is
+  measured, not a bar.

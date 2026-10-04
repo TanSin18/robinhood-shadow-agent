@@ -5,7 +5,7 @@
 * the security is a member of the stored historical universe on T (membership formed from bars before it took effect);
 * it has a bar on T and at least 252 bars of history, and the core features are available at T;
 * every input is tier A (Firm Lab held it before the next session opened) or tier B (a publisher-dated historical bar);
-* its label at the horizon exists (``targets``): entry at the open of T+1, never a price at or before T.
+* its label at the horizon exists (``targets``): entry at the close of T+1, never a price at or before T.
 
 Tiers. The row's tier is the lowest among its bars, its universe membership and its label. A bar counts as held at the
 time only if the value read today was stored, by this machine's clock, before the next session opened. A bar whose
@@ -150,7 +150,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
     tier = np.array([row_tier(t, membership_tier) for t in bar_tier], dtype=object) if count else np.zeros(0, dtype=object)
     segment = np.array([splits.segment(s) for s in sessions], dtype=object) if count else np.zeros(0, dtype=object)
     delisting = targets.delisted_at_last_bar(p, actions, data_end)
-    labels = targets.build(p, mask, delisted=delisting)
+    labels = targets.build(p, mask, delisted=delisting, splits=audit['splits'])
     readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
     coarse = adjust.coarse_print(p)
     reads_coarse = _window_sum(coarse, oldest.clip(0, max(count - 1, 0)), np.arange(count)) > 0 if count else np.zeros(0, bool)
@@ -164,6 +164,18 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
             'segment': segment, 'coarse': coarse, 'reads_coarse': reads_coarse, 'delisting': delisting,
             'features': values, 'labels': labels, 'breaks': found, 'blocks': p['blocks'],
             'audit': {**{k: v for k, v in audit.items() if k != 'breaks'}, 'structure': computed['audit']}, 'history_bars': history}
+
+
+def contradictions(split_convention, dividend_basis) -> list:
+    """What the visible cases say against the two readings of the action table that every decision rests on (a split's
+    value is new shares per old share; a dividend's value is the amount paid per share on the day). Empty when nothing
+    speaks against them. A dataset is not built while this is not empty: the adapter has to be corrected first."""
+    found = []
+    if split_convention.get('old_per_new'):
+        found.append('SPLIT_VALUE_CONVENTION_CONTRADICTED')
+    if dividend_basis.get('adjusted'):
+        found.append('DIVIDEND_AMOUNT_BASIS_CONTRADICTED')
+    return found
 
 
 def _sources(store) -> list:
@@ -195,7 +207,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
            'members_whose_bars_end_without_a_delisting_record': 0, 'breaks_by_reason': {}, 'splits_confirmed': 0,
            'split_convention': {'new_per_old': 0, 'old_per_new': 0},
            'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0, 'rows_reading_a_coarse_print': 0,
-           'sample_sessions_per_instrument': [], 'sequence_ready': 0, 'splits_unchecked': 0, 'distributions_not_sizable': 0}
+           'sample_sessions_per_instrument': [], 'sequence_ready': 0, 'splits_unchecked': 0, 'distributions_without_amount': 0}
     sample_sessions = set()                                             # sessions with at least one strict sample at the longest horizon
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
     totals = {h: {} for h in targets.HORIZONS}                           # horizon -> {window index: [sum, count]} for the cross-sectional mean
@@ -212,7 +224,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         out['rows_reading_a_coarse_print'] += int((eligible & rows['reads_coarse']).sum())
         out['splits_confirmed'] += rows['audit']['splits_confirmed']
         out['splits_unchecked'] += rows['audit']['splits_unchecked']
-        out['distributions_not_sizable'] += rows['audit']['distributions_not_sizable']
+        out['distributions_without_amount'] += rows['audit']['distributions_without_amount']
         own_samples = 0
         for key, value in rows['audit']['split_convention'].items():
             out['split_convention'][key] += value
@@ -277,6 +289,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     # all rows or none: one row that would read a coarsely printed bar withholds the high/low/open families from every row
     out['high_low_open_families_usable'] = bool(out['eligible_feature_rows']) and out['rows_reading_a_coarse_print'] == 0
     out['member_bars_present_share'] = out['raw_member_rows'] / out['member_sessions'] if out['member_sessions'] else None
+    out['action_table_contradictions'] = contradictions(out['split_convention'], out['dividend_basis'])
     # Burn-in and purge sessions yield no sample. The total is the sum of the four sample segments, shown one by one.
     out['strict_samples_by_segment'] = {str(h): {name: out['by_segment'][name][f'labelled_{h}'] for name in splits.SAMPLE_SEGMENTS} for h in targets.HORIZONS}
     out['strict_samples'] = {h: sum(parts.values()) for h, parts in out['strict_samples_by_segment'].items()}
@@ -344,6 +357,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     securities = current_securities(store, source=source)
     actions = _actions_by_security(store, source)
     ids, sessions, tiers, feats, blocks, coarse, touched, restated = [], [], [], [], set(), 0, 0, 0
+    convention, basis = {}, {}
     raw = {h: [] for h in targets.HORIZONS}
     states = {h: [] for h in targets.HORIZONS}
     data_end = store.bar_summary()['last_session']
@@ -352,6 +366,9 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
         keep = rows['eligible'] & np.isin(rows['segment'], list(segments))
         if years is not None:
             keep &= np.array([s[:4] in years for s in rows['sessions']], bool)
+        for tally, counts in ((convention, rows['audit']['split_convention']), (basis, rows['audit']['dividend_basis'])):
+            for key, value in counts.items():
+                tally[key] = tally.get(key, 0) + value
         restated += int((keep & (rows['tier'] == RETROSPECTIVE)).sum())
         keep &= np.isin(rows['tier'], STRICT_TIERS)
         index = np.flatnonzero(keep)
@@ -367,6 +384,9 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
         for h in targets.HORIZONS:
             raw[h].append(rows['labels'][h]['value'][index])
             states[h].append(rows['labels'][h]['state'][index])
+    against = contradictions(convention, basis)
+    if against:
+        raise ValueError(against[0])                                   # the vendor's action table does not mean what every decision here assumes
     X = np.vstack(feats) if feats else np.zeros((0, len(features.NAMES)))
     share = coarse / len(ids) if ids else 0.0
     usable = touched == 0

@@ -32,7 +32,8 @@ def _row_places(columns, k) -> int:
     Only the bar's own row is read. A precision taken from the whole column would let one later print (in a sealed
     segment, or after a later split) change how every earlier bar is judged. A vendor that drops trailing zeros prints
     "29" for 29.00; the three other prices of the same bar usually still show the precision. Where they do not, the bar
-    is judged coarser than it is, which errs on the cautious side."""
+    is judged coarser than it is: that withholds the high/low/open families (cautious) and widens the tolerance of the
+    split audit at that bar (less able to catch a vendor error there)."""
     return max((_decimals(columns[c][k]) for c in ('open', 'high', 'low', 'close') if columns[c][k] not in ('', None)), default=0)
 
 

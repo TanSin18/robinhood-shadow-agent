@@ -98,21 +98,41 @@ An identical duplicate row is kept once and counted. A file with a required colu
 repeated in its header, is refused whole (`UNEXPECTED_FILE_LAYOUT`). A security-master row whose delisted flag is
 not one of the provider's two values is rejected (`MALFORMED_SECURITY`); nothing is guessed from it.
 
-**Consistency with corporate actions** is checked per security after bars and actions are both stored. The ratio of
-unadjusted close to split-adjusted close is the cumulative split factor. It must be constant between split dates and
-must step, at each recorded split date, by that split's ratio. The tolerance is 0.5% plus the largest error that
-rounding of the two printed prices can cause, taken from the decimals of **that bar's own row** (the most decimals
-among its open, high, low and close). Only the bar's own row is read: a precision taken over the whole column would
-let one later print, in a sealed segment or after a later split, change how every earlier bar is judged. If a vendor
-drops trailing zeros, a bar whose four prices are all round is judged coarser than it is, which errs on the cautious
-side. A step with no
-recorded split (`SPLIT_FACTOR_WITHOUT_ACTION`), or a recorded split with no step (`ACTION_WITHOUT_SPLIT_FACTOR`), is
-recorded as a **break** at that session: prices before it and after it cannot be compared. Either way of writing a
-split ratio is read (new shares per old, or the inverse), splits dated on one session multiply, and a split large
-enough to tell is also checked for direction: the adjusted series must be continuous across it. A feature whose lookback
-reaches across a break is unavailable, and a label whose window contains one is excluded. Nothing is corrected. The
-universe screen is not affected by a break: dollar volume does not change under a split, and the minimum-price screen
-reads the printed close, not the factor.
+**Consistency with corporate actions** is checked per security after bars and actions are both stored. One rule
+governs every decision: what a row may read must not depend on a split that happened after it. After later splits
+the vendor reprints early prices as small, coarsely rounded numbers, so anything decided from the reprinted prices
+could differ between a stock that split later and one that did not.
+
+* **A recorded split is applied as recorded**, from the first bar on or after its date; splits dated on one session
+  multiply. Its value is read as new shares per old share.
+* **The vendor's factor is an audit, not the source.** The ratio of unadjusted close to split-adjusted close is the
+  vendor's cumulative split factor. It is asked only whether it contradicts the record beyond what its own rounding
+  can explain. The tolerance is 0.5% plus the rounding of the two printed prices, taken from the decimals of **that
+  bar's own row** (the most decimals among its open, high, low and close). Only the bar's own row is read: a
+  precision taken over the whole column would let one later print change how every earlier bar is judged. A correct
+  record is never contradicted, however coarse the reprint. It is counted as confirmed where the step is visible and
+  as unchecked (`splits_unchecked`) where the step is too small to see there.
+* **Continuity** across a split is asked of the unadjusted close and the recorded ratio, never of the reprinted
+  closes.
+* **A break** is recorded where the factor steps with no recorded split (`SPLIT_FACTOR_WITHOUT_ACTION`), where the
+  record and the factor contradict each other (the same reason when a step is visible,
+  `ACTION_WITHOUT_SPLIT_FACTOR` when none is), and where a split is recorded the other way round. Prices before and
+  after a break cannot be compared: a feature whose lookback reaches across it is unavailable, and a label whose
+  window contains it is excluded. Nothing is corrected.
+* **The two readings of the action table** that all of this rests on are stated in the code and counted against the
+  cases the prices can show: a split's value is new shares per old share (`split_convention`), and a dividend's value
+  is the amount paid per share on the day (`dividend_basis`). When a visible case contradicts either reading, no
+  dataset is built (`SPLIT_VALUE_CONVENTION_CONTRADICTED`, `DIVIDEND_AMOUNT_BASIS_CONTRADICTED`) until the adapter is
+  corrected. The validation sample is where this is found out.
+* **What still depends on the reprint** is whether an *error* in the vendor's own tables is caught: an unrecorded
+  split or a wrong ratio is seen under a fine print and can be missed under a coarse one. A check that cannot be
+  made is not a failure. Where a vendor drops trailing zeros, a bar whose four prices are all round is judged coarser
+  than it is: that withholds the high, low and open families (cautious) and widens the audit's tolerance at that bar
+  (less able to catch a vendor error there). A declared print format for the vendor would remove both; it is a
+  registered change to make after a real file has been read, not before.
+
+The universe screen is not affected by a break: dollar volume does not change under a split, and the minimum-price
+screen reads the printed close, not the factor.
 
 ## 4. Price basis
 
@@ -149,33 +169,33 @@ What remains is bounded and stated: on rows that are used, a reprinted high, low
 of the price, and how far depends on later splits. The measure is deliberately blunt: a vendor that prints two
 decimals makes every bar under $10 coarse by it, whether or not a split followed.
 
-* **What a coarse reprint may not decide.** After later splits, early prices are reprinted as small, coarsely rounded
-  numbers, and the split factor and the total-return factor read from them are blurred. Two decisions used to
-  depend on that blur, and so on the future: whether a small recorded split (a 3% stock dividend) was confirmed, and
-  whether a cash distribution reached 5%. Both are now taken from numbers a later split cannot change. A recorded
-  split too small to show through the blur is applied as recorded (`splits_unchecked`), not turned into a break. A
-  distribution the blurred factor cannot size is sized by its recorded amount over the unadjusted close of the day.
-  This rests on two readings of the vendor's action table, stated in the code and counted against the cases the
-  prices can show (`split_convention`, `dividend_basis`): a split's value is new shares per old share, and a
-  dividend's value is the amount paid per share on the day. The validation sample is where a vendor that means
-  otherwise is found out. What still depends on the reprint is whether an **error** in the vendor's own tables is
-  caught: a check that cannot be made is not a failure.
+* **What a coarse reprint may not decide.** Whether a recorded split is applied, whether a distribution is large and
+  what a label is worth are all taken from numbers a later split cannot change: the recorded actions and the
+  unadjusted close (§3, and the label below). The vendor's adjusted prints are read for two things only: the shape of
+  a bar (its open, high and low relative to its own close), under the all-or-none rule above, and the audit of §3.
 
 The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 
-**Return methodology for targets: split-adjusted price return.** One method across the whole universe, as in
-Checkpoint 7. Cash dividends are not added back. Known effects, stated rather than hidden:
+**Return methodology for targets: split-adjusted price return** (`forward-close-to-close-price-return-v3`). One
+method across the whole universe. For a row at session T the label at horizon h is `close[T+1+h] / close[T+1] - 1`
+on the exact close. The decision time is the open of T+1; the entry is the close of T+1, the first price after the
+decision that no later split can blur. The vendor supplies the open only split-adjusted and reprinted, and a label
+built from reprinted opens was measured in review to be off by a median of 0.7% (up to 4%) for a stock whose later
+splits left its adjusted price near 0.40 at two decimals. Cash dividends are not added back. Known effects, stated
+rather than hidden:
 
+* The move from the open to the close of T+1 is not part of the label.
 * An ordinary dividend lowers the price return on its ex-date by the dividend yield (typically under 1%).
 * A spin-off or a large one-off distribution produces a price gap that is not a loss. It is a **break**: a feature
   whose lookback reaches across it is unavailable, the recursive averages (ATR, RSI) restart there, and a label whose
   window contains it is excluded (`LABEL_WINDOW_HAS_BREAK`). "Large" is a single cash distribution of at least 5% of
-  the prior close. Its size is read from the vendor's own total-return factor on the two sessions around the ex-date,
-  which no later split changes; the recorded amount is used only when that factor is missing. The excluded count is
-  reported.
-* The vendor's total-return close is used for that one measurement and for nothing else. It is never used as a
-  price. A total-return label can replace the price-return label only after the factor is reconciled against the
-  recorded dividends and spin-offs across the universe; the reconciliation exists as an audit.
+  the prior close, sized by its **recorded amount over the unadjusted close of the session before**. A distribution
+  recorded without an amount cannot be sized from anything a later split leaves alone and is a break
+  (`DISTRIBUTION_WITHOUT_AMOUNT`). The excluded count is reported.
+* The vendor's total-return close is never used as a price and decides nothing. It is read for one tally: whether
+  the vendor's own factor agrees that the recorded amounts are per share on the day (`dividend_basis`). A
+  total-return label can replace the price-return label only after the factor is reconciled against the recorded
+  dividends and spin-offs across the universe; the reconciliation exists as an audit.
 
 ## 5. Known-at for a daily bar (`bar-known-at-v1`)
 
@@ -196,7 +216,7 @@ Checkpoint 7. Cash dividends are not added back. Known effects, stated rather th
   otherwise tier B. (Wilder's smoothing carries a weight below one part in a hundred million from bars older than
   that window; it is not followed further.)
 * Consequence for a training row: features use bars up to and including session T; the decision time is the open
-  of session T+1; the label starts at the open of T+1. No label uses a price at or before the last feature bar.
+  of session T+1; the label starts at the close of T+1. No label uses a price at or before the last feature bar.
 
 **What tier B does and does not claim for bars.** It claims that the session closed before the decision time and
 that the price is the exchange's price for that session as the archive holds it. It does not claim Firm Lab held

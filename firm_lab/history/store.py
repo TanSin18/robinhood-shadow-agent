@@ -129,19 +129,21 @@ def _factor_range(old, i, new, j, old_places, new_places):
             high = min(high, (now + b) / (was - a) if was - a > 0 else float('inf'))
         was, now = float(old['volume'][i]), float(new['volume'][j])
         a, b = max(0.5, 0.5 * 10.0 ** -old_places['volume']), max(0.5, 0.5 * 10.0 ** -new_places['volume'])
+        says = False                                                    # whether the volume alone rules out "nothing was re-counted"
         if was > 0 or now > 0:
-            low = max(low, (was - a) / (now + b))
-            high = min(high, (was + a) / (now - b) if now - b > 0 else float('inf'))
+            least, most = (was - a) / (now + b), (was + a) / (now - b) if now - b > 0 else float('inf')
+            low, high, says = max(low, least), min(high, most), not least <= 1.0 <= most
         slack = 1e-12 * max(1.0, low)
-        return (low - slack, high + slack, was > 0 and now > 0) if low <= high + 2 * slack else None
+        return (low - slack, high + slack, says) if low <= high + 2 * slack else None
     except (ValueError, ZeroDivisionError):
         return None
 
 
 def _common_factor(old, new, pairs):
     """The one factor every (old row, new row) pair of a block was rescaled by, or None. One is not a factor: a block
-    whose rows moved by nothing more than their printing is not a rescale. At least one row must have traded: with no
-    volume anywhere, nothing says that the shares were re-counted and not the prices changed."""
+    whose rows moved by nothing more than their printing is not a rescale. At least one row's volume must itself show
+    the re-count: with no volume anywhere, or volumes too small to move, nothing says that the shares were re-counted
+    and not the prices changed."""
     if not pairs:
         return None
     old_places, new_places = _places(old), _places(new)
@@ -257,11 +259,13 @@ class HistoryStore:
             self._depth -= 1
             if self._depth == 0:
                 self.db.rollback()
+                self._capture = None                                    # a capture's time is good for its own transaction only
             raise
         else:
             self._depth -= 1
             if self._depth == 0:
                 self.db.commit()
+                self._capture = None
 
     # ------------------------------------------------------------------------------------------------ generic rows
     def put(self, table, payload, *, identity=None, at=None) -> bool:
@@ -312,7 +316,8 @@ class HistoryStore:
 
     def begin_capture(self, at=None) -> tuple:
         """Checks the time of a capture once and returns the (time, clock) pair every block of that capture is stored
-        under. ``put_bars`` accepts only the pair handed out here, so a clock cannot be claimed."""
+        under. ``put_bars`` accepts only the pair handed out here, so a clock cannot be claimed, and only until the
+        transaction it is used in ends, so it cannot be kept for later."""
         self._capture = self.capture_clock(at)
         return self._capture
 

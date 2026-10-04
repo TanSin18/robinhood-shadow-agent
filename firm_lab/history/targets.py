@@ -1,13 +1,20 @@
 """Labels for a future tournament. Labels only: a future price is never a feature.
 
-``forward-open-to-open-price-return-v2``. For a row at session T (features use bars up to and including T; the decision
-time is the open of T+1), the label at horizon h is
+``forward-close-to-close-price-return-v3``. For a row at session T (features use bars up to and including T; the
+decision time is the open of T+1), the label at horizon h is
 
-    open[T+1+h] / open[T+1] - 1
+    close[T+1+h] / close[T+1] - 1
 
-on split-adjusted opens: a price return, the same method for every security. The entry is the first price after the
-decision time, so no label uses a price at or before the last feature bar. Checkpoint 7's label began at the close the
-features ended at; this one does not.
+on the exact close (``adjust.exact_close``): the unadjusted close and the recorded split ratios, a price return, the
+same method for every security. The entry is the close of the first session after the decision time, so no label uses
+a price at or before the last feature bar. Checkpoint 7's label began at the close the features ended at; this one
+begins a session later.
+
+Why the close and not the open of T+1. The vendor supplies the open only split-adjusted, reprinted after every later
+split and rounded. For a stock that split heavily afterwards the reprinted opens are small, coarse numbers, and a label
+built from them is quantised by something that had not happened yet (measured in review: a median error of 0.7% and up
+to 4% at an adjusted price near 0.40 printed to two decimals). The unadjusted close is the price printed on the day and
+no later split changes it, so this label is the same number whatever happened afterwards.
 
 A label is not built, and the reason is recorded, when:
 
@@ -29,7 +36,9 @@ from __future__ import annotations
 
 import numpy as np
 
-TARGET_VERSION = 'forward-open-to-open-price-return-v2'
+from . import adjust
+
+TARGET_VERSION = 'forward-close-to-close-price-return-v3'
 HORIZONS = (5, 10, 20)
 MAX_HORIZON = max(HORIZONS)
 OK, NO_ENTRY, PAST_HISTORY, NO_EXIT, HAS_BREAK, DELISTED_EXIT = 0, 1, 2, 3, 4, 5
@@ -66,13 +75,14 @@ def _after(session, days=DELISTING_WINDOW) -> str:
         return session
 
 
-def build(panel, break_mask, *, delisted, horizons=HORIZONS) -> dict:
-    """{h: {'value': array, 'state': array of codes, 'exit_index': array}} over the panel's sessions.
+def build(panel, break_mask, *, delisted, horizons=HORIZONS, splits=()) -> dict:
+    """{h: {'value': array, 'state': array of codes, 'exit_index': array}} over the panel's sessions. ``splits`` are the
+    applied split ratios from ``adjust.breaks``; prices are the exact close.
 
     ``delisted`` is true (or the provider's code, from ``delisted_at_last_bar``) when a delisting is recorded at the last
     bar, so the end of its bars is an end and not merely the end of the stored data. A label with state OK or DELISTED_EXIT has a value; every other state has NaN."""
     count = len(panel['sessions'])
-    opens, closes, present = panel['open'], panel['close'], panel['present']
+    closes, present = adjust.exact_close(panel, splits), panel['present']
     seen = np.cumsum(break_mask) if break_mask is not None else np.zeros(count, int)
     last = count - 1                                                 # the panel ends at the security's last stored bar
     t = np.arange(count)
@@ -92,13 +102,14 @@ def build(panel, break_mask, *, delisted, horizons=HORIZONS) -> dict:
         exit_present[inside] = present[target[inside]]
         normal = full & exit_present
         with np.errstate(invalid='ignore', divide='ignore'):
-            value[normal] = opens[target[normal]] / opens[entry[normal]] - 1
+            value[normal] = closes[target[normal]] / closes[entry[normal]] - 1
         state[normal], exit_index[normal] = OK, target[normal]
         state[full & ~exit_present] = NO_EXIT
-        ended = has_entry & ~inside
+        ended = has_entry & ~inside & (entry < last)                   # entered on the last bar itself, nothing is left to hold
+        state[has_entry & ~inside & (entry >= last)] = NO_EXIT if delisted else PAST_HISTORY
         if delisted:
             with np.errstate(invalid='ignore', divide='ignore'):
-                value[ended] = closes[last] / opens[entry[ended]] - 1
+                value[ended] = closes[last] / closes[entry[ended]] - 1
             state[ended], exit_index[ended] = DELISTED_EXIT, last
         state[~has_entry & (can_enter | bool(delisted))] = NO_ENTRY
         if not delisted:

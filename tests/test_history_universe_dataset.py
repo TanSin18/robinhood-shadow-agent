@@ -126,25 +126,33 @@ def test_a_member_is_used_from_the_session_after_formation(built):
 
 
 # ------------------------------------------------------------------------------------------------------------ labels
-def test_a_label_starts_at_the_open_after_the_last_feature_bar(built):
+def test_a_label_starts_at_the_close_after_the_decision_and_reads_only_the_unadjusted_close(built):
     store, _, _ = built
     p = panel.load(store, '100009')
     labels = targets.build(p, None, delisted=False)
     t = 500
     for h in targets.HORIZONS:
-        assert labels[h]['value'][t] == pytest.approx(p['open'][t + 1 + h] / p['open'][t + 1] - 1)
+        assert labels[h]['value'][t] == pytest.approx(p['close_unadjusted'][t + 1 + h] / p['close_unadjusted'][t + 1] - 1)
         assert labels[h]['state'][t] == targets.OK and labels[h]['exit_index'][t] == t + 1 + h
     changed = dict(p)
-    for name in ('open', 'high', 'low', 'close', 'volume'):
+    for name in ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted'):
         changed[name] = p[name].copy()
         changed[name][:t + 1] *= 3.0                                                                  # everything at or before T
     again = targets.build(changed, None, delisted=False)
     assert again[20]['value'][t] == labels[20]['value'][t]                                            # the label uses nothing the features use
+    reprinted = dict(p)
+    for name in ('open', 'high', 'low', 'close'):                                                     # the vendor's adjusted prints, as after a later split
+        reprinted[name] = np.round(p[name] / 40.0, 2)
+    assert np.array_equal(targets.build(reprinted, None, delisted=False)[20]['value'], labels[20]['value'], equal_nan=True)      # a later reprint moves no label
     moved = dict(p)
-    moved['open'] = p['open'].copy()
-    moved['open'][t + 1] *= 1.1
+    moved['close_unadjusted'] = p['close_unadjusted'].copy()
+    moved['close_unadjusted'][t + 1] *= 1.1
     assert targets.build(moved, None, delisted=False)[20]['value'][t] != labels[20]['value'][t]
-    assert targets.TARGET_VERSION == 'forward-open-to-open-price-return-v2'
+    split = panel.load(store, '100001')                                                               # across a recorded 2-for-1 the ratio is applied
+    k = split['sessions'].index('2020-06-15')
+    crossing = targets.build(split, None, delisted=False, splits=[(k, 2.0)])[20]
+    assert crossing['value'][k - 5] == pytest.approx(split['close_unadjusted'][k + 16] * 2.0 / split['close_unadjusted'][k - 4] - 1)
+    assert targets.TARGET_VERSION == 'forward-close-to-close-price-return-v3'
 
 
 def test_labels_through_a_delisting_are_kept_and_flagged_and_the_end_of_the_data_is_not_a_delisting(built):
@@ -153,7 +161,9 @@ def test_labels_through_a_delisting_are_kept_and_flagged_and_the_end_of_the_data
     last = len(gone['sessions']) - 1
     labels = targets.build(gone, None, delisted=True)[20]
     assert labels['state'][last] == targets.NO_ENTRY and np.isnan(labels['value'][last])              # nothing to buy after the last bar
-    assert labels['state'][last - 1] == targets.DELISTED_EXIT and labels['value'][last - 1] == pytest.approx(gone['close'][last] / gone['open'][last] - 1)
+    assert labels['state'][last - 1] == targets.NO_EXIT and np.isnan(labels['value'][last - 1])       # entered at the last close: nothing left to hold
+    assert labels['state'][last - 2] == targets.DELISTED_EXIT
+    assert labels['value'][last - 2] == pytest.approx(gone['close_unadjusted'][last] / gone['close_unadjusted'][last - 1] - 1)
     assert labels['state'][last - 21] == targets.OK and labels['state'][last - 20] == targets.DELISTED_EXIT
     assert labels['exit_index'][last - 5] == last
     listed = panel.load(store, '100009')
@@ -186,10 +196,10 @@ def test_the_strict_count_is_honest_about_tiers_segments_and_what_it_did_not_rea
     assert sum(part['eligible_feature_rows'] for part in counted['by_segment'].values()) == counted['eligible_feature_rows'] <= counted['raw_member_rows']
     assert counted['by_segment'][splits.FORWARD_HOLDOUT]['eligible_feature_rows'] == 0 and counted['by_segment'][splits.BURN_IN]['eligible_feature_rows'] == 0
     assert counted['by_segment'][splits.HISTORICAL_HOLDOUT]['sessions'] == len(calendar.sessions(splits.HOLDOUT_FIRST, splits.holdout_last_sample()))
-    assert counted['delisting_exits_by_reason'] == {'delisted': 20, 'bankruptcyliquidation': 20}      # kept, and counted by the provider's reason
+    assert counted['delisting_exits_by_reason'] == {'delisted': 19, 'bankruptcyliquidation': 19}      # kept, and counted by the provider's reason
     assert counted['breaks_by_reason'] == {'SPIN_OFF': 1, 'LARGE_DISTRIBUTION': 1, 'SPLIT_FACTOR_WITHOUT_ACTION': 1} and counted['splits_confirmed'] == 1
     states = counted['label_states']['20']
-    assert states['EXIT_AT_LAST_PRICE_BEFORE_DELISTING'] == 40 and states['LABEL_WINDOW_HAS_BREAK'] > 0 and states['WINDOW_PAST_STORED_HISTORY'] > 0
+    assert states['EXIT_AT_LAST_PRICE_BEFORE_DELISTING'] == 38 and states['LABEL_WINDOW_HAS_BREAK'] > 0 and states['WINDOW_PAST_STORED_HISTORY'] > 0
     effective = counted['effective']
     assert effective['5']['breadth']['n_eff'] <= effective['5']['breadth']['instruments_per_window'] == 6.0
     assert effective['20']['breadth']['n_eff'] is None and effective['20']['detectable_ic_holdout'] is None      # too few windows to measure: not assumed
@@ -216,9 +226,12 @@ def test_no_label_value_of_a_sealed_holdout_is_returned_or_used(built, tmp_path)
         assert not splits.labels_allowed(name)
 
     def spoil(first, last):
-        def edit(row):                                                 # change only the opens inside [first, last]: labels there change, nothing else does
+        def edit(row):                                                 # other prices inside [first, last], a little different every day
             if first <= row[1] <= last:
-                row[2] = f'{min(float(row[2]) * 1.004, float(row[3])):.6f}'
+                k = 1.0 + 0.002 * (int(row[1][-2:]) % 5 - 2)
+                for c in (2, 3, 4, 5, 7):
+                    row[c] = f'{float(row[c]) * k:.6f}'
+                row[8] = f'{float(row[8]) * k:.4f}'
             return row
         return edit
 

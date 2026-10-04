@@ -19,7 +19,7 @@ window with it, is not reused as a pristine test set:
 |---|---|---|
 | Burn-in | before 1999-01-04 | The first 252 bars of any instrument yield no sample |
 | `DEVELOPMENT` | 1999-01-04 to 2020-11-23 | Training and expanding, purged walk-forward validation: at least 5 folds, each validated on at least 252 sessions |
-| `PURGE` | 2020-11-24 to 2020-12-31 (26 sessions) | No samples. A label of session T ends at the open of T+21; then a 5-session embargo |
+| `PURGE` | 2020-11-24 to 2020-12-31 (26 sessions) | No samples. A label of session T ends at the close of T+21; then a 5-session embargo |
 | `HISTORICAL_HOLDOUT` | 2021-01-04 to 2025-03-28 | **Sealed.** Read once, by a registered Checkpoint 9 plan, after every model and every choice is frozen |
 | `BURNED_CHECKPOINT7` | 2025-03-31 to 2026-10-02 | Never a test set. Samples through 2026-09-02; the last 21 sessions (2026-09-03 to 2026-10-02) are a purge |
 | `FORWARD_HOLDOUT` | 2026-10-05 onward | **Sealed.** Data that did not exist when this was written |
