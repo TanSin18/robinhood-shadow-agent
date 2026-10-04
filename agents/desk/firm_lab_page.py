@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from .components import esc
 from .feature_explorer import render_features
 from .modeling_lab import render_modeling
+from .history_readiness import render_history
 
 ET = ZoneInfo('America/New_York')
 STATUS_TONE = {'AVAILABLE': 'good', 'UNAVAILABLE': 'stop', 'NOT_STARTED': 'neutral', 'BUILD_ONLY': 'warn', 'PARTIAL_EXISTING': 'warn',
@@ -18,6 +19,8 @@ STATUS_TONE = {'AVAILABLE': 'good', 'UNAVAILABLE': 'stop', 'NOT_STARTED': 'neutr
 LABELS = {
     'research_modeling': 'Research modeling laboratory', 'deep_learning': 'Deep-learning models', 'transformer_models': 'Transformer models',
     'rl_policy': 'Reinforcement-learning policy',
+    'historical_ohlcv': 'Historical daily OHLCV', 'historical_universe': 'Historical universe', 'pit_fundamentals': 'Point-in-time fundamentals',
+    'pit_earnings': 'Point-in-time earnings events', 'pit_macro': 'Point-in-time macro', 'strict_pit_training_data': 'Strict point-in-time training data',
     'daily_closes': 'Daily closes', 'daily_baseline_features': 'Daily baseline features', 'fundamentals': 'Fundamentals',
     'analyst_revisions': 'Analyst revisions', 'earnings_transcripts': 'Earnings-call transcripts', 'intraday_bars': 'Intraday bars',
     'vwap': 'VWAP', 'opening_range': 'Opening range', 'time_of_day_rvol': 'Time-of-day RVOL', 'trade_flow': 'Aggressive order flow',
@@ -527,6 +530,7 @@ def render(state):
     return (head
             + f'<section class="v10-panel" id="fl-status"><h2>System status</h2>{_facts(status)}</section>'
             + f'<section class="v10-panel" id="fl-readiness"><h2>Data Readiness</h2>{_readiness(fl)}</section>'
+            + f'<section class="v10-panel" id="fl-history"><h2>Historical Data Readiness</h2>{render_history(fl)}</section>'
             + f'<section class="v10-panel" id="fl-macro"><h2>Macro / Regime Readiness</h2>{_macro(fl)}</section>'
             + render_features(fl.get('research_features') or {'missing_reason':'NO_STORED_FEATURE_RUN'})
             + f'<section class="v10-panel" id="fl-modeling"><h2>Modeling Laboratory</h2>{render_modeling(fl)}</section>'
