@@ -22,7 +22,7 @@ FAMILIES = {'linear': (60, 20, False, False), 'xgboost': (2400, 400, False, Fals
 HISTORY = {'target_first_session': '1998-01-02', 'minimum_first_session': '2005-01-03', 'target_members': 1000, 'minimum_members': 500}
 REGIME_BAR = {'bear_markets': 2, 'corrections': 4, 'high_volatility_episodes': 3, 'rising_rate_periods': 1, 'falling_rate_periods': 1}
 NETWORK_BAR = {'bear_markets_in_training': 2, 'calendar_years_in_training': 8, 'sequence_sessions': 63, 'sequence_share': 0.95}
-COVERAGE = {'bars_complete_target': 0.995, 'bars_complete_minimum': 0.99, 'rejected_target': 0.001, 'rejected_minimum': 0.005, 'cross_check_minimum': 0.995,
+COVERAGE = {'coarse_print_target': 0.01, 'coarse_print_minimum': 0.05, 'print_precision_bound': 5e-4, 'bars_complete_target': 0.995, 'bars_complete_minimum': 0.99, 'rejected_target': 0.001, 'rejected_minimum': 0.005, 'cross_check_minimum': 0.995,
             'earnings_target': 0.80, 'earnings_minimum': 0.60, 'filings_target': 0.90, 'filings_minimum': 0.75, 'macro_target': 0.98, 'macro_minimum': 0.95,
             'facts_target': 0.70, 'per_year_target': 0.95, 'per_year_minimum': 0.90}
 

@@ -259,7 +259,9 @@ def test_splits_are_confirmed_and_inconsistencies_are_named_without_changing_a_v
         for _, p, _ in store.rows('history_actions'):
             actions.setdefault(p['security_id'], []).append(p)
         found = {sid: adjust.breaks(panel.load(store, sid), actions.get(sid, [])) for sid in ('100001', '100005', '100006', '100007', '100009')}
-    assert found['100001'] == {'breaks': [], 'splits_confirmed': 1, 'split_convention': {'new_per_old': 1, 'old_per_new': 0}}
+    aaa = found['100001']
+    assert aaa['breaks'] == [] and aaa['splits_confirmed'] == 1 and aaa['split_convention'] == {'new_per_old': 1, 'old_per_new': 0}
+    assert [(panel_session, ratio) for panel_session, ratio in aaa['splits']] == [(aaa['splits'][0][0], 2.0)]
     assert [(b['session'], b['reason']) for b in found['100005']['breaks']] == [('2020-08-03', 'SPIN_OFF')]
     assert [(b['session'], b['reason']) for b in found['100006']['breaks']] == [('2020-05-11', 'LARGE_DISTRIBUTION')]       # the small 2021 dividend is not a break
     assert [(b['session'], b['reason']) for b in found['100007']['breaks']] == [('2020-07-01', 'SPLIT_FACTOR_WITHOUT_ACTION')]

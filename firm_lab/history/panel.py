@@ -6,6 +6,8 @@ stored text; the text itself is kept for the rounding bounds used by the consist
 """
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 import numpy as np
 
 from . import calendar
@@ -14,32 +16,48 @@ NUMERIC = ('open', 'high', 'low', 'close', 'volume', 'close_unadjusted', 'close_
 
 
 def _decimals(text) -> int:
-    text = str(text)
-    if 'e' in text.lower() or '.' not in text:
-        return 0
-    return len(text.split('.', 1)[1])
+    """Digits after the decimal point in a printed number ("29.50" -> 2, "1e-05" -> 5, "29" -> 0)."""
+    try:
+        exponent = Decimal(str(text).strip()).as_tuple().exponent
+    except InvalidOperation:
+        raise ValueError('INVALID_STORED_BAR') from None
+    return max(0, -exponent) if isinstance(exponent, int) else 0
+
+
+def _places(texts) -> int:
+    """The precision a column is printed at: the most decimals any of its values shows. A vendor that strips trailing
+    zeros prints "29" for 29.00; the column, not the single value, says how finely the price was rounded."""
+    return max((_decimals(t) for t in texts if t not in ('', None)), default=0)
 
 
 def from_columns(columns) -> dict:
     """Arrays for one security from ``HistoryStore.bars``. Empty input gives an empty panel."""
     stored = list(columns['sessions'])
     if not stored:
-        return {'sessions': (), 'present': np.zeros(0, bool), **{c: np.zeros(0) for c in NUMERIC}, 'half_ulp': np.zeros(0)}
+        return {'sessions': (), 'present': np.zeros(0, bool), **{c: np.zeros(0) for c in NUMERIC}, 'half_ulp': np.zeros(0), 'print_error': np.zeros(0)}
     if stored != sorted(set(stored)):
         raise ValueError('BARS_NOT_IN_SESSION_ORDER')
-    span = calendar.sessions(stored[0], stored[-1])
-    slot = {s: k for k, s in enumerate(span)}
+    try:
+        span = calendar.sessions(stored[0], stored[-1])
+        slot = {s: k for k, s in enumerate(span)}
+        index = np.array([slot[s] for s in stored])
+    except KeyError:
+        raise ValueError('INVALID_STORED_BAR') from None
     out = {'sessions': span, 'present': np.zeros(len(span), bool)}
-    index = np.array([slot[s] for s in stored])
     out['present'][index] = True
     for c in NUMERIC:
         values = np.full(len(span), np.nan)
-        values[index] = [float(v) if v not in ('', None) else np.nan for v in columns[c]]
+        try:
+            values[index] = [float(v) if v not in ('', None) else np.nan for v in columns[c]]
+        except (TypeError, ValueError):
+            raise ValueError('INVALID_STORED_BAR') from None
         out[c] = values
-    # the largest relative error rounding can have put into unadjusted/adjusted: used only as a tolerance, never to change a value
-    bound = np.full(len(span), np.nan)
-    bound[index] = [0.5 * 10.0 ** -_decimals(c) / float(c) + 0.5 * 10.0 ** -_decimals(u) / float(u) for c, u in zip(columns['close'], columns['close_unadjusted'])]
-    out['half_ulp'] = bound
+    if not (np.all(out['close'][index] > 0) and np.all(out['close_unadjusted'][index] > 0)):
+        raise ValueError('INVALID_STORED_BAR')                          # ingestion rejects these; a stored block must not hold one
+    # How coarsely the vendor printed each price, relative to the price. A tolerance and a report, never a correction.
+    adjusted, printed = 0.5 * 10.0 ** -_places(columns['close']), 0.5 * 10.0 ** -_places(columns['close_unadjusted'])
+    out['print_error'] = adjusted / out['close']
+    out['half_ulp'] = out['print_error'] + printed / out['close_unadjusted']
     return out
 
 

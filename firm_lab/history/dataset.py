@@ -29,7 +29,8 @@ from .store import content_hash
 
 DATASET_VERSION = 'pit-dataset-v2'
 MINIMUM_HISTORY_BARS = 252
-CORE_FEATURES = ('return20', 'realized_vol20', 'atr14_fraction', 'rvol20')
+CORE_FEATURES = ('return20', 'realized_vol20', 'rvol20')      # close and volume only: eligibility must not depend on how coarsely a price was printed
+COARSE_SHARE_MAXIMUM = 0.05                                    # above this share of coarse rows the high/low/open families are not used for any row
 SEGMENTS = (splits.BURN_IN, splits.DEVELOPMENT, splits.PURGED, splits.HISTORICAL_HOLDOUT, splits.BURNED, splits.FORWARD_HOLDOUT)
 _ELIGIBLE = {}
 
@@ -69,7 +70,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None) -> dict:
     count = len(sessions)
     audit = adjust.breaks(p, actions)
     mask = adjust.break_mask(p, audit['breaks'])
-    computed = features.compute(p, mask)
+    computed = features.compute(p, mask, splits=audit['splits'])
     values = computed['values']
     member = universe.member_mask(sessions, spans)
     history = np.cumsum(p['present'])
@@ -82,6 +83,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None) -> dict:
     for h in labels:
         labels[h]['value'] = np.where(sealed, np.nan, labels[h]['value'])          # a sealed label value never leaves this function
     return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'segment': segment,
+            'coarse': adjust.coarse_print(p),
             'features': values, 'labels': labels, 'breaks': audit['breaks'], 'blocks': p['blocks'], 'audit': {**audit, 'structure': computed['audit']},
             'history_bars': history}
 
@@ -106,6 +108,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
            'by_segment': {s: {'eligible_feature_rows': 0, 'sessions': set(), 'instruments': set(), **{f'labelled_{h}': 0 for h in targets.HORIZONS}} for s in SEGMENTS},
            'by_tier': {HELD_AT_THE_TIME: 0, PUBLISHER_DATED_HISTORICAL: 0}, 'by_year': {}, 'label_states': {str(h): {} for h in targets.HORIZONS},
            'delisting_exits_by_reason': {}, 'breaks_by_reason': {}, 'splits_confirmed': 0, 'split_convention': {'new_per_old': 0, 'old_per_new': 0},
+           'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0,
            'sample_sessions_per_instrument': [], 'sequence_ready': 0}
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
     totals = {h: {} for h in targets.HORIZONS}                           # horizon -> {window index: [sum, count]} for the cross-sectional mean
@@ -117,6 +120,9 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         out['splits_confirmed'] += rows['audit']['splits_confirmed']
         for key, value in rows['audit']['split_convention'].items():
             out['split_convention'][key] += value
+        for key, value in rows['audit']['dividend_basis'].items():
+            out['dividend_basis'][key] += value
+        out['coarse_print_rows'] += int((eligible & rows['coarse']).sum())
         for b in rows['breaks']:
             out['breaks_by_reason'][b['reason']] = out['breaks_by_reason'].get(b['reason'], 0) + 1
         index = np.flatnonzero(eligible)
@@ -158,6 +164,8 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     out['unique_instruments'] = len(set().union(*(p['instruments'] for p in out['by_segment'].values())))
     out['unique_sessions'] = len(set().union(*(p['sessions'] for p in out['by_segment'].values())))
     out['sequence_share'] = out.pop('sequence_ready') / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
+    out['coarse_print_share'] = out['coarse_print_rows'] / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
+    out['high_low_open_families_usable'] = out['coarse_print_share'] is not None and out['coarse_print_share'] <= COARSE_SHARE_MAXIMUM
     out['strict_samples'] = {str(h): sum(p[f'labelled_{h}'] for p in out['by_segment'].values()) for h in targets.HORIZONS}
     out['retrospective_samples'] = 0            # this builder reads no retrospective input; Checkpoint 7's retrospective dataset is separate and not added
     measured = {}
@@ -215,7 +223,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     spans = universe.membership(chosen['records'])
     securities = current_securities(store, source=source)
     actions = _actions_by_security(store, source)
-    ids, sessions, tiers, feats, blocks = [], [], [], [], set()
+    ids, sessions, tiers, feats, blocks, coarse = [], [], [], [], set(), 0
     raw = {h: [] for h in targets.HORIZONS}
     states = {h: [] for h in targets.HORIZONS}
     for sid in sorted(spans):
@@ -227,6 +235,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
         if not len(index):
             continue
         blocks.update(rows['blocks'])
+        coarse += int(rows['coarse'][index].sum())
         ids.extend([sid] * len(index))
         sessions.extend(rows['sessions'][t] for t in index)
         tiers.extend(rows['tier'][index])
@@ -235,6 +244,10 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
             raw[h].append(rows['labels'][h]['value'][index])
             states[h].append(rows['labels'][h]['state'][index])
     X = np.vstack(feats) if feats else np.zeros((0, len(features.NAMES)))
+    share = coarse / len(ids) if ids else 0.0
+    usable = share <= COARSE_SHARE_MAXIMUM
+    if not usable:              # too many rows are printed too coarsely: the high/low/open families are withheld from every row, not row by row
+        X[:, [k for k, d in enumerate(features.DEFINITIONS) if d['uses_high_low_open']]] = np.nan
     order = np.lexsort((np.array(ids, dtype=object), np.array(sessions, dtype=object))) if ids else np.zeros(0, int)
     ids, sessions, tiers, X = [ids[k] for k in order], [sessions[k] for k in order], [tiers[k] for k in order], X[order]
     y, y_state, excess = {}, {}, {}
@@ -251,7 +264,8 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     body = manifest(store, chosen['manifest'])
     parts = {'rows': content_hash([list(pair) for pair in zip(ids, sessions)]), 'features': _array_hash(X),
              'labels': content_hash({str(h): [_array_hash(y[h]), _array_hash(excess[h])] for h in targets.HORIZONS}), 'blocks': content_hash(sorted(blocks))}
-    body.update({'segments': list(segments), 'years': sorted(years) if years else None, 'rows': len(ids), 'hashes': parts})
+    body.update({'segments': list(segments), 'years': sorted(years) if years else None, 'rows': len(ids), 'hashes': parts,
+                 'coarse_print_share': share, 'high_low_open_families_usable': usable})
     body['dataset_hash'] = content_hash({'spec': body['dataset_spec_hash'], 'segments': body['segments'], 'years': body['years'], 'hashes': parts})
     return {'security_id': ids, 'session': sessions, 'tier': tiers, 'X': X, 'feature_names': list(features.NAMES), 'y': y, 'y_excess': excess, 'y_state': y_state,
             'manifest': body}

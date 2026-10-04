@@ -1,10 +1,17 @@
 """Descriptive features from validated daily OHLCV, as arrays over a security's sessions. No model, no rule, no score.
 
 Every feature is a ratio: a later split multiplies every earlier price by one number and leaves the feature where it
-was, so a series adjusted as of today gives the value the feature had on its own day. Nothing here is in dollars.
+was. Nothing here is in dollars.
+
+Which prices are used. Across sessions, the close is the exact close (``adjust.exact_close``): the unadjusted close and
+the confirmed split ratios, so the vendor's rounding of reprinted adjusted prices cannot carry a later split back into
+an earlier feature. Within one bar, the open, high and low are the vendor's adjusted prints relative to that bar's own
+adjusted close. Where the adjusted close is printed more coarsely than 0.05% of itself, the bar's shape cannot be
+trusted, and every feature that reads a high, low or open is unavailable there. Close-based features are not affected.
 
 A value at session T uses bars up to and including T and nothing after. A window that reaches across a missing bar,
-or across a session where prices are not comparable (``adjust.breaks``), is NaN: unavailable, never estimated.
+or across a session where prices are not comparable (``adjust.breaks``), is NaN: unavailable, never estimated. The
+recursive averages (ATR, RSI) restart at such a session, so nothing from before it survives in them.
 
 Versions. These are new feature versions, stored beside the Checkpoint 6 close-only features, which are not changed:
 
@@ -27,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import pivots
+from . import adjust, pivots
 
 FEATURE_SET_VERSION = 'ohlcv-features-v1'
 RETRACEMENTS = ('0.236', '0.382', '0.5', '0.618', '0.786')
@@ -48,7 +55,9 @@ def _definitions() -> tuple:
     out = []
 
     def add(name, version, family, lookback, unit, formula):
-        out.append({'name': name, 'version': version, 'family': family, 'lookback': lookback, 'unit': unit, 'formula': formula})
+        shape = (version in ('candle_geometry_v1', 'ohlcv_pivot_v1', 'fib_ohlcv_pivot_v1') or name.endswith('_atr_distance')
+                 or name in ('true_range_fraction', 'atr14_fraction', 'range_expansion', 'range_expansion_rvol'))
+        out.append({'name': name, 'version': version, 'family': family, 'lookback': lookback, 'unit': unit, 'formula': formula, 'uses_high_low_open': shape})
 
     for name, n, formula in (('body_fraction', 1, '|C-O|/(H-L)'), ('upper_wick_fraction', 1, '(H-max(O,C))/(H-L)'), ('lower_wick_fraction', 1, '(min(O,C)-L)/(H-L)'),
                              ('clv', 1, '(2C-H-L)/(H-L)'), ('open_close_return', 1, 'C/O-1'), ('range_fraction', 1, '(H-L)/C'), ('gap_close', 2, 'O/C[-1]-1'),
@@ -134,8 +143,10 @@ def _wilder(values, n):
     return out
 
 
-def _rsi(close, n=14):
+def _rsi(close, n=14, restart=None):
     diff = close - _shift(close, 1)
+    if restart is not None:
+        diff = np.where(restart, np.nan, diff)                          # the change into a break session is not a price change
     gain = _wilder(np.where(diff != diff, np.nan, np.maximum(diff, 0.0)), n)
     loss = _wilder(np.where(diff != diff, np.nan, np.maximum(-diff, 0.0)), n)
     with np.errstate(invalid='ignore', divide='ignore'):
@@ -188,10 +199,20 @@ def _structure_features(prefix, close, high, low, atr, out):
     return {k: v - pivots.WINDOW for k, v in starts.items()}, {'pivots': s['pivots'], 'legs': s['legs'], 'outside_bars': s['outside_bars']}
 
 
-def compute(panel, break_mask=None) -> dict:
-    """{'values': {feature name: array over panel sessions}, 'audit': {...}}. NaN means unavailable at that session."""
-    o, h, l, c, v = (np.asarray(panel[k], float) for k in ('open', 'high', 'low', 'close', 'volume'))
-    count = len(c)
+def compute(panel, break_mask=None, splits=()) -> dict:
+    """{'values': {feature name: array over panel sessions}, 'audit': {...}}. NaN means unavailable at that session.
+
+    ``break_mask`` marks the sessions prices cannot be compared across and ``splits`` the confirmed splits, both from
+    ``adjust.breaks``."""
+    count = len(panel['close'])
+    present = np.asarray(panel['present'], bool)
+    broken = np.zeros(count, bool) if break_mask is None else np.asarray(break_mask, bool)
+    coarse = adjust.coarse_print(panel)
+    c = adjust.exact_close(panel, splits)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        basis = c / np.asarray(panel['close'], float)                   # puts a bar's printed open, high and low on the exact close's share basis
+    o, h, l = (np.asarray(panel[k], float) * basis for k in ('open', 'high', 'low'))
+    v = np.asarray(panel['volume'], float)
     out = {}
     with np.errstate(invalid='ignore', divide='ignore'):
         span = h - l
@@ -205,6 +226,7 @@ def compute(panel, break_mask=None) -> dict:
         pc, ph, pl = _shift(c, 1), _shift(h, 1), _shift(l, 1)
         out['gap_close'], out['gap_high'], out['gap_low'] = o / pc - 1, o / ph - 1, o / pl - 1
         tr = np.maximum(span, np.maximum(np.abs(h - pc), np.abs(l - pc)))
+        tr = np.where(broken | coarse, np.nan, tr)                      # the smoothing restarts after a break, and after prices too coarse to give a range
         atr = _wilder(tr, 14)
         out['true_range_fraction'] = tr / c
         out['atr14_fraction'] = atr / c
@@ -229,25 +251,29 @@ def compute(panel, break_mask=None) -> dict:
             out[f'return{n}'] = np.where(np.isfinite(_rolling(c, n + 1, np.sum)), c / _shift(c, n) - 1, np.nan)
         for n in (20, 50, 100, 200):
             out[f'sma{n}_distance'] = c / _rolling(c, n, np.mean) - 1
-        out['rsi14_wilder'] = _rsi(c)
+        out['rsi14_wilder'] = _rsi(c, restart=broken)
     starts, audit = {}, {}
     for prefix, hi, lo in (('ohlc', h, l), ('close', c, c)):
         first, info = _structure_features(prefix, c, hi, lo, atr, out)
         starts.update(first)
         audit[prefix] = info
-    if break_mask is not None and break_mask.any():
-        seen = np.cumsum(break_mask)
-        t = np.arange(count)
-        for d in DEFINITIONS:
-            name = d['name']
-            if d['lookback'] == VARIABLE:
-                first = starts[name]
-                begin = np.where(np.isfinite(first), first, 0).astype(int).clip(0, count - 1)
-            else:
-                begin = (t - d['lookback'] + 1).clip(0, count - 1)
-            crossed = seen[t] - seen[begin] > 0                           # a break strictly after the window's first bar and at or before T
-            out[name] = np.where(crossed, np.nan, out[name])
-    present = np.asarray(panel['present'], bool)
-    for name in out:
-        out[name] = np.where(present, out[name], np.nan)                  # a session without a bar has no features
+    # What each value's window must not contain: a break after its first bar, a missing bar, and (for features that read
+    # a high, low or open) a coarsely printed bar. Counted with running totals so a window is one subtraction.
+    t = np.arange(count)
+    seen_break, seen_missing, seen_coarse = np.cumsum(broken), np.cumsum(~present), np.cumsum(coarse)
+    for d in DEFINITIONS:
+        name = d['name']
+        if d['lookback'] == VARIABLE:
+            first = starts[name]
+            begin = np.where(np.isfinite(first), first, 0).astype(int).clip(0, max(count - 1, 0))
+            unusable = seen_missing[t] - seen_missing[begin] > 0        # a pivot or leg found before a missing bar is not carried across it
+        else:
+            begin = (t - d['lookback'] + 1).clip(0, max(count - 1, 0))
+            unusable = np.zeros(count, bool)                            # a missing bar inside a fixed window already makes the value NaN
+        unusable |= seen_break[t] - seen_break[begin] > 0               # a break strictly after the window's first bar and at or before T
+        if d['uses_high_low_open']:
+            before = np.where(begin > 0, seen_coarse[np.maximum(begin - 1, 0)], 0)
+            unusable |= seen_coarse[t] - before > 0                     # any coarse bar in the window, its first bar included
+        out[name] = np.where(unusable | ~present, np.nan, out[name])    # a session without a bar has no features
+    audit['coarse_print_bars'] = int(coarse.sum())
     return {'values': {name: out[name] for name in NAMES}, 'audit': audit}

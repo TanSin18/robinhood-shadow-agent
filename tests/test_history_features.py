@@ -20,7 +20,7 @@ def _panel(ticker='III', count=None):
     n = count or len(data['sessions'])
     columns = {'sessions': data['sessions'][:n], 'open': [f'{v:.6f}' for v in data['open'][:n]], 'high': [f'{v:.6f}' for v in data['high'][:n]],
                'low': [f'{v:.6f}' for v in data['low'][:n]], 'close': [f'{v:.6f}' for v in data['close'][:n]], 'volume': [f'{v:.1f}' for v in data['volume'][:n]],
-               'close_unadjusted': [f'{v:.4f}' for v in data['unadjusted'][:n]], 'close_total_return': [f'{v:.6f}' for v in data['total'][:n]]}
+               'close_unadjusted': [f'{v:.6f}' for v in data['unadjusted'][:n]], 'close_total_return': [f'{v:.6f}' for v in data['total'][:n]]}
     return panel.from_columns(columns), columns
 
 
@@ -138,8 +138,9 @@ def test_high_low_fibonacci_levels_follow_the_latest_completed_leg():
     high = np.array([10, 11, 12, 15, 12, 11, 10, 9.5, 9, 8, 9, 10, 11, 12], float)
     low = high - 1.0
     close = high - 0.5
-    columns = {'sessions': list(fx.SESSIONS[:14]), 'open': [str(v) for v in close], 'high': [str(v) for v in high], 'low': [str(v) for v in low],
-               'close': [str(v) for v in close], 'volume': ['100'] * 14, 'close_unadjusted': [str(v) for v in close], 'close_total_return': [str(v) for v in close]}
+    text = lambda values: [f'{v:.4f}' for v in values]
+    columns = {'sessions': list(fx.SESSIONS[:14]), 'open': text(close), 'high': text(high), 'low': text(low),
+               'close': text(close), 'volume': ['100'] * 14, 'close_unadjusted': text(close), 'close_total_return': text(close)}
     values = features.compute(panel.from_columns(columns))['values']
     a, b, c = 15.0, 7.0, close[12]                                    # leg from the swing high (high 15) down to the swing low (low 7)
     assert values['ohlc_leg_direction'][12] == -1 and values['ohlc_leg_size'][12] == pytest.approx(b / a - 1)
@@ -159,8 +160,9 @@ def test_high_low_fibonacci_levels_follow_the_latest_completed_leg():
 def test_a_projected_level_at_or_below_zero_is_not_a_price():
     high = np.array([10, 11, 12, 40, 12, 11, 10, 9.5, 9, 3, 9, 10, 11, 12], float)
     low = high - 1.0
-    columns = {'sessions': list(fx.SESSIONS[:14]), 'open': [str(v) for v in high], 'high': [str(v) for v in high], 'low': [str(v) for v in low],
-               'close': [str(v) for v in high], 'volume': ['100'] * 14, 'close_unadjusted': [str(v) for v in high], 'close_total_return': [str(v) for v in high]}
+    text = lambda values: [f'{v:.4f}' for v in values]
+    columns = {'sessions': list(fx.SESSIONS[:14]), 'open': text(high), 'high': text(high), 'low': text(low),
+               'close': text(high), 'volume': ['100'] * 14, 'close_unadjusted': text(high), 'close_total_return': text(high)}
     values = features.compute(panel.from_columns(columns))['values']
     assert np.isnan(values['fib_ohlc_extension_1.272_distance'][12]) and np.isnan(values['fib_ohlc_extension_1.618_distance'][12])    # 40 + 1.272*(2-40) < 0
     assert np.isfinite(values['fib_ohlc_retracement_0.5_distance'][12])

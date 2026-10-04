@@ -98,6 +98,11 @@ def test_the_bars_in_code_are_the_bars_written_before_any_data_was_collected():
     assert 'at least two bear markets and at least 8 calendar years' in SPEC and sufficiency.NETWORK_BAR['calendar_years_in_training'] == 8
     assert 'at least 63 consecutive sessions per sample for at least 95% of samples' in SPEC
     assert 'at least 99.5% of expected (member, session) bars' in SPEC.replace('At least', 'at least') and sufficiency.COVERAGE['bars_complete_target'] == 0.995
+    assert 'O7 Print precision (added by amendment 1) | At most 1% of member rows have an adjusted close printed more coarsely than 0.05% of its value | At most 5%' in SPEC
+    assert (sufficiency.COVERAGE['coarse_print_target'], sufficiency.COVERAGE['coarse_print_minimum'], sufficiency.COVERAGE['print_precision_bound']) == (0.01, 0.05, 5e-4)
+    from firm_lab.history import adjust
+    assert adjust.PRECISION_BOUND == sufficiency.COVERAGE['print_precision_bound'] and dataset.COARSE_SHARE_MAXIMUM == sufficiency.COVERAGE['coarse_print_minimum']
+    assert 'No bar was\nlowered' in SPEC
     history_text = subprocess_free_git_log()
     assert history_text is None or 'data-sufficiency specification, written before any collection' in history_text
 
@@ -184,7 +189,7 @@ def test_with_nothing_stored_every_market_bar_is_unmet_the_count_is_zero_and_eve
     assert strict['checkpoint7_retrospective_samples'] == 6490 and strict['retrospective_samples_in_this_dataset'] == 0
     assert {v['verdict'] for families in report['sufficiency']['verdicts'].values() for v in families.values()} == {'INSUFFICIENT'}
     bars = {b['id']: b['status'] for b in report['specification_bars']}
-    assert all(bars[i] == 'NOT_MET' for i in ('H1', 'H3', 'H4', 'H6', 'P1', 'O4', 'O6', 'E1', 'E2', 'E3', 'F2')) and bars['H5'] == 'NOT_MEASURABLE'
+    assert all(bars[i] == 'NOT_MET' for i in ('H1', 'H3', 'H4', 'H6', 'P1', 'O4', 'O6', 'O7', 'E1', 'E2', 'E3', 'F2')) and bars['H5'] == 'NOT_MEASURABLE'
     assert report['provider_decision']['status'] == 'OPERATOR PURCHASE DECISION REQUIRED' and report['provider_decision']['purchased'] is False
     assert report['holdout']['checkpoint7_holdout_reused_as_pristine'] is False and report['holdout']['historical_holdout'] == 'RESERVED_NO_DATA_YET'
     assert report['market_data']['closes_held']['tier'] == 'RETROSPECTIVE' and report['fundamentals']['tier'] == 'PUBLISHER_DATED_HISTORICAL'

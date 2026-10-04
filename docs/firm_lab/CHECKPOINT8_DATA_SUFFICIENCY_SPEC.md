@@ -124,6 +124,7 @@ fundamentals source at no cost; the price-only feature set is the only one that 
 | O4 Rejected rows | At most 0.1% of rows, each with a stated reason | At most 0.5% |
 | O5 Conflicts | 0 unresolved (two different bars for one security and session from one source version) | 0 |
 | O6 Independent cross-check | Closes already held from another source agree within 0.01% after the stated adjustment, on every overlapping (instrument, session) | At least 99.5% agree; every disagreement listed |
+| O7 Print precision (added by amendment 1) | At most 1% of member rows have an adjusted close printed more coarsely than 0.05% of its value | At most 5%. Above that, no feature that reads a high, low or open is used for any row |
 
 ## 8. Model families
 
@@ -184,3 +185,16 @@ Computed from the broad-market proxy's daily closes and from official policy-rat
 * Measuring `N_eff`, `MDE` inputs or any model metric on a reserved holdout.
 * Reporting a family as sufficient because the row count is large.
 * Choosing the horizon to model from these numbers. That belongs to the Checkpoint 9 plan.
+
+## Amendments
+
+**Amendment 1, 2026-10-04, after the independent review and still before any data was collected.** No bar was
+lowered. One bar was added:
+
+* O7, print precision. A vendor reprints adjusted prices after every split at a fixed number of decimals. For a
+  stock that later split many times, the reprinted early prices are small numbers rounded coarsely, and that
+  coarseness depends on the future. Close-based features are therefore computed from the unadjusted close and the
+  confirmed split ratios, which are not affected. Features that read a high, low or open still depend on the
+  adjusted prints; O7 bounds how much of the dataset may be affected before those feature families are withheld
+  from every row. Withholding them row by row would itself mark the rows of future splitters, so above the minimum
+  they are withheld from all rows.

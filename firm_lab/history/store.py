@@ -17,8 +17,8 @@ from pathlib import Path
 from . import DATABASE_ROLE, POLICY_VERSION
 
 CANONICAL_OFFICIAL = Path('/Users/tanmaysinnarkar/LocalProjects/robinhood-shadow-agent/data/agent.db')
-JSON_TABLES = ('history_sources', 'history_captures', 'history_securities', 'history_actions', 'history_index_events', 'history_bar_rejections',
-               'history_quarantine', 'history_universe', 'history_datasets', 'history_reservations', 'history_reports')
+JSON_TABLES = ('history_captures', 'history_securities', 'history_actions', 'history_index_events', 'history_bar_rejections',
+               'history_universe', 'history_datasets', 'history_reservations', 'history_reports')
 BAR_TABLE = 'history_bars'
 BAR_COLUMNS = ('sessions', 'open', 'high', 'low', 'close', 'volume', 'close_unadjusted', 'close_total_return', 'provider_updated')
 FORBIDDEN_TABLE_WORDS = ('order', 'fill', 'position', 'account', 'cash', 'portfolio', 'broker')

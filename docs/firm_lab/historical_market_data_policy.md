@@ -59,7 +59,9 @@ unadjusted close to split-adjusted close is the cumulative split factor. It must
 must step, at each recorded split date, by that split's ratio. The tolerance is 0.5% plus the largest error that
 rounding of the two printed prices can cause, taken from the number of decimals the vendor printed. A step with no
 recorded split (`SPLIT_FACTOR_WITHOUT_ACTION`), or a recorded split with no step (`ACTION_WITHOUT_SPLIT_FACTOR`), is
-recorded as a **break** at that session: prices before it and after it cannot be compared. A feature whose lookback
+recorded as a **break** at that session: prices before it and after it cannot be compared. Either way of writing a
+split ratio is read (new shares per old, or the inverse), splits dated on one session multiply, and a split large
+enough to tell is also checked for direction: the adjusted series must be continuous across it. A feature whose lookback
 reaches across a break is unavailable, and a label whose window contains one is excluded. Nothing is corrected. The
 universe screen is not affected by a break: dollar volume does not change under a split, and the minimum-price screen
 reads the printed close, not the factor.
@@ -72,26 +74,41 @@ Every stored series names its basis. Bases are never mixed inside one calculatio
 |---|---|
 | open, high, low, close, volume | `SPLIT_ADJUSTED_AS_OF_CAPTURE`: adjusted for splits up to the capture date; not adjusted for cash dividends or spin-offs |
 | unadjusted close | `UNADJUSTED`: the price printed on the day |
-| total-return close | `SPLIT_DIVIDEND_SPINOFF_ADJUSTED_AS_OF_CAPTURE`: the vendor's method; stored, not yet validated, used by nothing |
+| total-return close | `SPLIT_DIVIDEND_SPINOFF_ADJUSTED_AS_OF_CAPTURE`: the vendor's method; stored, not validated; read only to size a recorded distribution, never as a price |
 
-**Why a series adjusted as of today does not leak.** A split after session T multiplies every price at or before T
-by the same number. A feature that is a ratio of prices (a return, a distance to an average, a wick over a range)
-is unchanged by that number, so it has the value it would have had on T. Checkpoint 8 features are restricted to
-such ratios; a feature in dollars is never a model input. A test applies a later split to a series and proves the
-features before it do not move. The one place a true price level is needed, the universe's minimum-price screen,
-uses the unadjusted close.
+**Why a later split does not leak, and where it could.** A split after session T multiplies every price at or before
+T by the same number. A feature that is a ratio of prices (a return, a distance to an average, a wick over a range)
+is unchanged by that number. Checkpoint 8 features are restricted to such ratios; a feature in dollars is never a
+model input.
+
+That holds for exact numbers. A vendor's reprinted adjusted prices are rounded to a fixed number of decimals, and for
+a stock that later split many times the early adjusted prices are small numbers rounded coarsely. The coarseness
+depends on the future. Two rules close that channel:
+
+* **The exact close.** Across sessions, the close is rebuilt from the unadjusted close (the price printed on the day)
+  and the confirmed split ratios. The vendor's adjusted prints are used only within one bar: its open, high and low
+  relative to its own close. A test reprints a history at three decimals after a large later split and shows that no
+  close-based feature before the split moves.
+* **Print precision.** Where the adjusted close is printed more coarsely than 0.05% of its value, the shape of the
+  bar cannot be trusted, and every feature that reads a high, low or open is unavailable there. If more than 5% of a
+  dataset's rows are affected, those feature families are withheld from every row (sufficiency bar O7), because
+  withholding them row by row would itself mark the rows of future splitters.
+
+The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 
 **Return methodology for targets: split-adjusted price return.** One method across the whole universe, as in
 Checkpoint 7. Cash dividends are not added back. Known effects, stated rather than hidden:
 
 * An ordinary dividend lowers the price return on its ex-date by the dividend yield (typically under 1%).
-* A spin-off or a large one-off distribution produces a price gap that is not a loss. A feature whose lookback
-  contains such an ex-date is unavailable for that row (`DISTRIBUTION_IN_WINDOW`), and a label whose window contains
-  one is excluded (`LABEL_WINDOW_HAS_DISTRIBUTION`). "Large" is a single cash distribution of at least 5% of the
-  prior unadjusted close. The excluded count is reported.
-* A total-return label can replace this only after the vendor's total-return factor is reconciled against the
-  recorded dividends and spin-offs across the universe. The reconciliation exists as an audit; until it passes on
-  real data the total-return close is not used.
+* A spin-off or a large one-off distribution produces a price gap that is not a loss. It is a **break**: a feature
+  whose lookback reaches across it is unavailable, the recursive averages (ATR, RSI) restart there, and a label whose
+  window contains it is excluded (`LABEL_WINDOW_HAS_BREAK`). "Large" is a single cash distribution of at least 5% of
+  the prior close. Its size is read from the vendor's own total-return factor on the two sessions around the ex-date,
+  which no later split changes; the recorded amount is used only when that factor is missing. The excluded count is
+  reported.
+* The vendor's total-return close is used for that one measurement and for nothing else. It is never used as a
+  price. A total-return label can replace the price-return label only after the factor is reconciled against the
+  recorded dividends and spin-offs across the universe; the reconciliation exists as an audit.
 
 ## 5. Known-at for a daily bar (`bar-known-at-v1`)
 
@@ -132,7 +149,8 @@ effective date and no announcement time; `announcement_timestamp` is stored as `
   later failed or was acquired is a member for as long as it qualified.
 * **Labels through a delisting.** When a member's last bar falls inside a label window, the label uses the last
   available price as the exit and is marked `EXIT_AT_LAST_PRICE_BEFORE_DELISTING` with the provider's delisting
-  reason. These rows are kept; dropping them would remove exactly the failures and takeovers.
+  reason. These rows are kept; dropping them would remove exactly the failures and takeovers. Such a label covers
+  fewer sessions than its horizon (down to a single session); it is flagged so that a later plan can treat it apart.
 * **Stated limitation.** No free or individually licensed source found gives a post-delisting return. For an
   acquisition the last price is close to the deal value. For a bankruptcy or a regulatory delisting the last price
   overstates what a holder recovered, so such labels are biased upward. The count of such rows per year and per
