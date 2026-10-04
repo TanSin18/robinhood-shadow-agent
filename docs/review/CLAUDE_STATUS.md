@@ -24,6 +24,18 @@ main. No Checkpoint 8. Codex maintenance stays PREPARED_AND_PROVEN_NOT_INSTALLED
 - Control A: Release N, fingerprint `901f7606…c876`, verified at the start and at 2026-10-03 22:36 ET; strategy not
   changed; runner not restarted.
 
+### 2026-10-04 09:51 ET — operator accepts the scientific result; deployment order
+
+The operator accepted the Checkpoint 7 conclusion (43 judged, 28 EXPERIMENTAL, 15 REJECTED, none established;
+Fibonacci INCONCLUSIVE; networks insufficient data), ordered that the tournament not be rerun, that the holdout be
+disclosed as no longer untouched, and that only the research laboratory be deployed. Done since: the page now opens
+with what stands (no validated trading model; strict point-in-time samples 0; retrospective count; holdout
+disclosure) and labels the highest scores as not recommended models; the closure report and the lifecycle design carry
+the holdout disclosure. Commit `35d6656`, pushed. The stored report is unchanged and still verifies. The Mac was still
+not connected at 10:05 ET.
+
+A pre-existing wall-clock defect in two registered-dashboard tests surfaced today (see `CHECKPOINT7_VALIDATION.md`).
+
 ### Outstanding, and why
 
 The Mac was not reachable when the work was ready (2026-10-04). Not done, and not claimed:

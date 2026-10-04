@@ -45,6 +45,13 @@ python -m pytest -q -p no:cacheprovider
 | Cloud, modeling tests with torch, xgboost, lightgbm and catboost made unimportable | 63 passed, 1 module skipped (`test_modeling_report.py`, the end-to-end run): what the Mac's environment will do |
 | Native Mac | see below |
 
+After 2026-10-04 13:10 UTC the full suite shows two failures that have nothing to do with this checkpoint:
+`tests/test_dashboard.py::test_decision_room_links_pending_approval_and_marks_failed_boundary` and
+`::test_historical_pending_proposal_never_claims_no_proposal` issue an approval card at a fixed time with a
+10,000-minute expiry and read the page with the real clock. They fail from that moment on every branch, including the
+Checkpoint 6 commit `3b34b97` (checked). Cloud at `35d6656`, 2026-10-04 14:00 UTC: 1145 passed, 2 failed (these two),
+1 skipped. They are left as they are and reported.
+
 One earlier test was changed: `tests/test_firm_lab_features.py::test_blocked_capabilities_are_unavailable` pinned the
 exact set of capability states; `RESEARCH_ONLY` was added to it.
 

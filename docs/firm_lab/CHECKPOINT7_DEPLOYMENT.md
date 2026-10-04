@@ -5,8 +5,13 @@
 ## State at the time of writing (2026-10-04)
 
 **NOT DEPLOYED.** The research, validation and review were done in the cloud container. The Mac was reachable until
-2026-10-03 22:37 ET and not on 2026-10-04 when the work was ready, so nothing of Checkpoint 7 has been written to the
-Mac: no overlay file, no laboratory file, no capability row. The Firm Lab page on the Mac is as Checkpoint 6 left it.
+2026-10-03 22:37 ET and not on 2026-10-04 when the work was ready (the link was tried at 08:40, 09:10, 09:55, 10:00 and
+10:05 ET and each time the device was not connected), so nothing of Checkpoint 7 has been written to the Mac: no
+overlay file, no laboratory file, no capability row. The Firm Lab page on the Mac is as Checkpoint 6 left it.
+
+The operator's order of 2026-10-04 09:51 ET accepts the scientific result and fixes the deployment scope: the
+laboratory file, the six read-only dashboard files and the eight capability rows below, and nothing else. The source
+to deploy is commit `35d6656`. A bundle with exactly these files and their sha256 sums is staged in the session.
 
 Last checks made on the Mac (2026-10-03 22:36 ET, read-only):
 
@@ -35,8 +40,8 @@ that. `com.openai.robinhood-daily` is not touched.
    | File | sha256 | |
    |---|---|---|
    | `agents/desk/firm_lab_page.py` | `1912d247ee4aaa1c9b70d51160bdd1e7e7f11f93e086b50361a3fbe28bbe81a3` | replaces `b092f1ea…` |
-   | `agents/desk/modeling_lab.py` | `1ee6c6a7c4f63dd3cfe1067526e713e0c0efc57409fa673c144ccea5d6dab8e2` | new |
-   | `agents/static/botfolio-theme.css` | `a9f7963c6d18a390f64a46ad91138fcb01562debecf6fa8116555baaa12dcbdd` | replaces `3aaa9193…` |
+   | `agents/desk/modeling_lab.py` | `1907872e727990fe434eaebc3236e420a9512ddb3e24fe5e6328d12a3f6eadc8` | new |
+   | `agents/static/botfolio-theme.css` | `0b8b15490400bd79d59a3ea877ee8955f2e6292f80eb442c732bdd6a405137c9` | replaces `3aaa9193…` |
    | `firm_lab/view.py` | `1518b31a3e220f925b64096b4d017eaf2fd562a22e469283f5a6728463baa0a5` | replaces `54449760…` |
    | `firm_lab/modeling_view.py` | `edd7e0e50e69a101e75abc49273ab16439946ed3086e7c1fab3ce1b8ace07699` | new, standard library only |
    | `firm_lab/capabilities.py` | `6f29885976204a5f6fbc82c737671dab1821139014663f3a22e6f3aed1c93f9d` | replaces `cf317b14…`; adds the `RESEARCH_ONLY` state |
@@ -57,7 +62,18 @@ that. `com.openai.robinhood-daily` is not touched.
    cd ~/LocalProjects/robinhood-diagnostics/checkpoint7-modeling-20261003/src && ~/LocalProjects/robinhood-shadow-agent/.venv/bin/python -m pytest -q -p no:cacheprovider 2>&1 | tee ../native-tests.txt
    ```
 
-   `src/` is a plain export of this branch placed there at deployment; the suite does not need a git checkout.
+   `src/` is a plain export of commit `35d6656` placed there at deployment; the suite does not need a git checkout.
+   Record the interpreter (`python --version`), the commit, the command, and passes, failures and warnings.
+
+   Expected native failures, each independent of Checkpoint 7 and none to be worked around:
+
+   - `tests/test_installed_isolation.py::test_installed_child_filters_tools_and_denies_unexpected_server`: the
+     installed Codex `configWarning`. The guard is not weakened; Codex maintenance stays PREPARED_AND_PROVEN_NOT_INSTALLED.
+   - `tests/test_dashboard.py::test_decision_room_links_pending_approval_and_marks_failed_boundary` and
+     `::test_historical_pending_proposal_never_claims_no_proposal`: these two issue an approval card at a fixed time
+     (2026-09-27 14:30 UTC) with a 10,000-minute expiry and read the page with the real clock, so they pass until
+     2026-10-04 13:10 UTC and fail from then on, on any branch (they fail on the Checkpoint 6 commit `3b34b97` too).
+     A test defect in the registered dashboard's tests, found on 2026-10-04; not changed here.
 5. **Re-verify Control A**: fingerprint, no stop file, the registered service not restarted.
 
 ## Rollback
