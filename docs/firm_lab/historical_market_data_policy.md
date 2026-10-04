@@ -169,10 +169,21 @@ What remains is bounded and stated: on rows that are used, a reprinted high, low
 of the price, and how far depends on later splits. The measure is deliberately blunt: a vendor that prints two
 decimals makes every bar under $10 coarse by it, whether or not a split followed.
 
-* **What a coarse reprint may not decide.** Whether a recorded split is applied, whether a distribution is large and
-  what a label is worth are all taken from numbers a later split cannot change: the recorded actions and the
-  unadjusted close (§3, and the label below). The vendor's adjusted prints are read for two things only: the shape of
-  a bar (its open, high and low relative to its own close), under the all-or-none rule above, and the audit of §3.
+* **Volume: the same rule.** The vendor supplies volume only on today's share basis. After a large later reverse
+  split, the volume of an early session is a small number of today's shares, and a volume is a whole number of
+  shares at best: below 100 re-counted shares its rounding is more than 0.5% of it, and it can round to nothing. A
+  bar no later split touched is exact and is never flagged. The features that read volume are used for every row of
+  a dataset or for none, and for none as soon as one row would read such a bar. In the universe, a security whose
+  liquidity window holds such a bar cannot be ranked; it is screened out under its own reason
+  (`VOLUME_REPRINT_TOO_COARSE`) and counted, so that the candidates lost this way are a known number. They are
+  stocks that later collapsed, so the count is a measure of a survivorship gap the vendor's format leaves.
+* **Whether a row exists** is decided from the exact close only (the core features are the 20-session return and the
+  20-session realized volatility). Nothing the vendor reprints can add or remove a row.
+* **What a coarse reprint may not decide.** Whether a recorded split is applied, whether a distribution is large,
+  whether a row exists and what a label is worth are all taken from numbers a later split cannot change: the
+  recorded actions and the unadjusted close (§3, and the label below). The vendor's reprinted numbers are read for
+  three things only: the shape of a bar (its open, high and low relative to its own close) and its volume, both under
+  an all-or-none rule, and the audit of §3.
 
 The one place a true price level is needed, the universe's minimum-price screen, uses the unadjusted close.
 

@@ -260,3 +260,6 @@ named here so that the record is in one place:
 * **No dataset is built while a visible case contradicts the reading of the vendor's action table** (split value as
   new shares per old; dividend value as the amount paid per share on the day). That is a gate before any bar is
   measured, not a bar.
+* **Whether a row exists is decided from the exact close only**, and the features that read volume follow the same
+  all-or-none rule as those that read a high, low or open (amendment 3). A security the universe cannot rank
+  because a later reverse split left its volume unreadable is counted; H3 and H4 are measured on what remains.

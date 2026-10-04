@@ -25,10 +25,12 @@ the burned window carries nothing of the historical holdout that ends the sessio
 the first months of the burned window does read the holdout's last bars, as one yes-or-no per security and month.)
 The raw store itself is not sealed; the seal is on what this builder hands out.
 
-High, low and open. A vendor reprints adjusted prices after every later split, and the reprint can be too coarse to
-give the shape of a bar. Withholding those features only where the print is coarse would mark the rows of stocks that
-split later, which is information from the future. So the families that read a high, low or open are used for every
-row of a dataset or for none: for none as soon as one row of it would read a coarsely printed bar.
+High, low, open and volume. A vendor reprints adjusted prices and volumes after every later split, and the reprint can
+be too coarse to give the shape of a bar or the size of a volume. Withholding those features only where the reprint is
+coarse would mark the rows of stocks that split later, which is information from the future. So the features that read
+a high, low or open are used for every row of a dataset or for none, and so are the features that read volume: for
+none as soon as one row of the dataset would read a bar the reprint made unreadable. Whether a row exists at all is
+decided from the exact close only.
 
 Every dataset names the stored blocks, captures, universe, feature code, target and split it was built from, and has
 one hash over all of that. The same inputs give the same hash.
@@ -46,7 +48,7 @@ from .store import content_hash, when
 
 DATASET_VERSION = 'pit-dataset-v2'
 MINIMUM_HISTORY_BARS = 252
-CORE_FEATURES = ('return20', 'realized_vol20', 'rvol20')      # close and volume only: eligibility must not depend on how coarsely a price was printed
+CORE_FEATURES = ('return20', 'realized_vol20')                # from the exact close only: whether a row exists must not depend on anything the vendor reprints
 INPUT_WINDOW_BARS = features.LONGEST_FIXED_LOOKBACK            # 253: the 252-session return reads the bar 252 sessions back and the row's own
 STRICT_TIERS = (HELD_AT_THE_TIME, PUBLISHER_DATED_HISTORICAL)
 FEATURES_FROM = splits.BURNED_FIRST                            # a row on or after this session reads no bar before it: the session before is sealed
@@ -154,6 +156,10 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
     readable = np.array([splits.labels_allowed(name) for name in segment], bool) if count else np.zeros(0, bool)
     coarse = adjust.coarse_print(p)
     reads_coarse = _window_sum(coarse, oldest.clip(0, max(count - 1, 0)), np.arange(count)) > 0 if count else np.zeros(0, bool)
+    thin = adjust.coarse_volume(p, audit['splits'])
+    t = np.arange(count)
+    floor = np.where(t >= (k0 or 0), k0 or 0, 0)                       # a row past the sealed holdout reads no bar before its own side
+    reads_thin = _window_sum(thin, np.maximum(t - features.LONGEST_VOLUME_LOOKBACK + 1, floor), t) > 0 if count else np.zeros(0, bool)
     for h in labels:
         labels[h]['value'] = np.where(readable, labels[h]['value'], np.nan)        # sealed, purge and burn-in label values never leave this function
     for name in values:
@@ -161,7 +167,7 @@ def security_rows(store, sid, security, spans, actions, *, source=None, membersh
     # A break is returned as where and why. Its size is a price move, and for a sealed session that is not handed out.
     found = [{'session': b['session'], 'index': b['index'], 'reason': b['reason']} for b in audit['breaks']]
     return {'security_id': sid, 'sessions': sessions, 'present': p['present'], 'member': member, 'eligible': eligible, 'tier': tier, 'bar_tier': bar_tier,
-            'segment': segment, 'coarse': coarse, 'reads_coarse': reads_coarse, 'delisting': delisting,
+            'segment': segment, 'coarse': coarse, 'reads_coarse': reads_coarse, 'reads_unreadable_volume': reads_thin, 'delisting': delisting,
             'features': values, 'labels': labels, 'breaks': found, 'blocks': p['blocks'],
             'audit': {**{k: v for k, v in audit.items() if k != 'breaks'}, 'structure': computed['audit']}, 'history_bars': history}
 
@@ -207,6 +213,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
            'members_whose_bars_end_without_a_delisting_record': 0, 'breaks_by_reason': {}, 'splits_confirmed': 0,
            'split_convention': {'new_per_old': 0, 'old_per_new': 0},
            'dividend_basis': {'unadjusted': 0, 'adjusted': 0, 'neither': 0, 'no_total_return_factor': 0}, 'coarse_print_rows': 0, 'rows_reading_a_coarse_print': 0,
+           'rows_reading_an_unreadable_volume': 0,
            'sample_sessions_per_instrument': [], 'sequence_ready': 0, 'splits_unchecked': 0, 'distributions_without_amount': 0}
     sample_sessions = set()                                             # sessions with at least one strict sample at the longest horizon
     tables = {h: {} for h in targets.HORIZONS}                           # horizon -> {security: {development window index: raw label}}
@@ -222,6 +229,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
         out['member_sessions'] += int(rows['member'].sum())
         out['eligible_feature_rows'] += int(eligible.sum())
         out['rows_reading_a_coarse_print'] += int((eligible & rows['reads_coarse']).sum())
+        out['rows_reading_an_unreadable_volume'] += int((eligible & rows['reads_unreadable_volume']).sum())
         out['splits_confirmed'] += rows['audit']['splits_confirmed']
         out['splits_unchecked'] += rows['audit']['splits_unchecked']
         out['distributions_without_amount'] += rows['audit']['distributions_without_amount']
@@ -288,6 +296,7 @@ def count(store, *, universe_hash=None, source=None, progress=None) -> dict:
     out['coarse_print_share'] = out['coarse_print_rows'] / out['eligible_feature_rows'] if out['eligible_feature_rows'] else None
     # all rows or none: one row that would read a coarsely printed bar withholds the high/low/open families from every row
     out['high_low_open_families_usable'] = bool(out['eligible_feature_rows']) and out['rows_reading_a_coarse_print'] == 0
+    out['volume_features_usable'] = bool(out['eligible_feature_rows']) and out['rows_reading_an_unreadable_volume'] == 0
     out['member_bars_present_share'] = out['raw_member_rows'] / out['member_sessions'] if out['member_sessions'] else None
     out['action_table_contradictions'] = contradictions(out['split_convention'], out['dividend_basis'])
     # Burn-in and purge sessions yield no sample. The total is the sum of the four sample segments, shown one by one.
@@ -356,7 +365,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     spans = universe.membership(chosen['records'])
     securities = current_securities(store, source=source)
     actions = _actions_by_security(store, source)
-    ids, sessions, tiers, feats, blocks, coarse, touched, restated = [], [], [], [], set(), 0, 0, 0
+    ids, sessions, tiers, feats, blocks, coarse, touched, restated, thin = [], [], [], [], set(), 0, 0, 0, 0
     convention, basis = {}, {}
     raw = {h: [] for h in targets.HORIZONS}
     states = {h: [] for h in targets.HORIZONS}
@@ -377,6 +386,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
         blocks.update(rows['blocks'])
         coarse += int(rows['coarse'][index].sum())
         touched += int(rows['reads_coarse'][index].sum())
+        thin += int(rows['reads_unreadable_volume'][index].sum())
         ids.extend([sid] * len(index))
         sessions.extend(rows['sessions'][t] for t in index)
         tiers.extend(rows['tier'][index])
@@ -392,6 +402,8 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
     usable = touched == 0
     if not usable:              # one row would read a coarsely printed bar: the high/low/open families are withheld from every row, never row by row
         X[:, [k for k, d in enumerate(features.DEFINITIONS) if d['uses_high_low_open']]] = np.nan
+    if thin:                    # the same rule for volume: one row would read a volume a later reverse split made unreadable
+        X[:, [k for k, d in enumerate(features.DEFINITIONS) if d['uses_volume']]] = np.nan
     order = np.lexsort((np.array(ids, dtype=object), np.array(sessions, dtype=object))) if ids else np.zeros(0, int)
     ids, sessions, tiers, X = [ids[k] for k in order], [sessions[k] for k in order], [tiers[k] for k in order], X[order]
     y, y_state, excess = {}, {}, {}
@@ -411,6 +423,7 @@ def materialise(store, *, universe_hash=None, source=None, segments=(splits.DEVE
              'tiers': content_hash(list(tiers)), 'blocks': content_hash(sorted(blocks))}
     body.update({'segments': list(segments), 'years': sorted(years) if years else None, 'rows': len(ids), 'hashes': parts,
                  'coarse_print_share': share, 'rows_reading_a_coarse_print': touched, 'high_low_open_families_usable': usable,
+                 'rows_reading_an_unreadable_volume': thin, 'volume_features_usable': thin == 0,
                  'rows_left_out_because_a_bar_was_revised': restated})
     body['dataset_hash'] = content_hash({'spec': body['dataset_spec_hash'], 'segments': body['segments'], 'years': body['years'], 'hashes': parts})
     return {'security_id': ids, 'session': sessions, 'tier': tiers, 'X': X, 'feature_names': list(features.NAMES), 'y': y, 'y_excess': excess, 'y_state': y_state,

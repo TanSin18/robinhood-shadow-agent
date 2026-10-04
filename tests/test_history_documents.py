@@ -58,6 +58,9 @@ def test_the_policy_document_lists_every_rejection_reason_and_every_change_class
     assert adjust.DIVIDEND_VALUE_MEANS == 'unadjusted' and "a dividend's value\n  is the amount paid per share on the day" in POLICY
     assert "taken from the decimals of **that\n  bar's own row**" in POLICY and '`splits_unchecked`' in POLICY
     assert f'`{targets.TARGET_VERSION}`' in POLICY and 'the label starts at the close of T+1' in POLICY
+    assert f'`{universe.UNREADABLE_VOLUME}`' in POLICY and f'`{universe.UNREADABLE_VOLUME}`' in UNIVERSE and universe.UNREADABLE_VOLUME in universe.REASONS
+    assert adjust.VOLUME_PRECISION_BOUND == 0.005 and 'below 100 re-counted shares its rounding is more than 0.5% of it' in POLICY
+    assert dataset.CORE_FEATURES == ('return20', 'realized_vol20') and 'the core features are the 20-session return and the\n  20-session realized volatility' in POLICY
     for name in (adjust.UNSIZED, adjust.NO_ACTION, adjust.NO_FACTOR, 'SPLIT_VALUE_CONVENTION_CONTRADICTED', 'DIVIDEND_AMOUNT_BASIS_CONTRADICTED'):
         assert f'`{name}`' in POLICY, name
     assert dataset.contradictions({'old_per_new': 1}, {}) == ['SPLIT_VALUE_CONVENTION_CONTRADICTED']

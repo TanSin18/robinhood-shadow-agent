@@ -57,7 +57,8 @@ def _definitions() -> tuple:
     def add(name, version, family, lookback, unit, formula):
         shape = (version in ('candle_geometry_v1', 'ohlcv_pivot_v1', 'fib_ohlcv_pivot_v1') or name.endswith('_atr_distance')
                  or name in ('true_range_fraction', 'atr14_fraction', 'range_expansion', 'range_expansion_rvol'))
-        out.append({'name': name, 'version': version, 'family': family, 'lookback': lookback, 'unit': unit, 'formula': formula, 'uses_high_low_open': shape})
+        out.append({'name': name, 'version': version, 'family': family, 'lookback': lookback, 'unit': unit, 'formula': formula, 'uses_high_low_open': shape,
+                    'uses_volume': family == 'volume'})
 
     for name, n, formula in (('body_fraction', 1, '|C-O|/(H-L)'), ('upper_wick_fraction', 1, '(H-max(O,C))/(H-L)'), ('lower_wick_fraction', 1, '(min(O,C)-L)/(H-L)'),
                              ('clv', 1, '(2C-H-L)/(H-L)'), ('open_close_return', 1, 'C/O-1'), ('range_fraction', 1, '(H-L)/C'), ('gap_close', 2, 'O/C[-1]-1'),
@@ -200,6 +201,7 @@ def _structure_features(prefix, close, high, low, atr, out):
 
 
 LONGEST_FIXED_LOOKBACK = max(d['lookback'] for d in DEFINITIONS if d['lookback'] != VARIABLE)      # bars, the row's own bar included
+LONGEST_VOLUME_LOOKBACK = max(d['lookback'] for d in DEFINITIONS if d['uses_volume'])
 
 
 def compute(panel, break_mask=None, splits=()) -> dict:

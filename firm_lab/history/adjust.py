@@ -27,6 +27,7 @@ from .panel import first_session_on_or_after
 TOLERANCE = 0.005
 LARGE_DISTRIBUTION = 0.05
 PRECISION_BOUND = 5e-4                    # an adjusted price printed more coarsely than 0.05% of itself cannot support high/low/open features
+VOLUME_PRECISION_BOUND = 0.005            # a re-counted volume known to worse than 0.5% of itself cannot support a volume feature or a liquidity rank
 DIRECTION_FROM = 0.2                      # a split of at least about 1.22-for-1 is large enough to check which way the factor stepped
 SPIN_OFF, LARGE, NO_ACTION, NO_FACTOR = 'SPIN_OFF', 'LARGE_DISTRIBUTION', 'SPLIT_FACTOR_WITHOUT_ACTION', 'ACTION_WITHOUT_SPLIT_FACTOR'
 UNSIZED = 'DISTRIBUTION_WITHOUT_AMOUNT'
@@ -197,6 +198,16 @@ def share_divisor(panel, splits=()) -> np.ndarray:
     with np.errstate(invalid='ignore', divide='ignore'):
         agrees = np.abs(np.log(printed / exact)) <= TOLERANCE + panel['half_ulp']
     return np.where(agrees, exact, printed)
+
+
+def coarse_volume(panel, splits=()) -> np.ndarray:
+    """True where the volume was re-counted for a later split and is too small a number to be read. The vendor supplies
+    volume only on today's share basis. After a later reverse split an early volume is a small number of today's shares,
+    and a volume is a whole number of shares at best: below 100 re-counted shares its rounding is more than 0.5% of it,
+    and it can round to nothing at all. A bar no later split touched is exact and is never flagged, whatever its volume."""
+    with np.errstate(invalid='ignore'):
+        recounted = np.abs(share_divisor(panel, splits) - 1.0) > 1e-9
+        return np.asarray(panel['present'], bool) & recounted & ~(panel['volume'] * VOLUME_PRECISION_BOUND >= 0.5)
 
 
 def total_return_audit(panel, actions) -> dict:

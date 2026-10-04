@@ -1183,3 +1183,61 @@ def test_a_tiny_volume_confirms_nothing_and_a_capture_pair_expires(tmp_path, mon
             store.put_bars('X', '2', 2024, _block(SPAN, ['10.00'] * 10), 'c2', price_table='stocks', capture=pair)
     finally:
         store.close()
+
+
+def test_a_volume_a_later_reverse_split_made_unreadable_is_counted_and_marks_no_row(tmp_path, monkeypatch):
+    """The vendor re-counts volume after every later split. After a large later reverse split an early volume is a
+    handful of today's shares: its rows lost their volume features (and, through a core feature, existed or not), and
+    the security dropped out of the universe as if it had not traded."""
+    from firm_lab.history import features
+    day = '2019-06-03'
+    monkeypatch.setattr(fx, 'SPLIT', ('AAA', day, 0.1))                 # a 1-for-10 reverse split: every earlier volume is re-counted
+
+    def thin(row):                                                      # before it, AAA's volume is a few dozen of today's shares
+        if row[0] == 'AAA' and row[1] < day:
+            row[6] = '40.0'
+        return row
+
+    def build(folder, edit):
+        folder.mkdir(parents=True)
+        fx.write_tickers(folder / 'T.csv')
+        rows = [list(r) for r in fx.price_rows(None, through='2020-12-31')]
+        fx.write_prices(folder / 'P.csv', [edit(r) for r in rows] if edit else rows)
+        fx.write_actions(folder / 'A.csv')
+        text = (folder / 'A.csv').read_text().replace('2020-06-15,split,AAA,AAA Corp,2.0', f'{day},split,AAA,AAA Corp,0.1')
+        (folder / 'A.csv').write_text(text)
+        store = HistoryStore(folder / 'firm_lab_history.db', create=True)
+        ingest.ingest_securities(store, sf.securities(folder / 'T.csv'), file=ingest.describe_file(folder / 'T.csv'), at=AT, **COMMON)
+        ingest.ingest_bars(store, sf.prices(folder / 'P.csv'), file=ingest.describe_file(folder / 'P.csv'), at=AT, **COMMON)
+        ingest.ingest_actions(store, sf.actions(folder / 'A.csv'), file=ingest.describe_file(folder / 'A.csv'), at=AT, **COMMON)
+        manifest = universe.build(store, fx.FIRST, '2020-12-31', rule={**universe.RULE, 'size': 12}, version='liquid-top12-test')
+        return store, manifest
+
+    plain, m0 = build(tmp_path / 'plain', None)
+    marked, m1 = build(tmp_path / 'marked', thin)
+    try:
+        assert m0['security_months_screened_out_for_unreadable_volume'] == 0 and m1['security_months_screened_out_for_unreadable_volume'] > 0
+        p = panel.load(marked, '100001')
+        k = p['sessions'].index(day)
+        unreadable = adjust.coarse_volume(p, [(k, 0.1)])
+        assert unreadable[:k].all() and not unreadable[k:].any()
+        assert not adjust.coarse_volume(panel.load(marked, '100009'), ()).any()       # no later split: exact, whatever the volume
+        a, b = dataset.materialise(plain), dataset.materialise(marked)
+        ca, cb = dataset.count(plain), dataset.count(marked)
+    finally:
+        plain.close()
+        marked.close()
+    volume = [n for n, d in enumerate(features.DEFINITIONS) if d['uses_volume']]
+    rest = [n for n, d in enumerate(features.DEFINITIONS) if not d['uses_volume'] and not d['uses_high_low_open']]
+    assert len(volume) == 7 and dataset.CORE_FEATURES == ('return20', 'realized_vol20')
+    ka, kb = list(zip(a['security_id'], a['session'])), list(zip(b['security_id'], b['session']))
+    late = [n for n, key in enumerate(kb) if key[0] == '100001']
+    assert late and b['manifest']['rows_reading_an_unreadable_volume'] > 0 and not b['manifest']['volume_features_usable'] and not cb['volume_features_usable']
+    assert np.isnan(b['X'][:, volume]).all()                            # all rows or none: AAA's rows cannot be told apart by what is missing
+    assert a['manifest']['volume_features_usable'] and ca['volume_features_usable'] and np.isfinite(a['X'][:, volume]).any()
+    common = sorted(set(ka) & set(kb))
+    ia, ib = {key: n for n, key in enumerate(ka)}, {key: n for n, key in enumerate(kb)}
+    np.testing.assert_array_equal(a['X'][[ia[key] for key in common]][:, rest], b['X'][[ib[key] for key in common]][:, rest])      # nothing close-based moved
+    # once AAA can be ranked again its rows exist as before: whether a row exists is decided from the exact close alone
+    after = [key for key in ka if key[0] == '100001' and key[1] > '2019-10-31']
+    assert after and set(after) <= set(kb)

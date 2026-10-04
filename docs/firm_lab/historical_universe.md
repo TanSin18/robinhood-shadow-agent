@@ -20,6 +20,10 @@ not decide who is screened.
    reprinted afterwards. Where a later split is not confirmed by the stored actions, the vendor's own factor is used
    and the rounding of its reprint remains (measured at up to 0.2% of dollar volume in a test).
 
+A security whose 63-session window holds a volume that a later reverse split made unreadable
+(`historical_market_data_policy.md` §4) cannot be ranked. It is screened out as `VOLUME_REPRINT_TOO_COARSE` and
+counted in the manifest (`security_months_screened_out_for_unreadable_volume`).
+
 Membership takes effect on the session after R and lasts through the next formation session. The 1,000 is the
 sufficiency target; the minimum acceptable is 500.
 
@@ -80,6 +84,9 @@ that do not match their manifest are refused (`UNIVERSE_RECORDS_DO_NOT_MATCH_MAN
 ## Limitations
 
 * The provider's coverage of delisted securities is its claim ("about 99% free of survivorship bias") until measured.
+* A stock that later went through very large reverse splits can be missing from the universe of the years before,
+  because its re-counted volume is too small to read. The manifest counts those security-months. With the vendor's
+  format this cannot be repaired, only measured.
 * Share classes are separate securities: both classes of a dual-class company can be members.
 * American depositary receipts in the stock table are included; the rule does not classify.
 * No sector balance is enforced or claimed. Sector bar H5 is `NOT MEASURABLE` until a historical classification

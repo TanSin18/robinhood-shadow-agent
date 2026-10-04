@@ -412,7 +412,9 @@ def build(research_database, history_database=None, *, now=None) -> dict:
          if stored and history.get('universe') else None, 'version': universe.UNIVERSE_VERSION,
          'known_at_methodology': 'membership is formed on the last session of a month from bars up to that session and takes effect on the next session',
          'adjustment_basis': 'the minimum-price screen reads the unadjusted close', 'pit_eligibility': PUBLISHER_DATED_HISTORICAL if stored and history.get('universe') else None,
-         'limitations': ['No sector, market value or index membership is read.', 'S&P 500 membership events are stored as a reference only.']},
+         'limitations': ['No sector, market value or index membership is read.', 'S&P 500 membership events are stored as a reference only.',
+                         'A security whose volume a later reverse split left unreadable cannot be ranked and is screened out: '
+                         f'{manifest.get("security_months_screened_out_for_unreadable_volume", 0):,} security-months. They are stocks that later collapsed.']},
     ]
     gaps = ['No licensed historical market data is stored: operator purchase decision required.' if not stored else None,
             'Historical sector classification: none stored; the vendor classification describes companies as they are today.',
@@ -448,6 +450,8 @@ def build(research_database, history_database=None, *, now=None) -> dict:
                             'rows_not_strict_because_a_bar_was_revised': (counted or {}).get('rows_not_strict_because_a_bar_was_revised', 0),
                             'rows_reading_a_coarse_print': (counted or {}).get('rows_reading_a_coarse_print'),
                             'high_low_open_families_usable': (counted or {}).get('high_low_open_families_usable'),
+                            'rows_reading_an_unreadable_volume': (counted or {}).get('rows_reading_an_unreadable_volume'),
+                            'volume_features_usable': (counted or {}).get('volume_features_usable'),
                             'delisting_exits_by_year': (counted or {}).get('delisting_exits_by_year'),
                             'members_whose_bars_end_without_a_delisting_record': (counted or {}).get('members_whose_bars_end_without_a_delisting_record'),
                             'checkpoint7_retrospective_samples': 6490, 'checkpoint7_note': 'a separate close-only dataset; never added to the strict count',

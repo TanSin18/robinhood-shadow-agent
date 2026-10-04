@@ -36,13 +36,20 @@ UNIVERSE_VERSION = 'liquid-us-listed-v1'
 RULE = {'size': 1000, 'minimum_unadjusted_close': 5.0, 'minimum_history_bars': 252, 'liquidity_window_sessions': 63, 'minimum_bars_in_window': 60,
         'price_table': 'stocks', 'ranking': 'median daily dollar volume over the liquidity window, descending; security identifier ascending on ties',
         'formation': 'last exchange session of each calendar month', 'effective': 'from the next session through the next formation session'}
-REASONS = ('NO_BAR_ON_FORMATION_SESSION', 'INSUFFICIENT_HISTORY', 'PRICE_BELOW_MINIMUM', 'TOO_FEW_BARS_IN_WINDOW', 'NO_DOLLAR_VOLUME', 'RANKED_BELOW_SIZE')
+REASONS = ('NO_BAR_ON_FORMATION_SESSION', 'INSUFFICIENT_HISTORY', 'PRICE_BELOW_MINIMUM', 'VOLUME_REPRINT_TOO_COARSE', 'TOO_FEW_BARS_IN_WINDOW', 'NO_DOLLAR_VOLUME',
+           'RANKED_BELOW_SIZE')
+UNREADABLE_VOLUME = 'VOLUME_REPRINT_TOO_COARSE'
 
 
 def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
     """{formation session: (reason or None, median dollar volume)} for the formation sessions inside this security's span.
     Dollar volume is the unadjusted close times the shares traded on the day (the vendor's adjusted volume divided by the
-    split factor), so it does not depend on how the vendor rounded prices it reprinted after a later split."""
+    split factor), so it does not depend on how the vendor rounded prices it reprinted after a later split.
+
+    One thing a later split can still take away is the volume itself: after a large later reverse split the re-counted
+    volume of an early session can be too small a number to read (``adjust.coarse_volume``). A security cannot be ranked
+    on such a window. It is screened out under its own reason and counted, so that the candidates lost this way (they
+    are stocks that later collapsed) are a known number and not a silent gap."""
     sessions = panel['sessions']
     if not sessions:
         return {}
@@ -53,6 +60,7 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
     splits = adjust.breaks(panel, actions)['splits'] if actions else ()
     with np.errstate(invalid='ignore', divide='ignore'):
         dollars = panel['close_unadjusted'] * panel['volume'] / adjust.share_divisor(panel, splits)
+    unreadable = np.cumsum(adjust.coarse_volume(panel, splits))
     out = {}
     for r in formations:
         k = slot.get(r)
@@ -64,6 +72,8 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
             out[r] = ('INSUFFICIENT_HISTORY', None)
         elif not panel['close_unadjusted'][k] >= rule['minimum_unadjusted_close']:
             out[r] = ('PRICE_BELOW_MINIMUM', None)
+        elif unreadable[k] - (unreadable[k - window] if k >= window else 0) > 0:
+            out[r] = (UNREADABLE_VOLUME, None)
         else:
             recent = dollars[max(0, k - window + 1):k + 1]
             valid = recent[np.isfinite(recent)]
@@ -138,6 +148,7 @@ def build(store, start, end, *, rule=RULE, version=UNIVERSE_VERSION, source=None
                 'securities_screened': len(screened), 'distinct_members': len(ever), 'members_later_delisted': delisted,
                 'member_count_min': min((r['member_count'] for r in records), default=0), 'member_count_max': max((r['member_count'] for r in records), default=0),
                 'member_count_min_by_year': by_year,
+                'security_months_screened_out_for_unreadable_volume': sum(r['screened_out'].get(UNREADABLE_VOLUME, 0) for r in records),
                 'first_formation_with_members': {str(n): next((r['formation_session'] for r in records if r['member_count'] >= n), None) for n in (500, 1000)},
                 'source_blocks_hash': blocks, 'actions_hash': acts, 'records_hash': content_hash([content_hash(r) for r in records]),
                 'survivorship': 'formed from every stored stock-file security including delisted ones; no present-day list, classification, master row or market '
