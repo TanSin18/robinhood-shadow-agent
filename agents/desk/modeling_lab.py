@@ -138,7 +138,7 @@ def _render(lab, report):
         ('Dataset hash', f'<code>{esc(data["dataset_hash"][:16])}</code>'),
         ('Feature calculation hash', f'<code>{esc(data["calculation_hash"][:16])}</code>'),
         ('Code hash', f'<code>{esc(report["code_hash"][:16])}</code>'),
-        ('Plan', esc(report['plan_version']) + (' (v1 was fixed before any model was fitted; v2 records the repairs made after the first run and the independent review)'
+        ('Plan', esc(report['plan_version']) + (' (v1 was fixed before any model was fitted; later versions record the repairs made after the first run and after each review)'
                                                  if report.get('supersedes') else ' (fixed before any model was fitted)')),
         ('Replaces', esc(str((report.get('supersedes') or {}).get('report_id', ''))[:16] + ' — ' + str((report.get('supersedes') or {}).get('reason', ''))) if report.get('supersedes') else 'nothing'),
         ('Models in the registry', esc(str(lab.get('models', 0))) + ' — ' + esc(', '.join(f'{k} {v}' for k, v in sorted((lab.get('registry_statuses') or {}).items())))

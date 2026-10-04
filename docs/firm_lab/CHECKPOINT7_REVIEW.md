@@ -8,7 +8,15 @@ combiners). The other looked at statistics, model selection, the networks, hidde
 and the claims in the documents. They worked on a read-only copy, ran their own experiments, and changed nothing.
 
 Every important finding below got a regression test that fails on `3abb5dd` (recorded run: 25 failed, 16 errors) and a
-repair (commits `4cad8b2`, `1ac2b17`). The tournament was then rerun once under plan v2. No critical finding is deferred.
+repair (commits `4cad8b2`, `1ac2b17`). The tournament was then rerun under plan v2. A third fresh reviewer then verified
+the repairs against the stored v2 report (last section); its findings were repaired in `1e57231` under plan v3 and the
+tournament was run a final time with no prediction changed. No critical finding is deferred.
+
+What "fails on `3abb5dd`" means, exactly. Seven of the regressions fail there on behaviour: the old code runs and gives
+the wrong answer (A1 the zero count, A3, B13, B14/B15, A7/B16, B7, B8). The others fail because the old code has no
+way to express the rule under test (there was no batch interval, no list of baselines, no gate record to be missing):
+that shows the rule is new, not that the test reproduces the defect. For those, the defect itself is on record in the
+reviewers' own experiments, quoted below.
 
 ## What the leakage reviewer found sound
 
@@ -40,7 +48,7 @@ No leak of future information into features, training, tuning or combiners. Evid
 | B6 | Gate-failing networks were REJECTED where the plan says EXPERIMENTAL. | Important | The gate is applied first (v2 #5). | same |
 | B7 | The page raised on a partial or older report and took the Firm Lab page down. | Important | The section degrades to a notice; the projection refuses an incomplete report. | `test_a_partial_or_malformed_stored_report_never_takes_the_page_down` |
 | B8 | After a rerun the page would count both runs' models together. | Important | Registry rows carry their run; rows of another run, or of none, are not counted. The rerun was also made on a clean copy of the feature history. | `test_registry_rows_of_another_run_or_of_no_run_are_not_counted…` |
-| B9 | Registry status contradicted the report for 28 risk and quantile rows. | Important | Registry rows take the status and role the report gives (v2 #9). | `test_the_registry_says_about_a_risk_or_quantile_model_exactly_what_the_report_says` |
+| B9 | Registry status contradicted the report for risk and quantile rows (25 registry rows were registered as unjudged diagnostics; 14 of them had a different status in the report). | Important | Registry rows take the status and role the report gives (v2 #9). | `test_the_registry_says_about_a_risk_or_quantile_model_exactly_what_the_report_says` |
 | B10 | Window counts flattered the evidence ("about 29 independent 10-session windows"). | Important | The report and page count predicted sessions: 13 development and 5 holdout windows of 10 sessions; batches are shown beside every interval. | `test_the_report_counts_the_windows_that_are_predicted…`, page test |
 | B11 | "Best" rows favoured gate-failed networks without saying so; the classification bar (base rate) was weaker than a coin flip. | Important | Gate label and holdout beside every best score; a coin-flip baseline; classifiers must beat both (v2 #7). | same, `test_a_forecast_that_is_constant_within_each_fold_has_no_ranking_skill_by_auc` |
 | A2 | A status rule changed after results were seen with no new plan version. | Important | Plan v2, section 12: every change with its reason and direction; `cli verify` checks a stored report against the tree. | `test_no_calculator_reads…and_the_documents_say_what_the_code_does`, `test_the_stored_report_can_be_checked_against_the_code…` |
@@ -69,5 +77,38 @@ No leak of future information into features, training, tuning or combiners. Evid
   Mildly optimistic for the combiner, the same for all members. The combinations are diagnostics and are all REJECTED
   or EXPERIMENTAL.
 - **The batch interval assumes batch means are roughly normal and independent.** With 3 to 6 batches that is a strong
-  assumption. A regression test holds its error rate to 5% to 7.5% at nominal 5% under a worst-case overlapping
-  series. It is honest about width, not powerful.
+  assumption. Under a Gaussian moving-sum series it rejects about 6% at nominal 5% (a regression test holds it under
+  7.5%). That is not the worst case: see V1 below. It is honest about width, not powerful.
+
+## Verification review (commit `93e2046`, stored v2 report `4794d1f4…`)
+
+A third fresh reviewer recomputed the stored result independently and attacked the repairs.
+
+**Confirmed.** All 66 table rows recomputed with the reviewer's own rank correlation, interval, Holm and status code:
+0 mismatches (means, fold results, interval bounds, ranked-session counts, batch counts, Holm values, statuses). Risk,
+quantile and classification rows: 0 mismatches. No CHALLENGER or ELIGIBLE_FOR_FUTURE_REVIEW anywhere, and both remain
+reachable: a synthetic strong 5-session model reaches ELIGIBLE_FOR_FUTURE_REVIEW through the same code. All 13 gate
+records follow the plan's formula. All 106 registry rows carry the report's run, plan and code hash and agree with the
+report. With every label from the first holdout-adjacent session on replaced, breadth, stacker weights, gate notes,
+sufficiency records and all 84 model-blocks checked were bit-identical. The page rendered the real report in full;
+659 injected markup strings were all escaped; no action wording; one status style.
+
+| # | Finding | Severity | Repair (plan v3) | Regression |
+|---|---|---|---|---|
+| V1 | The batch interval is still anti-conservative for rankings that persist across sessions: on real labels a no-information ranking with fixed instrument identities had its interval above zero 8.5% to 11.5% of the time on the 5-session label (development), about 7% on the 10-session label. "Worst case" was the wrong description. No stored status depended on it. | Important | A challenger must also beat its own predictions with instrument identities shuffled, an exact test for that case (v3 #13); the description is corrected. | `test_a_ranking_that_persists_by_chance_is_caught_by_the_identity_shuffle_where_the_interval_alone_is_not`, `test_the_identity_shuffle_is_the_mean_rank_correlation_of_the_shuffled_predictions`, `test_a_challenger_must_also_beat_its_own_predictions_with_identities_shuffled` |
+| V2 | The page could still raise: an integer too large to convert (a hand-edited or corrupt stored report) gave OverflowError. | Important | Caught in the number formatter, the section guard and the projection. | `test_an_inherited_gate_row_says_so_and_a_huge_number_cannot_take_the_page_down`, fuzz value added |
+| V3 | The zero rule was not applied to the top-minus-bottom spread, the inner tuning score, or a fold with nothing predicted. | Minor | Applied (v3 #14). The strongest baseline's 10-session spread is +1.13% over all 131 sessions, not +1.42% over 104. | `test_the_zero_rule_also_covers_the_spread_the_tuning_score_and_a_fold_with_nothing_predicted` |
+| V4 | The record "25 failed, 16 errors" did not say which regressions failed on behaviour and which on a renamed interface. | Minor | Stated at the top of this record. | — |
+| V5 | The exported file had no protection against INSERT OR REPLACE; `verify` wrote triggers into the file it checked. | Minor | Exports are protected; `verify` reads only (v3 #16). | `test_an_exported_file_is_append_only_and_checking_a_file_never_changes_it` |
+| V6 | The 5-session LightGBM and XGBoost rows showed "Holm-adjusted p 0.054 / 0.060" without the level or whether it was met. | Minor | The reason names the level, met or not met, the batch count, and that it does not by itself make a challenger. | end-to-end family test |
+| V7 | Three statements in the documents were wrong or not yet true (a closure report that did not exist yet; "28 rows"; "5% to 6%"). | Minor | Corrected; `CHECKPOINT7_CLOSURE.md` lists every moved status. | document test |
+| V8 | The Holm family counted two identical models twice and its description claimed more than the code did. | Minor | Identical results count once (v3 #15): 16, 51 and 16 tests. | end-to-end family test |
+| V9 | A combination's inherited gate row was shown with its member's parameter count. | Minor | Shown as inherited. | page test above |
+
+**On the 5-session LightGBM and XGBoost holdout result.** Holdout mean rank correlation +0.123 and +0.108; five batch
+means all positive; Holm-adjusted p 0.054 and 0.060 in a family of 16, below the plan's 10% level. The reviewer's
+fixed-identity permutation test agrees in size (0.28% and 0.53% unadjusted). It is one result, not two: the two series
+correlate 0.92. On development sessions neither clears the gates (LightGBM's interval includes zero and its
+identity-shuffle p is 0.051; XGBoost is below the strongest baseline), so the statuses are EXPERIMENTAL and REJECTED.
+The holdout is 11 non-overlapping windows and has been read by every run. It is recorded as the one observation worth
+looking at again when more sessions exist, and as nothing more.
