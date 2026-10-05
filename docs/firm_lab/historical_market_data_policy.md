@@ -184,16 +184,19 @@ depends on the future. Two rules close that channel:
   prints two decimals makes every bar under $10 coarse by (a), and every bar with a later forward split coarse by
   (b), so with such a vendor these families are never used.
 * **Volume: the same rule.** The vendor supplies volume only on today's share basis. A bar no later split touched is
-  exact. After a forward split the day's shares can be recovered exactly: only one whole number of shares re-counts
-  into the vendor's figure, also for a 3-for-2, where the vendor's own rounded re-count of a thin day is off by up to
-  a third. The features therefore use the recovered shares, not the vendor's re-count. After a reverse split
+  exact. After a recorded forward split the day's shares can be recovered exactly, if the vendor rounded once: only
+  one whole number of shares re-counts into the vendor's figure, also for a 3-for-2, where the vendor's own rounded
+  re-count of a thin day is off by up to a third. The features therefore use the recovered shares, not the vendor's
+  re-count. After a reverse split
   recovery is not possible: many different volumes of the day re-count into the same small number of today's shares,
   and a volume can round to nothing. The day's volume is then known only as a range. Where the range is wider than 0.5% of the volume either way, the features
   that read volume are withheld; and, as above, for every row of a dataset or for none. On rows that are used, each
   re-counted volume is within 0.5% of the day's (so a ratio of two volumes within about 1%, and a rank among 252
   within a step or two).
 * **Volume in the universe.** The liquidity rank uses the middle of that range, and the builder counts the
-  memberships the range leaves undecided (it reaches across the cut): `security_months_undecided_by_volume_recount`.
+  memberships the ranges leave undecided: a candidate is certainly a member when fewer than the universe's size of
+  others can outrank it, certainly not when that many surely do, and undecided between
+  (`security_months_undecided_by_volume_recount`).
   A test re-counts one stock as after a later 1-for-20 and a later 1-for-5,000 reverse split and shows the same
   members at every formation. A security with nothing known to have traded is not a member in any world; where the
   re-count leaves room for trading it is counted as undecided. An undecided membership is a stock that later

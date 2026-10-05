@@ -23,6 +23,7 @@ stale: it is refused, and a new one is built with its own hash. Both stay in the
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 from pathlib import Path
 
@@ -86,20 +87,22 @@ def formation_stats(panel, formations, rule=RULE, actions=()) -> dict:
 
 
 def undecided(ranked, size, unranked=()) -> int:
-    """How many candidates a later reverse split left undecided: their dollar volume is only known as a range, and the
-    range reaches across the cut. ``ranked`` is [(-dollars, security, lowest, highest)], best first. ``unranked`` are
-    the highest possible dollar volumes of candidates screened out because nothing is known to have traded, although
-    the re-count leaves room for it: each could be a member if the universe has room or its range reaches the weakest
-    member."""
-    inside, outside = ranked[:size], ranked[size:]
-    weakest_in = min((low for _, _, low, _ in inside), default=0.0)
-    room = len(inside) < size
-    doubtful = sum(1 for high in unranked if high > 0 and (room or high > weakest_in))
-    if not outside:
-        return doubtful
-    strongest_out = max(high for _, _, _, high in outside)
-    return (doubtful + sum(1 for _, _, low, high in inside if high > low and low < strongest_out)
-            + sum(1 for _, _, low, high in outside if high > low and high > weakest_in))
+    """How many memberships a later reverse split left undecided. After such a split the dollar volume of a candidate is
+    only known as a range. A candidate is certainly a member when fewer than ``size`` others can outrank it, and
+    certainly not one when at least ``size`` others outrank it for sure; anything between is undecided, whether its own
+    range is the wide one or a neighbour's is. ``ranked`` is [(-dollars, security, lowest, highest)]. ``unranked`` are
+    the highest possible values of candidates screened out because nothing is known to have traded although the re-count
+    leaves room for it: such a candidate is never certainly a member, since it may not have traded at all."""
+    ranges = [(low, high) for _, _, low, high in ranked] + [(0.0, high) for high in unranked if high > 0]
+    lows, highs = sorted(low for low, _ in ranges), sorted(high for _, high in ranges)
+    count = 0
+    for low, high in ranges:
+        surely_above = len(lows) - bisect.bisect_right(lows, high)
+        maybe_above = len(highs) - bisect.bisect_right(highs, low) - (1 if high > low else 0)
+        may_not_have_traded = low == 0 and high > 0
+        if surely_above < size and (maybe_above >= size or may_not_have_traded):
+            count += 1
+    return count
 
 
 def actions_hash(store, source=None) -> str:

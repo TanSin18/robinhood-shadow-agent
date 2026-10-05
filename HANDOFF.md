@@ -91,6 +91,18 @@ Deployed read-only to the dashboard and closed on October 4 (native suite 1129 p
 the checkpoint). The Checkpoint 7 holdout is no longer an untouched test set for future model selection. Current
 state and what is left for the operator: `docs/review/CLAUDE_STATUS.md`. Checkpoint 8 is not started.
 
+## Firm Lab Checkpoint 8 (October 4, 2026) — historical data foundation, no trading change
+
+**DATA READINESS ONLY — NO TRADING MODEL IS ACTIVE.** `CHECKPOINT 8 = NOT CLOSED`: `OPERATOR PURCHASE DECISION
+REQUIRED` (Sharadar "Prices — Full History", personal licence, $39 per month or $299 per year; nothing purchased).
+Branch `claude/checkpoint8-data-foundation`. The foundation exists as code, tests and documents: a separate
+append-only historical research database (`firm_lab/history/`), validation, a versioned historical universe, OHLCV
+feature versions, labels on the exact close, dataset contract v2, sealed holdouts, a readiness report and a read-only
+page section. No licensed data is stored: strict point-in-time samples 0, every model family INSUFFICIENT. Vendor
+files, the history database and anything derived from licensed data never go into Git, a report, a prompt or the
+dashboard overlay. Start with `docs/firm_lab/CHECKPOINT8_STATUS.md`, then `CHECKPOINT8_PROVIDER_DECISION.md`,
+`historical_market_data_policy.md` and `CHECKPOINT8_REVIEW.md`. Do not begin Checkpoint 9 without an operator order.
+
 ## Important unfinished items
 
 - The approved design retires the 14-symbol primary universe, but runtime still

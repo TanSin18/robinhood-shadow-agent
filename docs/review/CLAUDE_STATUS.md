@@ -1,5 +1,50 @@
 # Claude status and questions
 
+## 2026-10-04 19:40 ET — Checkpoint 8 built, reviewed and installed read-only; NOT CLOSED; operator purchase decision required; STOP
+
+`CHECKPOINT 8 = NOT CLOSED`. `OPERATOR PURCHASE DECISION REQUIRED`: Sharadar "Prices — Full History", Personal Use
+License, $39 per month or $299 per year. Nothing was purchased, no account was created, no key exists.
+
+Branch `claude/checkpoint8-data-foundation`, from `claude/checkpoint7-modeling` `3978d1b`. No merge to main. No
+Checkpoint 9. Codex maintenance stays PREPARED_AND_PROVEN_NOT_INSTALLED.
+
+**DATA READINESS ONLY — NO TRADING MODEL IS ACTIVE.**
+
+- Honest result: no licensed historical bars are stored. Strict point-in-time samples 0 (tier A 0, tier B 0); the
+  6,490 retrospective samples of Checkpoint 7 are a separate dataset and are not counted. Every model family is
+  INSUFFICIENT. 0 of 25 sufficiency bars are met.
+- Built: the sufficiency specification (committed alone, first), the provider decision, a separate append-only
+  historical research database with validation, a versioned historical universe, OHLCV feature versions, labels on
+  the exact close, dataset contract v2, two sealed holdouts (the Checkpoint 7 holdout is burned and is not reused), a
+  readiness report and page, six capability rows.
+- FRED and ALFRED removed from the collector and the macro store: their terms prohibit storing the data and training
+  models on it without written consent.
+- Nine independent reviewers in eight rounds. Every critical and important finding has a regression and a repair; the
+  ninth found none in the package. Record: `docs/firm_lab/CHECKPOINT8_REVIEW.md`.
+- Installed on the Mac at 19:37 ET: five overlay files, the readiness file, six capability rows. Control A verified
+  before and after: fingerprint `901f7606…c876`, 240 files, no stop file, fills 3. `com.openai.robinhood-daily` was not
+  touched. Record: `docs/firm_lab/CHECKPOINT8_STATUS.md`.
+
+### For the operator to run
+
+```sh
+launchctl kickstart -k gui/$(id -u)/com.openai.robinhood-inbox
+sleep 5; cd ~/LocalProjects/robinhood-diagnostics/checkpoint8-data-foundation-20261004 && curl -s http://127.0.0.1:8765/firm-lab -o page.html; grep -c "DATA READINESS ONLY" page.html | tee page-check.txt
+cd ~/LocalProjects/robinhood-diagnostics/checkpoint8-data-foundation-20261004/src && PY=~/LocalProjects/robinhood-shadow-agent/.venv/bin/python && $PY --version 2>&1 | tee ../native-tests.txt && $PY -m pytest -q -p no:cacheprovider 2>&1 | tee -a ../native-tests.txt
+```
+
+Expected: the page check prints 1. The native suite fails only the three tests that failed at Checkpoint 7 (the two
+wall-clock tests of the registered dashboard and the installed-Codex `configWarning` test).
+
+### Questions for the operator
+
+1. Buy one month of Sharadar "Prices — Full History"? If yes: download SEP, SFP, TICKERS, ACTIONS and SP500 into a
+   private folder outside any repository. Send no login, key or payment detail.
+2. Delete any `fred_*.csv`, `fredapi_*.json` or `alfred_*.csv` capture files.
+3. Forward capture of each day's bars before the next open: wanted, and by what means?
+4. SEC history: may the bulk path carry its own evidence label? Run the free validation sample now?
+5. Remove `robinhood-diagnostics/checkpoint8-data-foundation-20261004/_to_delete/` (nothing licensed in it).
+
 ## 2026-10-04 11:40 ET — Checkpoint 7 deployed, natively verified and CLOSED; STOP
 
 CHECKPOINT 7 = CLOSED. The read-only laboratory is live on `/firm-lab`: one laboratory file, six overlay files, eight

@@ -1241,7 +1241,7 @@ def test_a_later_reverse_split_decides_no_membership_and_marks_no_row(tmp_path):
     assert not adjust.coarse_volume(forward, ()).any() and [list(b) for b in adjust.volume_bounds(forward, ())] == [[20.0, 0.0], [20.0, 0.0]]
     # where the range does reach across the cut, the membership is counted as undecided, not passed off as known
     ranked = [(-100.0, 'a', 100.0, 100.0), (-90.0, 'b', 85.0, 95.0), (-88.0, 'c', 88.0, 88.0), (-50.0, 'd', 40.0, 60.0)]
-    assert universe.undecided(ranked, 2) == 1 and universe.undecided(ranked, 3) == 0 and universe.undecided(ranked[:2], 2) == 0
+    assert universe.undecided(ranked, 2) == 2 and universe.undecided(ranked, 3) == 0 and universe.undecided(ranked[:2], 2) == 0     # b, and c whose seat b may take
 
 
 # ------------------------------------------------------ review round 6 (a seventh, fresh reviewer; commit dac1522)
@@ -1321,7 +1321,9 @@ def test_nothing_known_to_have_traded_is_not_a_member_whatever_a_later_split_did
         assert all(high == 0 for high in doubtful) if divisor == 1.0 else all(high > 0 for high in doubtful)
     assert universe.undecided([], 5, [0.0]) == 0 and universe.undecided([], 5, [1900.0]) == 1          # room in the universe: it could have been a member
     full = [(-100.0 + k, str(k), 100.0 - k, 100.0 - k) for k in range(5)]
-    assert universe.undecided(full, 5, [50.0]) == 0 and universe.undecided(full, 5, [97.0]) == 1
+    assert universe.undecided(full, 5, [50.0]) == 0 and universe.undecided(full, 5, [97.0]) == 2       # the candidate, and the member whose seat it may take
+    assert universe.undecided([(-12.0, 'x', 12.0, 12.0), (-15.0, 'm', 10.0, 20.0)], 1, [11.0]) == 2     # 12 always outranks the screened-out 11: only x and m are open
+    assert universe.undecided([(-100.0, 'm', 90.0, 110.0)], 1, [95.0]) == 2
 
 
 def test_a_price_reprinted_with_one_digit_and_a_thin_day_after_a_split_are_read_exactly(monkeypatch):
@@ -1361,9 +1363,15 @@ def test_a_price_reprinted_with_one_digit_and_a_thin_day_after_a_split_are_read_
 def test_a_bar_that_fits_anything_takes_the_ratio_of_its_neighbours():
     columns = _cent_world(1.5, 6, n=300, ticker='HHH')                  # a later 3-for-2 the stored actions do not hold
     k = 150
-    columns['close_unadjusted'][k] = '2'                                # printed with no decimals: this bar alone would agree with a ratio of one
-    columns['close'][k] = f'{2 / 1.5:.6f}'
-    for name, value in (('open', 2 / 1.5), ('high', 2 / 1.5), ('low', 2 / 1.5), ('close_total_return', 2 / 1.5)):
-        columns[name][k] = f'{value:.6f}'
-    scale = adjust.reprint_scale(panel.from_columns(columns))
-    assert scale[k] == scale[k - 1] == scale[k + 1] and scale[k] == pytest.approx(1.5, rel=1e-3)
+    for at in (k, 200, 201, 202):                                       # one such bar, and a run of three
+        columns['close_unadjusted'][at] = '1'                           # printed with no decimals: 0.5 to 1.5, so the bar alone agrees with a ratio of one
+        for name in ('open', 'high', 'low', 'close', 'close_total_return'):
+            columns[name][at] = f'{1 / 1.5:.6f}'
+    p = panel.from_columns(columns)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        alone = np.abs(np.log(adjust.split_factor(p))) <= adjust.TOLERANCE + adjust.rounding_reach(p)
+    assert alone[[k, 200, 201, 202]].all() and not alone[[k - 1, k + 1, 199, 203]].any()      # each would stand at 1 between neighbours at 1.5
+    scale = adjust.reprint_scale(p)
+    assert np.allclose(scale, 1.5, rtol=1e-3) and scale[k] == scale[k - 1] and scale[201] == scale[199]
+    fine = panel.from_columns(_cent_world(1.0, 2, n=300, ticker='HHH'))
+    assert (adjust.reprint_scale(fine) == 1.0).all()                    # and nothing pulls a bar that genuinely stands at one

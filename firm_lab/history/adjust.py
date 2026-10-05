@@ -244,13 +244,21 @@ def reprint_scale(panel, splits=()) -> np.ndarray:
         if ends:                                                        # a stretch ends where the bars stop being neighbours or the ratio steps
             scale[index[start:n]] = float(np.median(ratio[index[start:n]]))
             start = n
-    # A bar printed so coarsely that it agrees with anything is not evidence for 1. Between two neighbours that share
-    # another ratio which it also fits, it belongs to their stretch.
-    for n, k in enumerate(valid[1:-1], start=1):
-        before, after = scale[valid[n - 1]], scale[valid[n + 1]]
-        if scale[k] == 1.0 and before != 1.0 and abs(math.log(after / before)) <= TOLERANCE and math.isfinite(ratio[k]) \
-                and abs(math.log(ratio[k] / before)) <= TOLERANCE + reach[k]:
-            scale[k] = before
+    # A bar printed so coarsely that it agrees with anything is not evidence for 1. A run of such bars between two
+    # neighbours that share another ratio, which every bar of the run also fits, belongs to their stretch.
+    n = 1
+    while n < len(valid) - 1:
+        if scale[valid[n]] != 1.0 or scale[valid[n - 1]] == 1.0:
+            n += 1
+            continue
+        end = n
+        while end < len(valid) - 1 and scale[valid[end]] == 1.0:
+            end += 1
+        before, after, run = scale[valid[n - 1]], scale[valid[end]], valid[n:end]
+        if after != 1.0 and abs(math.log(after / before)) <= TOLERANCE and \
+                all(math.isfinite(ratio[k]) and abs(math.log(ratio[k] / before)) <= TOLERANCE + reach[k] for k in run):
+            scale[run] = before
+        n = end + 1
     return scale
 
 
@@ -263,8 +271,10 @@ def share_divisor(panel, splits=()) -> np.ndarray:
 def volume_bounds(panel, splits=()) -> tuple:
     """(fewest, most) shares that can have traded on the day, given the vendor's re-counted volume. The vendor supplies
     volume on today's share basis: the day's shares times the divisor, a whole number of today's shares at best. A bar no
-    later split touched is exact. After a forward split the re-count is exact too (one whole number of the day's shares
-    fits). After a reverse split many do: the re-count has lost them."""
+    later split touched is exact. After a forward split one whole number of the day's shares fits, so the day's volume
+    is recovered exactly, provided the divisor is exact (a recorded ratio) and the vendor rounded once; where the divisor
+    is only estimated, or the vendor rounded at each of several splits, the range is what it is and the bar may be
+    flagged. After a reverse split many whole numbers fit: the re-count has lost them."""
     divisor, volume = share_divisor(panel, splits), np.asarray(panel['volume'], float)
     with np.errstate(invalid='ignore', divide='ignore'):
         low, high = np.ceil((volume - 0.5) / divisor - 1e-9).clip(0), np.floor((volume + 0.5) / divisor + 1e-9)
