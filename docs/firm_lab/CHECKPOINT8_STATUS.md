@@ -55,8 +55,22 @@ Left in `_to_delete/` because this session may not delete on the Mac: a compress
 (63 MB) and two fragments of a failed scratch file. They hold nothing licensed. The operator can remove the folder.
 
 **Operator steps still open**: restart the dashboard (`com.openai.robinhood-inbox` only), check the page, run the
-native suite from `src/` (a plain export of `8fb60d9`). Commands are in the status note of 2026-10-04 19:40 ET in
-`docs/review/CLAUDE_STATUS.md`.
+native suite from `src/`. Commands are in the status note of 2026-10-04 19:40 ET in `docs/review/CLAUDE_STATUS.md`.
+`src/` was exported at `8fb60d9`; at 20:10 ET the eight files that changed afterwards (two package files, one test
+file, five documents; no overlay file) were brought to the branch head, so the native run tests the final code.
+
+## Tests at the final code (`af958e1`)
+
+| Run | Result |
+|---|---|
+| Six history test files | 122 passed |
+| Full cloud suite (Python 3.11.15, Linux) | 1267 passed, 2 failed, 1 skipped |
+| Native suite (Python 3.14.6, the Mac) | not yet run: an operator step |
+
+The two cloud failures are the wall-clock tests of the registered dashboard in `tests/test_dashboard.py`, failing on
+every branch since 2026-10-04 13:10 UTC. The skip is the installed-Codex test that runs only on the Mac, where it is
+the third known failure. None is caused by this checkpoint. Control A was verified a third time at 00:01 UTC on
+2026-10-05 (20:01 ET): the same fingerprint, 240 files, no stop file, fills 3.
 
 ## Capability states
 

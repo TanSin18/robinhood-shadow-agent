@@ -121,6 +121,6 @@ These are known, bounded or counted, and none is a point-in-time leak for a corr
 
 Kept outside the repository with the Checkpoint 7 records (they hold no licensed data): the failing runs of each
 round's regressions on the commit read, and the full cloud suite at each repair commit. Last full cloud suite before
-this commit, at `8fb60d9`: 1267 passed, 2 failed, 1 skipped. The two failures are the wall-clock tests of the
-registered dashboard that have failed on every branch since 2026-10-04 13:10 UTC; the skip is the installed-Codex test
-that only runs on the operator's Mac.
+this commit, at `8fb60d9`: 1267 passed, 2 failed, 1 skipped; at the round-8 commit `af958e1` the same. The two
+failures are the wall-clock tests of the registered dashboard that have failed on every branch since 2026-10-04
+13:10 UTC; the skip is the installed-Codex test that only runs on the operator's Mac.
